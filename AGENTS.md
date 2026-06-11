@@ -70,7 +70,7 @@ crank/
 │   │   ├── tool_registry.go               # GlobalToolRegistry singleton
 │   │   ├── generator.go                   # Generate() and Add() orchestration logic
 │   │   ├── context.go                     # Template context (ProjectName, ModulePath, Has())
-│   │   ├── manifest.go                    # .bootstrap.yaml encode/decode
+│   │   ├── manifest.go                    # .crank.yaml encode/decode
 │   │   ├── registry.go                    # GlobalRegistry singleton
 │   │   ├── result.go                      # Result.FeaturesUsed() helper
 │   │   ├── gomod.go                       # GoGet, Tidy helpers (go get + go mod tidy)
@@ -204,7 +204,7 @@ Passed to every template during rendering:
 ### Generator (`internal/bootstrap/generator.go`)
 
 - `Generate(reg, opts)` — creates a new project from scratch; `base` is always first; returns `Result.Dependencies` for the caller to run `go get`
-- `Add(reg, projectDir, featureName)` — adds a feature to an existing project; re-renders all features; updates `.bootstrap.yaml` manifest; returns `Result.Dependencies` with only the new feature's deps
+- `Add(reg, projectDir, featureName)` — adds a feature to an existing project; re-renders all features; updates `.crank.yaml` manifest; returns `Result.Dependencies` with only the new feature's deps
 - `GoGet(projectDir, deps)` — runs `go get <deps...>` then `go mod tidy` in the project directory
 - `Tidy(projectDir)` — runs `go mod tidy` in the project directory
 
@@ -316,7 +316,7 @@ Config files live in a top-level `configs/` directory, following the
 | Global tool registry | `internal/bootstrap/tool_registry.go` |
 | Project generation logic | `internal/bootstrap/generator.go` |
 | Template context | `internal/bootstrap/context.go` |
-| Manifest I/O (.bootstrap.yaml) | `internal/bootstrap/manifest.go` |
+| Manifest I/O (.crank.yaml) | `internal/bootstrap/manifest.go` |
 | Result helpers | `internal/bootstrap/result.go` |
 | Filesystem utilities | `internal/utils/fileutil.go` |
 | Feature implementations | `internal/bootstrap/features/<name>/feature.go` |

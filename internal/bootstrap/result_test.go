@@ -33,7 +33,7 @@ features:
   - base
   - postgres
 `
-	os.WriteFile(filepath.Join(dir, ".bootstrap.yaml"), []byte(manifestContent), 0o644)
+	os.WriteFile(filepath.Join(dir, ".crank.yaml"), []byte(manifestContent), 0o644)
 
 	r := &Result{ProjectDir: dir}
 	got := r.FeaturesUsed()

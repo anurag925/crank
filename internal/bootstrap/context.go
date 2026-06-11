@@ -15,6 +15,8 @@ type Context struct {
 	PackageName string
 	// Features is the list of feature names the user opted into.
 	Features []string
+	// CrankVersion is the crank CLI version that generated this project.
+	CrankVersion string
 
 	featureSet map[string]bool
 }
@@ -42,11 +44,12 @@ func NewContext(projectName, modulePath string, features []string) *Context {
 	}
 
 	return &Context{
-		ProjectName: projectName,
-		ModulePath:  modulePath,
-		PackageName: pkg,
-		Features:    features,
-		featureSet:  set,
+		ProjectName:  projectName,
+		ModulePath:   modulePath,
+		PackageName:  pkg,
+		Features:     features,
+		CrankVersion: Version,
+		featureSet:   set,
 	}
 }
 

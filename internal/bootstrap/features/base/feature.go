@@ -64,6 +64,6 @@ func (feature) Files() []bootstrap.FileMapping {
 		{TemplatePath: "templates/.gitignore.tmpl", OutputPath: ".gitignore"},
 		{TemplatePath: "templates/go.mod.tmpl", OutputPath: "go.mod"},
 		{TemplatePath: "templates/README.md.tmpl", OutputPath: "README.md"},
-		{TemplatePath: "templates/.bootstrap.yaml.tmpl", OutputPath: ".bootstrap.yaml"},
+		{TemplatePath: "templates/.crank.yaml.tmpl", OutputPath: ".crank.yaml"},
 	}
 }

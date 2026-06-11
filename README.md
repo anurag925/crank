@@ -198,7 +198,7 @@ crank/
 │   │   ├── tool.go                # Tool interface + ToolRegistry
 │   │   ├── tool_registry.go       # GlobalToolRegistry singleton
 │   │   ├── context.go             # template context
-│   │   ├── manifest.go            # .bootstrap.yaml I/O
+│   │   ├── manifest.go            # .crank.yaml I/O
 │   │   ├── registry.go            # process-wide feature registry
 │   │   ├── result.go
 │   │   ├── commands/              # one cobra command per subcommand

@@ -75,6 +75,9 @@ If --project is not specified, the current directory is used.`,
 		SilenceErrors: true,
 	}
 
+	// Wire build version into the bootstrap package for manifest stamping.
+	bootstrap.Version = version
+
 	// Feature lifecycle commands.
 	root.AddCommand(
 		commands.NewInitCmd(featReg, toolReg),

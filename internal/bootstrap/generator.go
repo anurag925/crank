@@ -93,10 +93,10 @@ func Generate(reg *Registry, opts Options) (*Result, error) {
 	}, nil
 }
 
-// Add applies a feature to an existing project directory. The base feature is
-// always re-rendered so its conditional sections (config schema, go.mod deps, ...)
-// pick up the updated feature set. Other features are re-rendered in case their
-// state is conditional too.
+// Add applies a feature to an existing project directory. Only the new
+// feature's templates are written. Files that already exist are skipped
+// unless SkipIfExists is false (e.g. the manifest). The manifest is always
+// re-written to reflect the updated feature set and crank version.
 func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 	if !utils.PathExists(projectDir) {
 		return nil, fmt.Errorf("project directory %s does not exist", projectDir)
@@ -116,32 +116,24 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 		return nil, err
 	}
 
-	var written []string
-	var newDeps []string
-	for _, name := range features {
-		ftr, _ := reg.resolve(name)
-		out, err := generateFeature(projectDir, ftr, ctx)
-		if err != nil {
-			return nil, err
-		}
-		written = append(written, out...)
-		// Collect deps only from the newly added feature.
-		if name == featureName {
-			newDeps = append(newDeps, ftr.Dependencies()...)
-		}
-	}
-	sort.Strings(written)
-	written = unique(written)
-
-	if err := writeManifest(projectDir, manifest, features); err != nil {
+	// Only render the new feature's templates, not all features.
+	ftr, _ := reg.resolve(featureName)
+	written, err := generateFeature(projectDir, ftr, ctx)
+	if err != nil {
 		return nil, err
 	}
 
+	// Always re-write the manifest with updated features + crank version.
+	if err := writeManifest(projectDir, manifest, features); err != nil {
+		return nil, err
+	}
+	written = append(written, ".crank.yaml")
+
 	return &Result{
 		ProjectDir:   projectDir,
-		Files:        written,
+		Files:        unique(written),
 		Features:     features,
-		Dependencies: uniqueDeps(newDeps),
+		Dependencies: uniqueDeps(ftr.Dependencies()),
 	}, nil
 }
 
@@ -215,15 +207,16 @@ func uniqueDeps(deps []string) []string {
 
 // manifest records which features were applied to a generated project.
 type manifest struct {
-	ProjectName string   `json:"project_name" yaml:"project_name"`
-	ModulePath  string   `json:"module_path"  yaml:"module_path"`
-	Features    []string `json:"features"     yaml:"features"`
+	ProjectName  string   `json:"project_name" yaml:"project_name"`
+	ModulePath   string   `json:"module_path"  yaml:"module_path"`
+	Features     []string `json:"features"     yaml:"features"`
+	CrankVersion string   `json:"crank_version" yaml:"crank_version"`
 }
 
 func readManifest(projectDir string) (*manifest, error) {
-	path := filepath.Join(projectDir, ".bootstrap.yaml")
+	path := filepath.Join(projectDir, ".crank.yaml")
 	if !utils.PathExists(path) {
-		return nil, fmt.Errorf("no .bootstrap.yaml manifest found in %s; is this a bootstrap-generated project?", projectDir)
+		return nil, fmt.Errorf("no .crank.yaml manifest found in %s; is this a crank-generated project?", projectDir)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -245,9 +238,10 @@ func writeManifest(projectDir string, current *manifest, updated []string) error
 		current = &manifest{}
 	}
 	current.Features = updated
+	current.CrankVersion = Version
 	body, err := encodeManifest(current)
 	if err != nil {
 		return err
 	}
-	return utils.WriteFile(filepath.Join(projectDir, ".bootstrap.yaml"), body)
+	return utils.WriteFile(filepath.Join(projectDir, ".crank.yaml"), body)
 }

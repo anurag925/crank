@@ -23,11 +23,11 @@ type FileMapping struct {
 	SkipIfExists bool
 }
 
-// Feature is implemented by every installable module in the bootstrapper.
+// Feature is implemented by every installable module in crank.
 type Feature interface {
 	// Name returns the short identifier used in --features lists.
 	Name() string
-	// Description is shown by `bootstrap list`.
+	// Description is shown by `crank list`.
 	Description() string
 	// Files enumerates the templates the feature contributes. Each template is rendered
 	// against the project context and written to the corresponding output path.
@@ -39,7 +39,7 @@ type Feature interface {
 	Dependencies() []string
 }
 
-// Registry holds the set of features known to the bootstrapper.
+// Registry holds the set of features known to crank.
 type Registry struct {
 	features map[string]Feature
 	order    []string
@@ -93,7 +93,7 @@ func (r *Registry) All() []Feature {
 func (r *Registry) resolve(name string) (Feature, error) {
 	f, ok := r.features[name]
 	if !ok {
-		return nil, fmt.Errorf("unknown feature %q (run `bootstrap list` to see available features)", name)
+		return nil, fmt.Errorf("unknown feature %q (run `crank list` to see available features)", name)
 	}
 	return f, nil
 }

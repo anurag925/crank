@@ -168,7 +168,7 @@ func TestBase_FilesExist_BaseOnly(t *testing.T) {
 		".gitignore",
 		"go.mod",
 		"README.md",
-		".bootstrap.yaml",
+		".crank.yaml",
 	}
 	for _, f := range expectedFiles {
 		assertFileExists(t, dir, f)
@@ -284,7 +284,7 @@ func TestBase_Dockerfile(t *testing.T) {
 
 func TestBase_BootstrapManifest(t *testing.T) {
 	r := generateProject(t, "manifesttest", []string{"base"})
-	content := readFile(t, r.ProjectDir, ".bootstrap.yaml")
+	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "project_name: manifesttest", "manifest project name")
 	assertContains(t, content, "module_path: github.com/example/manifesttest", "manifest module path")
 	assertContains(t, content, "- base", "manifest features")
@@ -424,7 +424,7 @@ func TestAuth_HandlerHandler_HasJWTDep(t *testing.T) {
 
 func TestAuth_BootstrapManifest(t *testing.T) {
 	r := generateProject(t, "authmanifest", []string{"auth"})
-	content := readFile(t, r.ProjectDir, ".bootstrap.yaml")
+	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "- auth", "manifest includes auth")
 }
 
@@ -567,7 +567,7 @@ func TestPostgres_Gitignore_HasDataDir(t *testing.T) {
 
 func TestPostgres_BootstrapManifest(t *testing.T) {
 	r := generateProject(t, "pgmanifest", []string{"postgres"})
-	content := readFile(t, r.ProjectDir, ".bootstrap.yaml")
+	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "- postgres", "manifest includes postgres")
 }
 
@@ -770,7 +770,7 @@ func TestAuthPostgres_GoMod_HasAllDeps(t *testing.T) {
 
 func TestAuthPostgres_BootstrapManifest(t *testing.T) {
 	r := generateProject(t, "authpgmanifest", []string{"auth", "postgres"})
-	content := readFile(t, r.ProjectDir, ".bootstrap.yaml")
+	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "- auth", "manifest has auth")
 	assertContains(t, content, "- postgres", "manifest has postgres")
 }
@@ -795,7 +795,7 @@ func TestRedis_Client(t *testing.T) {
 
 func TestRedis_BootstrapManifest(t *testing.T) {
 	r := generateProject(t, "redismanifest", []string{"redis"})
-	content := readFile(t, r.ProjectDir, ".bootstrap.yaml")
+	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "- redis", "manifest includes redis")
 }
 
@@ -894,7 +894,7 @@ func TestCrypto_ConfigGo_Defaults(t *testing.T) {
 
 func TestCrypto_BootstrapManifest(t *testing.T) {
 	r := generateProject(t, "cryptomanifest", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, ".bootstrap.yaml")
+	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "- crypto", "manifest includes crypto")
 }
 
@@ -947,7 +947,7 @@ func TestMongodb_Client(t *testing.T) {
 
 func TestMongodb_BootstrapManifest(t *testing.T) {
 	r := generateProject(t, "mongomanifest", []string{"mongodb"})
-	content := readFile(t, r.ProjectDir, ".bootstrap.yaml")
+	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "- mongodb", "manifest includes mongodb")
 }
 
@@ -1003,7 +1003,7 @@ func TestAll_Features(t *testing.T) {
 	assertContains(t, cfg, "crypto:", "config crypto")
 
 	// Verify manifest has all features
-	manifest := readFile(t, dir, ".bootstrap.yaml")
+	manifest := readFile(t, dir, ".crank.yaml")
 	for _, name := range names {
 		assertContains(t, manifest, "- "+name, "manifest "+name)
 	}
@@ -1040,7 +1040,7 @@ func TestAdd_AuthToBaseProject(t *testing.T) {
 	assertFileExists(t, r2.ProjectDir, "internal/handler/auth.go")
 
 	// Manifest should include auth
-	manifest := readFile(t, r2.ProjectDir, ".bootstrap.yaml")
+	manifest := readFile(t, r2.ProjectDir, ".crank.yaml")
 	assertContains(t, manifest, "- auth", "manifest after add auth")
 
 	// go.mod should now include auth deps
@@ -1070,6 +1070,6 @@ func TestAdd_PostgresToBaseProject(t *testing.T) {
 	assertFileExists(t, r2.ProjectDir, "migrations/000001_init.up.sql")
 
 	// Manifest should include postgres
-	manifest := readFile(t, r2.ProjectDir, ".bootstrap.yaml")
+	manifest := readFile(t, r2.ProjectDir, ".crank.yaml")
 	assertContains(t, manifest, "- postgres", "manifest after add postgres")
 }

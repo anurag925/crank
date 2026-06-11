@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Tool represents an external CLI tool that the bootstrap CLI wraps.
+// Tool represents an external CLI tool that the crank CLI wraps.
 // Each tool is exposed as a subcommand (e.g. "crank migrate", "crank swag").
 type Tool interface {
 	// Name returns the subcommand name (e.g. "migrate", "swag", "build").

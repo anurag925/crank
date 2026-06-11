@@ -193,7 +193,7 @@ func TestAdd_AuthToBase(t *testing.T) {
 	}
 
 	// manifest should include auth
-	data, _ := os.ReadFile(filepath.Join(result2.ProjectDir, ".bootstrap.yaml"))
+	data, _ := os.ReadFile(filepath.Join(result2.ProjectDir, ".crank.yaml"))
 	if !strings.Contains(string(data), "auth") {
 		t.Error("manifest missing auth after Add")
 	}
