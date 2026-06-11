@@ -378,11 +378,37 @@ targets without modifying crank itself.
 
 ## Testing
 
-There are currently no Go unit tests (`*_test.go`) in the project. The `test/` directory contains a generated sample project (`test/myapp/`) used for manual/integration verification. To validate changes:
+The project has three test layers:
 
-1. Build the CLI: `go build -o crank ./cmd/bootstrap`
-2. Generate a test project: `./crank init testapp --features=base,auth,postgres`
-3. Verify the output structure and generated files
+| Layer | Location | Speed | Network | How to run |
+|-------|----------|-------|---------|------------|
+| **Unit** | `internal/bootstrap/*_test.go` (`registry`, `context`, `manifest`, `result`, `generator`), `internal/bootstrap/commands/makedelegate_test.go`, `internal/utils/fileutil_test.go` | fast | no | `go test ./internal/... ./cmd/...` |
+| **Integration** | `internal/bootstrap/integration_test.go` — renders every feature/combo into a temp dir and asserts on the generated file contents | fast | no | `go test ./internal/...` |
+| **End-to-end** | `e2e/e2e_test.go` (build tag `e2e`) — builds the real `crank` binary, exercises the CLI surface (`--version`, `list`, `tools`, ...), and scaffolds projects that are then compiled with `go build`/`go vet` to prove the generated code is valid | slow | yes (`go get`) | `go test -tags e2e ./e2e/...` |
+
+The e2e tests are guarded by the `e2e` build tag so they are excluded from the
+ordinary `go test ./...` cycle (the `e2e/doc.go` file keeps the package buildable
+when the tag is absent). They require network access because they run `go get`
+for the generated projects' dependencies.
+
+Use the helper script to run any combination:
+
+```bash
+./scripts/test.sh unit          # fast, network-free
+./scripts/test.sh integration   # alias of the fast suite
+./scripts/test.sh e2e           # build binary + compile generated projects
+./scripts/test.sh all           # everything (default)
+./scripts/test.sh cover         # fast suite + coverage.out profile
+```
+
+CI (`.github/workflows/ci.yml`) runs the unit/integration suite (with `-race`)
+and the e2e suite as separate jobs on every push to `main` and on pull requests.
+
+### Adding tests for a new feature
+
+When you add a feature, extend `integration_test.go` with content assertions and
+add the feature to the `compileCases`/`allFeatureNames` lists in `e2e/e2e_test.go`
+so its generated output is compiled end-to-end.
 
 ## Dependencies
 
