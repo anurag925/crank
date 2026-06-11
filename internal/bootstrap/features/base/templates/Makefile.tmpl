@@ -1,74 +1,29 @@
 APP_NAME := {{.ProjectName}}
-MODULE   := {{.ModulePath}}
 BIN_DIR  := bin
-BIN      := $(BIN_DIR)/$(APP_NAME)
-{{if .Has "postgres"}}
-MIGRATIONS_DIR := migrations
-MIGRATE := migrate -path $(MIGRATIONS_DIR) -database "$$DATABASE_URL"
-{{end}}
 
-.PHONY: help tidy build run test clean fmt vet lint swag{{if .Has "postgres"}} migrate-up migrate-down migrate-create{{end}}
+# Common development tasks (build, run, dev, test, fmt, vet, tidy, swag{{if .Has "postgres"}}, migrate{{end}})
+# are provided by the `rev` CLI, so they are intentionally NOT duplicated here.
+# Run `rev tools` to list them. This Makefile holds only targets that rev does
+# not provide natively — add your own project-specific targets below. They can
+# be run with either `make <target>` or `rev <target>` (rev transparently
+# delegates unknown commands to this Makefile).
+
+.PHONY: help clean
 
 help:
-	@echo "Available targets:"
-	@echo "  tidy            - sync module dependencies"
-	@echo "  build           - compile binary into $(BIN)"
-	@echo "  run             - run the application"
-	@echo "  test            - run all tests"
-	@echo "  fmt             - run gofmt"
-	@echo "  vet             - run go vet"
-	@echo "  clean           - remove build artifacts"
-	@echo "  swag            - generate Swagger docs"
+	@echo "Common tasks are provided by the rev CLI:"
+	@echo "  rev build        - compile the binary into $(BIN_DIR)/$(APP_NAME)"
+	@echo "  rev run          - run the application"
+	@echo "  rev dev          - run with live reload (air)"
+	@echo "  rev test         - run all tests"
+	@echo "  rev swag         - generate Swagger docs"
 {{- if .Has "postgres"}}
-	@echo "  migrate-up      - apply all up migrations"
-	@echo "  migrate-down    - roll back the last migration"
-	@echo "  migrate-create  - create a new migration pair (use name=foo_bar)"
+	@echo "  rev migrate up   - apply database migrations"
+	@echo "  rev make migration <name> - create an up/down migration pair"
 {{- end}}
-
-tidy:
-	go mod tidy
-
-build: tidy swag
-	@mkdir -p $(BIN_DIR)
-	go build -o $(BIN) ./cmd/server
-
-run:
-	go run ./cmd/server
-
-test:
-	go test ./...
-
-fmt:
-	gofmt -s -w .
-
-vet:
-	go vet ./...
+	@echo ""
+	@echo "Project-specific Makefile targets:"
+	@echo "  make clean       - remove build artifacts ($(BIN_DIR)/)"
 
 clean:
 	rm -rf $(BIN_DIR)
-
-swag:
-	swag init -g cmd/server/main.go -o docs --parseInternal --parseDependency
-{{if .Has "postgres"}}
-migrate-up:
-	@if [ -z "$$DATABASE_URL" ]; then \
-		echo "DATABASE_URL is not set; falling back to configs/config.yaml settings"; \
-		export DATABASE_URL="postgres://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_NAME?sslmode=$$DB_SSLMODE"; \
-	fi
-	$(MIGRATE) up
-
-migrate-down:
-	@if [ -z "$$DATABASE_URL" ]; then \
-		echo "DATABASE_URL is not set; falling back to configs/config.yaml settings"; \
-		export DATABASE_URL="postgres://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_NAME?sslmode=$$DB_SSLMODE"; \
-	fi
-	$(MIGRATE) down 1
-
-migrate-create:
-	@if [ -z "$$name" ]; then \
-		echo "Usage: make migrate-create name=create_users_table"; \
-		exit 1; \
-	fi
-	@ts=$$(date +%Y%m%d%H%M%S); \
-	migrate create -ext sql -dir $(MIGRATIONS_DIR) -seq $${ts}_$$name
-{{end}}

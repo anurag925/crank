@@ -308,6 +308,7 @@ Config files live in a top-level `configs/` directory, following the
 | Feature interface & registry | `internal/bootstrap/feature.go` |
 | Tool interface & registry | `internal/bootstrap/tool.go` + `tool_registry.go` |
 | Tool command factory | `internal/bootstrap/commands/tools.go` |
+| Makefile delegation fallback | `internal/bootstrap/commands/makedelegate.go` |
 | Tool implementations | `internal/bootstrap/tools/<name>/tool.go` |
 | Tool install helper | `internal/bootstrap/tools/install.go` |
 | Exec utilities | `internal/utils/exec.go` |
@@ -337,6 +338,43 @@ Config files live in a top-level `configs/` directory, following the
 | `rev tidy` | `go mod tidy` | `go` | — |
 
 All tools accept `--project <dir>`. If `--project` is not specified, the current directory is used as the project root.
+
+## Makefile Delegation
+
+The generated project ships **both** a `Makefile` and is usable through the `rev`
+CLI, but they have **non-overlapping** responsibilities to avoid confusion:
+
+- `rev` is the single source of truth for common development tasks (build, run,
+  dev, test, fmt, vet, tidy, swag, migrate). These are intentionally **not**
+  duplicated as Makefile targets.
+- The generated `Makefile` holds only targets that `rev` does not provide
+  natively (e.g. `clean`) and is the place for project-specific custom targets.
+
+To bridge the two, `rev` transparently delegates unknown subcommands to the
+project's `Makefile`. When you run `rev <name>` and `<name>` is **not** a native
+rev command, rev looks up `<name>` as a target in the target project's
+`Makefile` (respecting `--project`) and runs `make <name>` for you. Any extra
+arguments (e.g. `name=foo`) are forwarded to make verbatim.
+
+```bash
+# `clean` is not a native rev command, but the Makefile defines it, so this
+# runs `make clean` in the project directory.
+rev clean --project ./myapp
+rev greet name=anurag --project ./myapp   # → make greet name=anurag (custom target)
+```
+
+Precedence rules:
+
+- **Native rev commands always win.** The fallback is only consulted for names
+  cobra does not already recognize, so `rev build` always runs the native build
+  tool. (The Makefile no longer defines a `build` target anyway.)
+- If the name matches neither a rev command nor a Makefile target (or there is
+  no `Makefile`), rev reports the usual `unknown command` error.
+
+This is implemented in `internal/bootstrap/commands/makedelegate.go` and hooked
+into `cmd/bootstrap/main.go` before `cobra`'s `Execute()`. It also provides a
+natural extension path: project-specific behavior can be expressed as Makefile
+targets without modifying rev itself.
 
 ## Testing
 

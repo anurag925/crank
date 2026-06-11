@@ -31,6 +31,18 @@ import (
 
 func main() {
 	root := newRootCmd()
+
+	// If the first argument is not a native rev command but matches a target in
+	// the target project's Makefile, transparently delegate to `make <target>`.
+	// Native rev commands always take precedence.
+	if handled, err := commands.TryMakeDelegation(root, os.Args[1:]); handled {
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if err := root.Execute(); err != nil {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		os.Exit(1)

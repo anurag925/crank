@@ -179,7 +179,7 @@ func TestBase_GoMod_ModulePath(t *testing.T) {
 	r := generateProject(t, "mymod", nil)
 	content := readFile(t, r.ProjectDir, "go.mod")
 	assertContains(t, content, "module github.com/example/mymod", "go.mod")
-	assertContains(t, content, "go 1.21", "go.mod")
+	assertContains(t, content, "go 1.25", "go.mod")
 
 	// Dependencies are now returned via Result and installed via go get.
 	assertDepsContains(t, r.Dependencies, "github.com/labstack/echo/v4", "base deps")
@@ -277,7 +277,7 @@ func TestBase_MainGo_HasValidatorImport(t *testing.T) {
 func TestBase_Dockerfile(t *testing.T) {
 	r := generateProject(t, "dockertest", nil)
 	content := readFile(t, r.ProjectDir, "Dockerfile")
-	assertContains(t, content, "golang:1.21-alpine", "Dockerfile golang image")
+	assertContains(t, content, "golang:1.25-alpine", "Dockerfile golang image")
 	assertContains(t, content, "cmd/server", "Dockerfile build target")
 	assertContains(t, content, "EXPOSE 8080", "Dockerfile expose")
 }
@@ -549,12 +549,14 @@ func TestPostgres_MainGo_ImportsDatabase(t *testing.T) {
 	assertContains(t, content, "db.Close()", "main.go defers db close")
 }
 
-func TestPostgres_Makefile_HasMigrateTargets(t *testing.T) {
+func TestPostgres_Makefile_NoMigrateTargets(t *testing.T) {
+	// Common commands (including migrate) are provided by the rev CLI, not
+	// duplicated in the Makefile.
 	r := generateProject(t, "pgmake", []string{"postgres"})
 	content := readFile(t, r.ProjectDir, "Makefile")
-	assertContains(t, content, "migrate-up", "Makefile has migrate-up")
-	assertContains(t, content, "migrate-down", "Makefile has migrate-down")
-	assertContains(t, content, "migrate-create", "Makefile has migrate-create")
+	assertNotContains(t, content, "migrate-up:", "Makefile no longer defines migrate-up target")
+	assertNotContains(t, content, "migrate-down:", "Makefile no longer defines migrate-down target")
+	assertNotContains(t, content, "migrate-create:", "Makefile no longer defines migrate-create target")
 }
 
 func TestPostgres_Gitignore_HasDataDir(t *testing.T) {
@@ -574,7 +576,7 @@ func TestPostgres_Readme_HasDBInfo(t *testing.T) {
 	content := readFile(t, r.ProjectDir, "README.md")
 	assertContains(t, content, "Bun", "README mentions Bun")
 	assertContains(t, content, "golang-migrate", "README mentions migrate")
-	assertContains(t, content, "migrate-up", "README has migrate-up target")
+	assertContains(t, content, "rev migrate", "README documents the rev migrate command")
 }
 
 // ==========================================================================
@@ -1070,8 +1072,4 @@ func TestAdd_PostgresToBaseProject(t *testing.T) {
 	// Manifest should include postgres
 	manifest := readFile(t, r2.ProjectDir, ".bootstrap.yaml")
 	assertContains(t, manifest, "- postgres", "manifest after add postgres")
-
-	// Makefile should now have migrate targets
-	mk := readFile(t, r2.ProjectDir, "Makefile")
-	assertContains(t, mk, "migrate-up", "Makefile after add postgres")
 }

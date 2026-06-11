@@ -20,17 +20,17 @@ Production-ready Go backend scaffolded by [rev](#).
 
 ```bash
 # 1. fetch dependencies
-make tidy
+rev tidy
 
 # 2. copy environment template and adjust as needed
 cp .env.example .env
 
 # 3. run the server
-make run
+rev run
 ```
 
 The server listens on `http://localhost:8080` by default. Health probe: `GET /health`.
-API docs (Swagger UI): `http://localhost:8080/swagger/index.html` (run `make swag` first).
+API docs (Swagger UI): `http://localhost:8080/swagger/index.html` (run `rev swag` first).
 
 ## Configuration
 
@@ -61,19 +61,40 @@ the dotted path with underscores (e.g. `database.password` -> `DATABASE_PASSWORD
 └── .air.toml           # live-reload config
 ```
 
-## Make targets
+## Tasks
 
-| Target | Purpose |
-| ------ | ------- |
-| `make build` | Compile a static binary into `bin/{{.ProjectName}}` (also generates swagger docs) |
-| `make run` | Run the application |
-| `make test` | Run all tests |
-| `make tidy` | Sync module dependencies |
-| `make fmt` | Run `gofmt` |
-| `make vet` | Run `go vet` |
-| `make swag` | Generate Swagger/OpenAPI docs into `docs/` |
+Common development tasks are provided by the [`rev`](https://github.com/anurag925/rev)
+CLI, so they are not duplicated in the `Makefile`. `rev` auto-installs missing
+tools (`swag`/`air`/`migrate`) and accepts `--project` to target this directory
+from anywhere:
+
+| Command | Purpose |
+| ------- | ------- |
+| `rev build` | Compile a static binary into `bin/{{.ProjectName}}` |
+| `rev run` | Run the application |
+| `rev dev` | Run with live reload (air) |
+| `rev test` | Run all tests |
+| `rev tidy` | Sync module dependencies |
+| `rev gofmt` | Run `gofmt` |
+| `rev vet` | Run `go vet` |
+| `rev swag` | Generate Swagger/OpenAPI docs into `docs/` |
 {{- if .Has "postgres"}}
-| `make migrate-up` | Apply all pending migrations |
-| `make migrate-down` | Roll back the last migration |
-| `make migrate-create name=foo` | Generate a new up/down migration pair |
+| `rev migrate up` | Apply all pending migrations |
+| `rev migrate down --steps 1` | Roll back the last migration |
+| `rev make migration <name>` | Generate a new up/down migration pair |
 {{- end}}
+
+Run `rev tools` to list everything available.
+
+## Makefile
+
+The `Makefile` intentionally holds only targets that `rev` does not provide
+natively (e.g. `make clean`). It's the place for your own project-specific
+targets. Any target you add can be run with either `make <target>` or
+`rev <target>` — `rev` transparently delegates unknown commands to `make`:
+
+```bash
+make clean              # remove build artifacts
+rev clean               # same thing, delegated to make
+rev <your-make-target>  # any custom target you add to the Makefile
+```
