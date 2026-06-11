@@ -9,9 +9,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/bootstrap"
-	"github.com/anurag925/rev/internal/bootstrap/tools"
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/bootstrap/tools"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 func init() {
@@ -36,10 +36,10 @@ from DATABASE_URL env var or the project's configs/config.yaml.
 If --project is not specified, the current directory is used.
 
 Examples:
-  rev migrate up --project ./myapp
-  rev migrate down --steps 1 --project ./myapp
-  rev migrate --project ./myapp              (defaults to "up")
-  cd myapp && rev migrate up                 (uses current directory)`
+  crank migrate up --project ./myapp
+  crank migrate down --steps 1 --project ./myapp
+  crank migrate --project ./myapp              (defaults to "up")
+  cd myapp && crank migrate up                 (uses current directory)`
 }
 
 func (*tool) InstallCmd() string {

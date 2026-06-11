@@ -1,19 +1,19 @@
 #!/bin/sh
-# install.sh — install the `rev` CLI from GitHub Releases.
+# install.sh — install the `crank` CLI from GitHub Releases.
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/anurag925/rev/main/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/anurag925/crank/main/install.sh | sh
 #
 # Environment overrides:
-#   REV_VERSION   Specific version to install (e.g. v0.1.0). Defaults to latest.
-#   REV_INSTALL_DIR  Target install directory. Defaults to /usr/local/bin
+#   CRANK_VERSION   Specific version to install (e.g. v0.1.0). Defaults to latest.
+#   CRANK_INSTALL_DIR  Target install directory. Defaults to /usr/local/bin
 #                    (falls back to $HOME/.local/bin if not writable).
-#   REV_NO_VERIFY  Set to any value to skip checksum verification.
+#   CRANK_NO_VERIFY  Set to any value to skip checksum verification.
 
 set -eu
 
-REPO="anurag925/rev"
-BINARY="rev"
+REPO="anurag925/crank"
+BINARY="crank"
 
 # --- helpers ---------------------------------------------------------------
 
@@ -71,8 +71,8 @@ detect_arch() {
 # --- resolve version -------------------------------------------------------
 
 resolve_version() {
-  if [ -n "${REV_VERSION:-}" ]; then
-    echo "$REV_VERSION"
+  if [ -n "${CRANK_VERSION:-}" ]; then
+    echo "$CRANK_VERSION"
     return
   fi
   # Resolve the latest release tag from the GitHub API.
@@ -80,15 +80,15 @@ resolve_version() {
     | grep '"tag_name":' \
     | head -n1 \
     | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')"
-  [ -n "$tag" ] || err "could not determine latest version; set REV_VERSION explicitly"
+  [ -n "$tag" ] || err "could not determine latest version; set CRANK_VERSION explicitly"
   echo "$tag"
 }
 
 # --- choose install dir ----------------------------------------------------
 
 choose_install_dir() {
-  if [ -n "${REV_INSTALL_DIR:-}" ]; then
-    echo "$REV_INSTALL_DIR"
+  if [ -n "${CRANK_INSTALL_DIR:-}" ]; then
+    echo "$CRANK_INSTALL_DIR"
     return
   fi
   if [ -w /usr/local/bin ] 2>/dev/null; then
@@ -123,7 +123,7 @@ main() {
     || err "failed to download $ARCHIVE_URL (does this release/asset exist?)"
 
   # Verify checksum unless disabled.
-  if [ -z "${REV_NO_VERIFY:-}" ]; then
+  if [ -z "${CRANK_NO_VERIFY:-}" ]; then
     if download "$CHECKSUMS_URL" "$TMP/checksums.txt" 2>/dev/null; then
       info "Verifying checksum"
       expected="$(grep " $ARCHIVE\$" "$TMP/checksums.txt" | awk '{print $1}')"
@@ -160,7 +160,7 @@ main() {
     warn "$DIR is not writable; using sudo"
     sudo install -m 0755 "$TMP/$BINARY" "$DIR/$BINARY"
   else
-    err "$DIR is not writable and sudo is unavailable; set REV_INSTALL_DIR to a writable path"
+    err "$DIR is not writable and sudo is unavailable; set CRANK_INSTALL_DIR to a writable path"
   fi
 
   info "Installed $BINARY to $DIR/$BINARY"

@@ -1,4 +1,4 @@
-module github.com/anurag925/rev
+module github.com/anurag925/crank
 
 go 1.25
 

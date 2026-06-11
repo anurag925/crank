@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/bootstrap"
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 func init() {
@@ -28,8 +28,8 @@ inside the bin/ directory.
 If --project is not specified, the current directory is used.
 
 Examples:
-  rev build --project ./myapp
-  cd myapp && rev build                          (uses current directory)`
+  crank build --project ./myapp
+  cd myapp && crank build                          (uses current directory)`
 }
 
 func (tool) InstallCmd() string          { return "" }

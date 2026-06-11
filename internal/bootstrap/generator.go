@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 // Options control how a project is generated.

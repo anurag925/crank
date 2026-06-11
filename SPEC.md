@@ -1,4 +1,4 @@
-# rev — Golang Backend CLI - Specification
+# crank — Golang Backend CLI - Specification
 
 ## Concept & Vision
 
@@ -7,7 +7,7 @@ A modular CLI tool that scaffolds production-ready Golang backend applications w
 ## Architecture Overview
 
 ```
-rev/
+crank/
 ├── cmd/
 │   └── bootstrap/
 │       └── main.go           # CLI entry point
@@ -108,37 +108,37 @@ rev/
 
 ```bash
 # Initialize new project (tools are checked/installed automatically)
-./rev init myapp --features=base,auth,postgres
+./crank init myapp --features=base,auth,postgres
 
 # Add features to existing project
-./rev add redis --project=./myapp
-./rev add mongodb --project=./myapp
+./crank add redis --project=./myapp
+./crank add mongodb --project=./myapp
 
 # List available features
-./rev list
+./crank list
 
 # List available tool subcommands
-./rev tools
+./crank tools
 
 # Generate migration
-./rev make migration create_users --project=./myapp
+./crank make migration create_users --project=./myapp
 
 # Run migrations (--project optional; defaults to current directory)
-./rev migrate up --project=./myapp
-cd myapp && ./rev migrate up
+./crank migrate up --project=./myapp
+cd myapp && ./crank migrate up
 
 # Run project
-./rev run --project=./myapp
-cd myapp && ./rev run
+./crank run --project=./myapp
+cd myapp && ./crank run
 
 # Other tool subcommands (all accept --project or use current directory)
-./rev build --project=./myapp
-./rev test -v --project=./myapp
-./rev swag --project=./myapp
-./rev dev --project=./myapp
-./rev gofmt --project=./myapp
-./rev vet --project=./myapp
-./rev tidy --project=./myapp
+./crank build --project=./myapp
+./crank test -v --project=./myapp
+./crank swag --project=./myapp
+./crank dev --project=./myapp
+./crank gofmt --project=./myapp
+./crank vet --project=./myapp
+./crank tidy --project=./myapp
 ```
 
 ## Generated Project Structure

@@ -9,7 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 // NewMakeCmd returns the `make` cobra command which generates scaffolding inside an

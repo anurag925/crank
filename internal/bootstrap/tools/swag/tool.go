@@ -6,9 +6,9 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/bootstrap"
-	"github.com/anurag925/rev/internal/bootstrap/tools"
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/bootstrap/tools"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 func init() {
@@ -30,9 +30,9 @@ producing docs/ with the generated OpenAPI spec.
 If --project is not specified, the current directory is used.
 
 Examples:
-  rev swag --project ./myapp
-  rev swag --parseDepth 2 --project ./myapp
-  cd myapp && rev swag                          (uses current directory)`
+  crank swag --project ./myapp
+  crank swag --parseDepth 2 --project ./myapp
+  cd myapp && crank swag                          (uses current directory)`
 }
 
 func (tool) InstallCmd() string {

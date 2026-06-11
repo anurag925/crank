@@ -3,7 +3,7 @@ package mongodb
 import (
 	"embed"
 
-	"github.com/anurag925/rev/internal/bootstrap"
+	"github.com/anurag925/crank/internal/bootstrap"
 )
 
 //go:embed templates/*.tmpl

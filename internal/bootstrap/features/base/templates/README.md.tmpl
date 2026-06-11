@@ -1,6 +1,6 @@
 # {{.ProjectName}}
 
-Production-ready Go backend scaffolded by [rev](#).
+Production-ready Go backend scaffolded by [crank](#).
 
 ## Stack
 
@@ -20,17 +20,17 @@ Production-ready Go backend scaffolded by [rev](#).
 
 ```bash
 # 1. fetch dependencies
-rev tidy
+crank tidy
 
 # 2. copy environment template and adjust as needed
 cp .env.example .env
 
 # 3. run the server
-rev run
+crank run
 ```
 
 The server listens on `http://localhost:8080` by default. Health probe: `GET /health`.
-API docs (Swagger UI): `http://localhost:8080/swagger/index.html` (run `rev swag` first).
+API docs (Swagger UI): `http://localhost:8080/swagger/index.html` (run `crank swag` first).
 
 ## Configuration
 
@@ -63,38 +63,38 @@ the dotted path with underscores (e.g. `database.password` -> `DATABASE_PASSWORD
 
 ## Tasks
 
-Common development tasks are provided by the [`rev`](https://github.com/anurag925/rev)
-CLI, so they are not duplicated in the `Makefile`. `rev` auto-installs missing
+Common development tasks are provided by the [`crank`](https://github.com/anurag925/crank)
+CLI, so they are not duplicated in the `Makefile`. `crank` auto-installs missing
 tools (`swag`/`air`/`migrate`) and accepts `--project` to target this directory
 from anywhere:
 
 | Command | Purpose |
 | ------- | ------- |
-| `rev build` | Compile a static binary into `bin/{{.ProjectName}}` |
-| `rev run` | Run the application |
-| `rev dev` | Run with live reload (air) |
-| `rev test` | Run all tests |
-| `rev tidy` | Sync module dependencies |
-| `rev gofmt` | Run `gofmt` |
-| `rev vet` | Run `go vet` |
-| `rev swag` | Generate Swagger/OpenAPI docs into `docs/` |
+| `crank build` | Compile a static binary into `bin/{{.ProjectName}}` |
+| `crank run` | Run the application |
+| `crank dev` | Run with live reload (air) |
+| `crank test` | Run all tests |
+| `crank tidy` | Sync module dependencies |
+| `crank gofmt` | Run `gofmt` |
+| `crank vet` | Run `go vet` |
+| `crank swag` | Generate Swagger/OpenAPI docs into `docs/` |
 {{- if .Has "postgres"}}
-| `rev migrate up` | Apply all pending migrations |
-| `rev migrate down --steps 1` | Roll back the last migration |
-| `rev make migration <name>` | Generate a new up/down migration pair |
+| `crank migrate up` | Apply all pending migrations |
+| `crank migrate down --steps 1` | Roll back the last migration |
+| `crank make migration <name>` | Generate a new up/down migration pair |
 {{- end}}
 
-Run `rev tools` to list everything available.
+Run `crank tools` to list everything available.
 
 ## Makefile
 
-The `Makefile` intentionally holds only targets that `rev` does not provide
+The `Makefile` intentionally holds only targets that `crank` does not provide
 natively (e.g. `make clean`). It's the place for your own project-specific
 targets. Any target you add can be run with either `make <target>` or
-`rev <target>` — `rev` transparently delegates unknown commands to `make`:
+`crank <target>` — `crank` transparently delegates unknown commands to `make`:
 
 ```bash
 make clean              # remove build artifacts
-rev clean               # same thing, delegated to make
-rev <your-make-target>  # any custom target you add to the Makefile
+crank clean               # same thing, delegated to make
+crank <your-make-target>  # any custom target you add to the Makefile
 ```

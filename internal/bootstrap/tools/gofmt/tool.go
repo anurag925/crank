@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/bootstrap"
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 func init() {
@@ -27,9 +27,9 @@ func (tool) LongDescription() string {
 If --project is not specified, the current directory is used.
 
 Examples:
-  rev gofmt --project ./myapp
-  rev gofmt -l --project ./myapp   (list files that differ)
-  cd myapp && rev gofmt                       (uses current directory)`
+  crank gofmt --project ./myapp
+  crank gofmt -l --project ./myapp   (list files that differ)
+  cd myapp && crank gofmt                       (uses current directory)`
 }
 
 func (tool) InstallCmd() string          { return "" }

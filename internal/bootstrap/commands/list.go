@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/bootstrap"
+	"github.com/anurag925/crank/internal/bootstrap"
 )
 
 // NewListCmd returns the `list` cobra command.

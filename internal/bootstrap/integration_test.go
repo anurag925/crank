@@ -6,15 +6,15 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/anurag925/rev/internal/bootstrap"
+	"github.com/anurag925/crank/internal/bootstrap"
 
 	// Register all features via init().
-	_ "github.com/anurag925/rev/internal/bootstrap/features/auth"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/base"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/crypto"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/mongodb"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/postgres"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/redis"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/auth"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/crypto"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 )
 
 // allFeatures returns every feature name registered in the global registry.
@@ -550,7 +550,7 @@ func TestPostgres_MainGo_ImportsDatabase(t *testing.T) {
 }
 
 func TestPostgres_Makefile_NoMigrateTargets(t *testing.T) {
-	// Common commands (including migrate) are provided by the rev CLI, not
+	// Common commands (including migrate) are provided by the crank CLI, not
 	// duplicated in the Makefile.
 	r := generateProject(t, "pgmake", []string{"postgres"})
 	content := readFile(t, r.ProjectDir, "Makefile")
@@ -576,7 +576,7 @@ func TestPostgres_Readme_HasDBInfo(t *testing.T) {
 	content := readFile(t, r.ProjectDir, "README.md")
 	assertContains(t, content, "Bun", "README mentions Bun")
 	assertContains(t, content, "golang-migrate", "README mentions migrate")
-	assertContains(t, content, "rev migrate", "README documents the rev migrate command")
+	assertContains(t, content, "crank migrate", "README documents the crank migrate command")
 }
 
 // ==========================================================================

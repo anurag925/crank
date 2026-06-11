@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/bootstrap"
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 // NewToolCmd creates a cobra command for a registered tool.
@@ -94,16 +94,16 @@ func NewToolsListCmd(reg *bootstrap.ToolRegistry) *cobra.Command {
 	return &cobra.Command{
 		Use:   "tools",
 		Short: "List available tool subcommands",
-		Long: `tools lists every external CLI tool that rev can wrap as a subcommand.
+		Long: `tools lists every external CLI tool that crank can wrap as a subcommand.
 
-Each tool is available as: rev <tool> [args] --project <dir>
+Each tool is available as: crank <tool> [args] --project <dir>
 If --project is not specified, the current directory is used.
 Missing tools are installed automatically when possible.
 
 Examples:
-  rev tools                        (list all tools)
-  rev migrate up                   (run migrate in current directory)
-  rev build --project ./myapp      (build a specific project)`,
+  crank tools                        (list all tools)
+  crank migrate up                   (run migrate in current directory)
+  crank build --project ./myapp      (build a specific project)`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			fmt.Println("Available tool subcommands:")
 			fmt.Println()
@@ -115,7 +115,7 @@ Examples:
 				fmt.Printf("  %-12s %s%s\n", t.Name(), t.Description(), reqs)
 			}
 			fmt.Println()
-			fmt.Println("Each tool is available as: rev <tool> [args] --project <dir>")
+			fmt.Println("Each tool is available as: crank <tool> [args] --project <dir>")
 			fmt.Println("If --project is omitted, the current directory is used as the project root.")
 			fmt.Println("Missing tools are installed automatically when possible.")
 			return nil

@@ -6,27 +6,27 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/bootstrap"
-	"github.com/anurag925/rev/internal/bootstrap/commands"
+	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/bootstrap/commands"
 
 	// Feature packages self-register with the global registry via init().
-	_ "github.com/anurag925/rev/internal/bootstrap/features/auth"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/base"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/crypto"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/mongodb"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/postgres"
-	_ "github.com/anurag925/rev/internal/bootstrap/features/redis"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/auth"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/crypto"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 
 	// Tool packages self-register with the global tool registry via init().
-	_ "github.com/anurag925/rev/internal/bootstrap/tools/build"
-	_ "github.com/anurag925/rev/internal/bootstrap/tools/dev"
-	_ "github.com/anurag925/rev/internal/bootstrap/tools/gofmt"
-	_ "github.com/anurag925/rev/internal/bootstrap/tools/migrate"
-	_ "github.com/anurag925/rev/internal/bootstrap/tools/run"
-	_ "github.com/anurag925/rev/internal/bootstrap/tools/swag"
-	_ "github.com/anurag925/rev/internal/bootstrap/tools/test"
-	_ "github.com/anurag925/rev/internal/bootstrap/tools/tidy"
-	_ "github.com/anurag925/rev/internal/bootstrap/tools/vet"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/build"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/dev"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/gofmt"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/migrate"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/run"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/swag"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/test"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/tidy"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/vet"
 )
 
 // Build information, populated at release time via -ldflags by GoReleaser.
@@ -39,9 +39,9 @@ var (
 func main() {
 	root := newRootCmd()
 
-	// If the first argument is not a native rev command but matches a target in
+	// If the first argument is not a native crank command but matches a target in
 	// the target project's Makefile, transparently delegate to `make <target>`.
-	// Native rev commands always take precedence.
+	// Native crank commands always take precedence.
 	if handled, err := commands.TryMakeDelegation(root, os.Args[1:]); handled {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
@@ -61,13 +61,13 @@ func newRootCmd() *cobra.Command {
 	toolReg := bootstrap.GlobalToolRegistry
 
 	root := &cobra.Command{
-		Use:     "rev",
+		Use:     "crank",
 		Version: fmt.Sprintf("%s (commit %s, built %s)", version, commit, date),
 		Short:   "Scaffold and manage production-ready Go backend services",
-		Long: `rev is a code generator and project management tool for Go backend
+		Long: `crank is a code generator and project management tool for Go backend
 services. It scaffolds projects with a curated set of installable features and
 wraps common CLI tools (go, migrate, swag, air, ...) as subcommands so you
-never need to leave the rev CLI.
+never need to leave the crank CLI.
 
 All tool subcommands accept --project to target a specific project directory.
 If --project is not specified, the current directory is used.`,

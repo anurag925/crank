@@ -9,7 +9,7 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 // FileMapping describes a single file produced by a feature: the template inside the

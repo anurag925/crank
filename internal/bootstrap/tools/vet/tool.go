@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/bootstrap"
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 func init() {
@@ -27,8 +27,8 @@ func (tool) LongDescription() string {
 If --project is not specified, the current directory is used.
 
 Examples:
-  rev vet --project ./myapp
-  cd myapp && rev vet                            (uses current directory)`
+  crank vet --project ./myapp
+  cd myapp && crank vet                            (uses current directory)`
 }
 
 func (tool) InstallCmd() string          { return "" }

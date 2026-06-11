@@ -1,9 +1,9 @@
-# rev
+# crank
 
 A modular CLI that scaffolds production-ready Go backend services and wraps common
 development tools as subcommands. Given a project name and a list of features, it
 generates a clean, layered Go service with sensible defaults and a curated set of
-optional modules. All day-to-day development tasks are accessible through `rev`.
+optional modules. All day-to-day development tasks are accessible through `crank`.
 
 ## Features
 
@@ -23,55 +23,55 @@ optional modules. All day-to-day development tasks are accessible through `rev`.
 Install the latest release for your platform (Linux / macOS, amd64 / arm64):
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/anurag925/rev/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/anurag925/crank/main/install.sh | sh
 ```
 
 The script detects your OS/architecture, downloads the matching release archive,
-verifies its checksum, and installs the `rev` binary to `/usr/local/bin`
+verifies its checksum, and installs the `crank` binary to `/usr/local/bin`
 (falling back to `~/.local/bin` if that isn't writable).
 
 Environment overrides:
 
 | Variable | Description |
 | -------- | ----------- |
-| `REV_VERSION` | Install a specific version (e.g. `v0.1.0`) instead of the latest |
-| `REV_INSTALL_DIR` | Target install directory |
-| `REV_NO_VERIFY` | Skip checksum verification |
+| `CRANK_VERSION` | Install a specific version (e.g. `v0.1.0`) instead of the latest |
+| `CRANK_INSTALL_DIR` | Target install directory |
+| `CRANK_NO_VERIFY` | Skip checksum verification |
 
 ```bash
 # Pin a version and install into a custom directory
-REV_VERSION=v0.1.0 REV_INSTALL_DIR="$HOME/bin" \
-  sh -c "$(curl -fsSL https://raw.githubusercontent.com/anurag925/rev/main/install.sh)"
+CRANK_VERSION=v0.1.0 CRANK_INSTALL_DIR="$HOME/bin" \
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/anurag925/crank/main/install.sh)"
 ```
 
 ### go install
 
 ```bash
-go install github.com/anurag925/rev/cmd/bootstrap@latest
+go install github.com/anurag925/crank/cmd/bootstrap@latest
 ```
 
-Note: this produces a binary named `bootstrap`. Rename it to `rev` if you like:
+Note: this produces a binary named `bootstrap`. Rename it to `crank` if you like:
 
 ```bash
-mv "$(go env GOPATH)/bin/bootstrap" "$(go env GOPATH)/bin/rev"
+mv "$(go env GOPATH)/bin/bootstrap" "$(go env GOPATH)/bin/crank"
 ```
 
 ### Prebuilt binaries
 
 Download the archive for your platform from the
-[Releases page](https://github.com/anurag925/rev/releases) (Windows `.zip`
-included), extract it, and move the `rev` binary onto your `PATH`.
+[Releases page](https://github.com/anurag925/crank/releases) (Windows `.zip`
+included), extract it, and move the `crank` binary onto your `PATH`.
 
 ### Build from source
 
 ```bash
-go build -o rev ./cmd/bootstrap
+go build -o crank ./cmd/bootstrap
 ```
 
 Verify your installation with:
 
 ```bash
-rev --version
+crank --version
 ```
 
 ## Usage
@@ -80,74 +80,74 @@ rev --version
 
 ```bash
 # Scaffold a new project (tools are checked/installed automatically)
-./rev init myapp --features=base,auth,postgres
+./crank init myapp --features=base,auth,postgres
 
 # List available features
-./rev list
+./crank list
 
 # Add a feature to an existing project
-./rev add redis --project=./myapp
+./crank add redis --project=./myapp
 
 # Generate a new migration
-./rev make migration create_orders --project=./myapp
+./crank make migration create_orders --project=./myapp
 ```
 
 ### Development Tools (all accept --project or use current directory)
 
 ```bash
 # Run migrations
-./rev migrate up --project=./myapp
-cd myapp && ./rev migrate up                    # current directory
+./crank migrate up --project=./myapp
+cd myapp && ./crank migrate up                    # current directory
 
 # Run the project
-./rev run --project=./myapp
-cd myapp && ./rev run
+./crank run --project=./myapp
+cd myapp && ./crank run
 
 # Build the binary
-./rev build --project=./myapp
+./crank build --project=./myapp
 
 # Run with live reload
-./rev dev --project=./myapp
+./crank dev --project=./myapp
 
 # Generate Swagger docs
-./rev swag --project=./myapp
+./crank swag --project=./myapp
 
 # Run tests
-./rev test -v --project=./myapp
+./crank test -v --project=./myapp
 
 # Format code
-./rev gofmt --project=./myapp
+./crank gofmt --project=./myapp
 
 # Vet code
-./rev vet --project=./myapp
+./crank vet --project=./myapp
 
 # Tidy module dependencies
-./rev tidy --project=./myapp
+./crank tidy --project=./myapp
 
 # List all available tool subcommands
-./rev tools
+./crank tools
 ```
 
 ### Auto-install
 
-When you run `rev init`, the CLI checks that all tools required by the selected
+When you run `crank init`, the CLI checks that all tools required by the selected
 features are installed. Missing tools are installed automatically via `go install`.
-When you run a tool subcommand directly and the binary is missing, rev attempts
+When you run a tool subcommand directly and the binary is missing, crank attempts
 auto-install before giving up.
 
 ## Tool Subcommands
 
 | Subcommand | Wraps | Binary | Requires |
 |------------|-------|--------|----------|
-| `rev migrate` | golang-migrate | `migrate` | `postgres` feature |
-| `rev swag` | swaggo/swag | `swag` | — |
-| `rev build` | `go build` | `go` | — |
-| `rev run` | `go run ./cmd/server` | `go` | — |
-| `rev dev` | air (live reload) | `air` | — |
-| `rev test` | `go test ./...` | `go` | — |
-| `rev gofmt` | `gofmt -s -w .` | `gofmt` | — |
-| `rev vet` | `go vet ./...` | `go` | — |
-| `rev tidy` | `go mod tidy` | `go` | — |
+| `crank migrate` | golang-migrate | `migrate` | `postgres` feature |
+| `crank swag` | swaggo/swag | `swag` | — |
+| `crank build` | `go build` | `go` | — |
+| `crank run` | `go run ./cmd/server` | `go` | — |
+| `crank dev` | air (live reload) | `air` | — |
+| `crank test` | `go test ./...` | `go` | — |
+| `crank gofmt` | `gofmt -s -w .` | `gofmt` | — |
+| `crank vet` | `go vet ./...` | `go` | — |
+| `crank tidy` | `go mod tidy` | `go` | — |
 
 ### Adding a New Tool Wrapper
 
@@ -161,7 +161,7 @@ The command factory handles `--project`, binary lookup, auto-install, and execut
 ## Architecture
 
 ```
-rev/
+crank/
 ├── cmd/bootstrap/main.go          # CLI entry point (cobra)
 ├── internal/
 │   ├── bootstrap/                 # generation engine + tool wrapper system
@@ -174,10 +174,10 @@ rev/
 │   │   ├── registry.go            # process-wide feature registry
 │   │   ├── result.go
 │   │   ├── commands/              # one cobra command per subcommand
-│   │   │   ├── init.go            # `rev init` (includes tool checking)
-│   │   │   ├── add.go             # `rev add`
-│   │   │   ├── list.go            # `rev list`
-│   │   │   ├── make.go            # `rev make`
+│   │   │   ├── init.go            # `crank init` (includes tool checking)
+│   │   │   ├── add.go             # `crank add`
+│   │   │   ├── list.go            # `crank list`
+│   │   │   ├── make.go            # `crank make`
 │   │   │   └── tools.go           # generic tool command factory
 │   │   └── tools/                 # tool wrappers (one package per CLI)
 │   │       ├── install.go         # shared InstallGoTool helper

@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 // makeTargetRe matches a Makefile target definition at the start of a line:
@@ -20,7 +20,7 @@ import (
 var makeTargetRe = regexp.MustCompile(`^([a-zA-Z0-9][a-zA-Z0-9_.-]*)[ \t]*:([^=]|$)`)
 
 // TryMakeDelegation inspects the raw CLI args and, when the first argument is
-// not a known rev subcommand but matches a target in the target project's
+// not a known crank subcommand but matches a target in the target project's
 // Makefile, runs `make <target>` in that project.
 //
 // It returns handled=true only when it takes responsibility for the command
@@ -28,10 +28,10 @@ var makeTargetRe = regexp.MustCompile(`^([a-zA-Z0-9][a-zA-Z0-9_.-]*)[ \t]*:([^=]
 // other case it returns handled=false so that cobra can run the command
 // natively or report an unknown command as usual.
 //
-// Native rev commands always take precedence: the fallback is consulted only
+// Native crank commands always take precedence: the fallback is consulted only
 // for names cobra does not already recognize. This means a Makefile can extend
-// rev with project-specific targets, and (in the future) be used to override
-// behavior for names rev does not ship natively.
+// crank with project-specific targets, and (in the future) be used to override
+// behavior for names crank does not ship natively.
 func TryMakeDelegation(root *cobra.Command, args []string) (handled bool, err error) {
 	if len(args) == 0 {
 		return false, nil
@@ -67,7 +67,7 @@ func TryMakeDelegation(root *cobra.Command, args []string) (handled bool, err er
 	return true, runMakeTarget(projectDir, candidate, makeArgs)
 }
 
-// isKnownCommand reports whether name matches a registered rev subcommand
+// isKnownCommand reports whether name matches a registered crank subcommand
 // (including the built-in help/completion commands) or one of its aliases.
 func isKnownCommand(root *cobra.Command, name string) bool {
 	if name == "help" || name == "completion" {

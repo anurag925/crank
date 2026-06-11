@@ -7,7 +7,7 @@ import (
 )
 
 // Tool represents an external CLI tool that the bootstrap CLI wraps.
-// Each tool is exposed as a subcommand (e.g. "rev migrate", "rev swag").
+// Each tool is exposed as a subcommand (e.g. "crank migrate", "crank swag").
 type Tool interface {
 	// Name returns the subcommand name (e.g. "migrate", "swag", "build").
 	Name() string
@@ -135,7 +135,7 @@ func ValidateToolRequirements(projectDir string, t Tool) error {
 	}
 	for _, req := range reqs {
 		if !contains(m.Features, req) {
-			return fmt.Errorf("tool %q requires feature %q — install it with: rev add %s --project %s",
+			return fmt.Errorf("tool %q requires feature %q — install it with: crank add %s --project %s",
 				t.Name(), req, req, projectDir)
 		}
 	}

@@ -1,8 +1,8 @@
-# Agent Guide — rev
+# Agent Guide — crank
 
 ## Project Overview
 
-A modular CLI tool that scaffolds production-ready Go backend services and wraps common development tools as subcommands. Given a project name and a list of features, it generates a clean, layered Go service with sensible defaults and optional modules (auth, postgres, redis, mongodb). All day-to-day development tasks (build, test, migrate, swag, etc.) are accessible through the `rev` CLI so developers never need to leave it.
+A modular CLI tool that scaffolds production-ready Go backend services and wraps common development tools as subcommands. Given a project name and a list of features, it generates a clean, layered Go service with sensible defaults and optional modules (auth, postgres, redis, mongodb). All day-to-day development tasks (build, test, migrate, swag, etc.) are accessible through the `crank` CLI so developers never need to leave it.
 
 ## Tech Stack
 
@@ -23,45 +23,45 @@ A modular CLI tool that scaffolds production-ready Go backend services and wraps
 
 ```bash
 # Build the CLI binary
-go build -o rev ./cmd/bootstrap
+go build -o crank ./cmd/bootstrap
 
 # Scaffold a new project (tools are checked/installed automatically)
-./rev init myapp --features=base,auth,postgres
+./crank init myapp --features=base,auth,postgres
 
 # List available features
-./rev list
+./crank list
 
 # List available tool subcommands
-./rev tools
+./crank tools
 
 # Add a feature to an existing project
-./rev add redis --project=./myapp
+./crank add redis --project=./myapp
 
 # Generate a migration
-./rev make migration create_orders --project=./myapp
+./crank make migration create_orders --project=./myapp
 
 # Run migrations (with --project or from inside the project directory)
-./rev migrate up --project=./myapp
-cd myapp && ./rev migrate up
+./crank migrate up --project=./myapp
+cd myapp && ./crank migrate up
 
 # Run a generated project
-./rev run --project=./myapp
-cd myapp && ./rev run
+./crank run --project=./myapp
+cd myapp && ./crank run
 
 # Other tool subcommands (all accept --project or use current directory)
-./rev build --project=./myapp
-./rev test -v --project=./myapp
-./rev swag --project=./myapp
-./rev dev --project=./myapp
-./rev gofmt --project=./myapp
-./rev vet --project=./myapp
-./rev tidy --project=./myapp
+./crank build --project=./myapp
+./crank test -v --project=./myapp
+./crank swag --project=./myapp
+./crank dev --project=./myapp
+./crank gofmt --project=./myapp
+./crank vet --project=./myapp
+./crank tidy --project=./myapp
 ```
 
 ## Architecture
 
 ```
-rev/
+crank/
 ├── cmd/bootstrap/main.go                  # CLI entry point (Cobra root command)
 ├── internal/
 │   ├── bootstrap/
@@ -75,22 +75,22 @@ rev/
 │   │   ├── result.go                      # Result.FeaturesUsed() helper
 │   │   ├── gomod.go                       # GoGet, Tidy helpers (go get + go mod tidy)
 │   │   ├── commands/                      # One Cobra command per CLI subcommand
-│   │   │   ├── init.go                    # `rev init` (includes tool checking)
-│   │   │   ├── add.go                     # `rev add`
-│   │   │   ├── list.go                    # `rev list`
-│   │   │   ├── make.go                    # `rev make`
-│   │   │   └── tools.go                   # Generic tool command factory + `rev tools`
+│   │   │   ├── init.go                    # `crank init` (includes tool checking)
+│   │   │   ├── add.go                     # `crank add`
+│   │   │   ├── list.go                    # `crank list`
+│   │   │   ├── make.go                    # `crank make`
+│   │   │   └── tools.go                   # Generic tool command factory + `crank tools`
 │   │   ├── tools/                         # Tool wrappers (one package per external CLI)
 │   │   │   ├── install.go                 # Shared InstallGoTool helper
-│   │   │   ├── migrate/                   # `rev migrate` → golang-migrate
-│   │   │   ├── swag/                      # `rev swag` → swaggo/swag
-│   │   │   ├── build/                     # `rev build` → go build
-│   │   │   ├── run/                       # `rev run` → go run
-│   │   │   ├── dev/                       # `rev dev` → air
-│   │   │   ├── test/                      # `rev test` → go test
-│   │   │   ├── gofmt/                     # `rev gofmt` → gofmt
-│   │   │   ├── vet/                       # `rev vet` → go vet
-│   │   │   └── tidy/                      # `rev tidy` → go mod tidy
+│   │   │   ├── migrate/                   # `crank migrate` → golang-migrate
+│   │   │   ├── swag/                      # `crank swag` → swaggo/swag
+│   │   │   ├── build/                     # `crank build` → go build
+│   │   │   ├── run/                       # `crank run` → go run
+│   │   │   ├── dev/                       # `crank dev` → air
+│   │   │   ├── test/                      # `crank test` → go test
+│   │   │   ├── gofmt/                     # `crank gofmt` → gofmt
+│   │   │   ├── vet/                       # `crank vet` → go vet
+│   │   │   └── tidy/                      # `crank tidy` → go mod tidy
 │   │   └── features/                      # One package per installable module
 │   │       ├── base/                      # Echo + Viper + slog + dev tooling
 │   │       ├── auth/                      # JWT middleware + auth handlers
@@ -123,7 +123,7 @@ type Feature interface {
 ```
 
 - `Name()` — short identifier used in `--features` lists (e.g. `"base"`, `"auth"`, `"postgres"`)
-- `Description()` — shown by `rev list`
+- `Description()` — shown by `crank list`
 - `Dependencies()` — Go module paths fetched via `go get` after scaffolding
 - `Files()` — template-to-output path mappings
 - `Templates()` — the `embed.FS` containing `.tmpl` files
@@ -146,9 +146,9 @@ type Tool interface {
 }
 ```
 
-- `Name()` — the subcommand name (e.g. `"migrate"` → `rev migrate`)
+- `Name()` — the subcommand name (e.g. `"migrate"` → `crank migrate`)
 - `BinaryName()` — the executable to look up on PATH (e.g. `"migrate"`, `"swag"`)
-- `InstallCmd()` — shown when the tool is missing; also used by `rev init` for auto-install
+- `InstallCmd()` — shown when the tool is missing; also used by `crank init` for auto-install
 - `RequiresFeatures()` — e.g. `migrate` requires `"postgres"`; empty means always available
 - `AddFlags()` — lets tools register custom flags (e.g. `--database-url`, `--steps`)
 - `Prepare()` — builds the `ToolInvocation` (args, working dir, stdin, env)
@@ -223,7 +223,7 @@ Passed to every template during rendering:
    ```
 5. Add a blank import in `cmd/bootstrap/main.go`:
    ```go
-   _ "github.com/anurag925/rev/internal/bootstrap/features/<name>"
+   _ "github.com/anurag925/crank/internal/bootstrap/features/<name>"
    ```
 
 ### Adding a New Tool Wrapper
@@ -239,7 +239,7 @@ Passed to every template during rendering:
 4. If the tool needs custom flags, implement `AddFlags(cmd *cobra.Command)` and read them in `Prepare()` via `cmd.Flags()`
 5. Add a blank import in `cmd/bootstrap/main.go`:
    ```go
-   _ "github.com/anurag925/rev/internal/bootstrap/tools/<name>"
+   _ "github.com/anurag925/crank/internal/bootstrap/tools/<name>"
    ```
 
 The command factory in `commands/tools.go` handles everything else: `--project` flag, binary lookup, auto-install on missing, and execution.
@@ -327,61 +327,61 @@ Config files live in a top-level `configs/` directory, following the
 
 | Subcommand | Wraps | Binary | Requires |
 |------------|-------|--------|----------|
-| `rev migrate` | golang-migrate | `migrate` | `postgres` feature |
-| `rev swag` | swaggo/swag | `swag` | — |
-| `rev build` | `go build` | `go` | — |
-| `rev run` | `go run ./cmd/server` | `go` | — |
-| `rev dev` | air (live reload) | `air` | — |
-| `rev test` | `go test ./...` | `go` | — |
-| `rev gofmt` | `gofmt -s -w .` | `gofmt` | — |
-| `rev vet` | `go vet ./...` | `go` | — |
-| `rev tidy` | `go mod tidy` | `go` | — |
+| `crank migrate` | golang-migrate | `migrate` | `postgres` feature |
+| `crank swag` | swaggo/swag | `swag` | — |
+| `crank build` | `go build` | `go` | — |
+| `crank run` | `go run ./cmd/server` | `go` | — |
+| `crank dev` | air (live reload) | `air` | — |
+| `crank test` | `go test ./...` | `go` | — |
+| `crank gofmt` | `gofmt -s -w .` | `gofmt` | — |
+| `crank vet` | `go vet ./...` | `go` | — |
+| `crank tidy` | `go mod tidy` | `go` | — |
 
 All tools accept `--project <dir>`. If `--project` is not specified, the current directory is used as the project root.
 
 ## Makefile Delegation
 
-The generated project ships **both** a `Makefile` and is usable through the `rev`
+The generated project ships **both** a `Makefile` and is usable through the `crank`
 CLI, but they have **non-overlapping** responsibilities to avoid confusion:
 
-- `rev` is the single source of truth for common development tasks (build, run,
+- `crank` is the single source of truth for common development tasks (build, run,
   dev, test, fmt, vet, tidy, swag, migrate). These are intentionally **not**
   duplicated as Makefile targets.
-- The generated `Makefile` holds only targets that `rev` does not provide
+- The generated `Makefile` holds only targets that `crank` does not provide
   natively (e.g. `clean`) and is the place for project-specific custom targets.
 
-To bridge the two, `rev` transparently delegates unknown subcommands to the
-project's `Makefile`. When you run `rev <name>` and `<name>` is **not** a native
-rev command, rev looks up `<name>` as a target in the target project's
+To bridge the two, `crank` transparently delegates unknown subcommands to the
+project's `Makefile`. When you run `crank <name>` and `<name>` is **not** a native
+crank command, crank looks up `<name>` as a target in the target project's
 `Makefile` (respecting `--project`) and runs `make <name>` for you. Any extra
 arguments (e.g. `name=foo`) are forwarded to make verbatim.
 
 ```bash
-# `clean` is not a native rev command, but the Makefile defines it, so this
+# `clean` is not a native crank command, but the Makefile defines it, so this
 # runs `make clean` in the project directory.
-rev clean --project ./myapp
-rev greet name=anurag --project ./myapp   # → make greet name=anurag (custom target)
+crank clean --project ./myapp
+crank greet name=anurag --project ./myapp   # → make greet name=anurag (custom target)
 ```
 
 Precedence rules:
 
-- **Native rev commands always win.** The fallback is only consulted for names
-  cobra does not already recognize, so `rev build` always runs the native build
+- **Native crank commands always win.** The fallback is only consulted for names
+  cobra does not already recognize, so `crank build` always runs the native build
   tool. (The Makefile no longer defines a `build` target anyway.)
-- If the name matches neither a rev command nor a Makefile target (or there is
-  no `Makefile`), rev reports the usual `unknown command` error.
+- If the name matches neither a crank command nor a Makefile target (or there is
+  no `Makefile`), crank reports the usual `unknown command` error.
 
 This is implemented in `internal/bootstrap/commands/makedelegate.go` and hooked
 into `cmd/bootstrap/main.go` before `cobra`'s `Execute()`. It also provides a
 natural extension path: project-specific behavior can be expressed as Makefile
-targets without modifying rev itself.
+targets without modifying crank itself.
 
 ## Testing
 
 There are currently no Go unit tests (`*_test.go`) in the project. The `test/` directory contains a generated sample project (`test/myapp/`) used for manual/integration verification. To validate changes:
 
-1. Build the CLI: `go build -o rev ./cmd/bootstrap`
-2. Generate a test project: `./rev init testapp --features=base,auth,postgres`
+1. Build the CLI: `go build -o crank ./cmd/bootstrap`
+2. Generate a test project: `./crank init testapp --features=base,auth,postgres`
 3. Verify the output structure and generated files
 
 ## Dependencies

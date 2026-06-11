@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/anurag925/rev/internal/bootstrap"
-	"github.com/anurag925/rev/internal/utils"
+	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/utils"
 )
 
 // NewInitCmd returns the `init` cobra command.
@@ -26,12 +26,12 @@ func NewInitCmd(reg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *cobra
 directory and populates it with a production-ready Go backend. The base feature
 is always included; additional modules are opt-in via --features.
 
-After scaffolding, rev checks that all CLI tools required by the selected
+After scaffolding, crank checks that all CLI tools required by the selected
 features are installed and offers to install any that are missing.
 
 Examples:
-  rev init myapp --features=base,auth,postgres
-  rev init myapp --module=github.com/org/myapp --features=base,redis`,
+  crank init myapp --features=base,auth,postgres
+  crank init myapp --module=github.com/org/myapp --features=base,redis`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			list := splitCSV(features)
@@ -61,7 +61,7 @@ Examples:
 			fmt.Println()
 			fmt.Println("Next steps:")
 			fmt.Println("  cd " + result.ProjectDir)
-			fmt.Println("  rev run")
+			fmt.Println("  crank run")
 			return nil
 		},
 	}
