@@ -16,10 +16,62 @@ optional modules. All day-to-day development tasks are accessible through `rev`.
 | `redis`   | Redis client (session storage / caching / rate limiting) |
 | `mongodb` | MongoDB client (document storage / aggregation) |
 
-## Install / Build
+## Installation
+
+### Install script (recommended)
+
+Install the latest release for your platform (Linux / macOS, amd64 / arm64):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/anurag925/rev/main/install.sh | sh
+```
+
+The script detects your OS/architecture, downloads the matching release archive,
+verifies its checksum, and installs the `rev` binary to `/usr/local/bin`
+(falling back to `~/.local/bin` if that isn't writable).
+
+Environment overrides:
+
+| Variable | Description |
+| -------- | ----------- |
+| `REV_VERSION` | Install a specific version (e.g. `v0.1.0`) instead of the latest |
+| `REV_INSTALL_DIR` | Target install directory |
+| `REV_NO_VERIFY` | Skip checksum verification |
+
+```bash
+# Pin a version and install into a custom directory
+REV_VERSION=v0.1.0 REV_INSTALL_DIR="$HOME/bin" \
+  sh -c "$(curl -fsSL https://raw.githubusercontent.com/anurag925/rev/main/install.sh)"
+```
+
+### go install
+
+```bash
+go install github.com/anurag925/rev/cmd/bootstrap@latest
+```
+
+Note: this produces a binary named `bootstrap`. Rename it to `rev` if you like:
+
+```bash
+mv "$(go env GOPATH)/bin/bootstrap" "$(go env GOPATH)/bin/rev"
+```
+
+### Prebuilt binaries
+
+Download the archive for your platform from the
+[Releases page](https://github.com/anurag925/rev/releases) (Windows `.zip`
+included), extract it, and move the `rev` binary onto your `PATH`.
+
+### Build from source
 
 ```bash
 go build -o rev ./cmd/bootstrap
+```
+
+Verify your installation with:
+
+```bash
+rev --version
 ```
 
 ## Usage

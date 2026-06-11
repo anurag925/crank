@@ -29,6 +29,13 @@ import (
 	_ "github.com/anurag925/rev/internal/bootstrap/tools/vet"
 )
 
+// Build information, populated at release time via -ldflags by GoReleaser.
+var (
+	version = "dev"
+	commit  = "none"
+	date    = "unknown"
+)
+
 func main() {
 	root := newRootCmd()
 
@@ -54,8 +61,9 @@ func newRootCmd() *cobra.Command {
 	toolReg := bootstrap.GlobalToolRegistry
 
 	root := &cobra.Command{
-		Use:   "rev",
-		Short: "Scaffold and manage production-ready Go backend services",
+		Use:     "rev",
+		Version: fmt.Sprintf("%s (commit %s, built %s)", version, commit, date),
+		Short:   "Scaffold and manage production-ready Go backend services",
 		Long: `rev is a code generator and project management tool for Go backend
 services. It scaffolds projects with a curated set of installable features and
 wraps common CLI tools (go, migrate, swag, air, ...) as subcommands so you
