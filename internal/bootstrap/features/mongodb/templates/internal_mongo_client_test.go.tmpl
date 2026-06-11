@@ -1,0 +1,33 @@
+package mongo
+
+import (
+	"context"
+	"testing"
+	"time"
+
+	"github.com/stretchr/testify/assert"
+)
+
+func TestNewClient_ConnectionRefused(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
+	cfg := Config{
+		URI:      "mongodb://localhost:59999",
+		Database: "testdb",
+	}
+
+	// Without a running MongoDB on port 59999, this should fail.
+	_, err := NewClient(ctx, cfg)
+	assert.Error(t, err)
+}
+
+func TestConfig_Fields(t *testing.T) {
+	cfg := Config{
+		URI:      "mongodb://localhost:27017",
+		Database: "mydb",
+	}
+
+	assert.Equal(t, "mongodb://localhost:27017", cfg.URI)
+	assert.Equal(t, "mydb", cfg.Database)
+}

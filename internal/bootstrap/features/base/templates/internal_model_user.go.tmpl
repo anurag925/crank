@@ -1,0 +1,21 @@
+package model
+
+// User is the domain model for application users. The base feature provides a
+// struct that satisfies the repository and service contracts; feature modules
+// (auth, postgres) may extend it with additional fields.
+type User struct {
+	ID    int64  `json:"id"`
+	Name  string `json:"name"  validate:"required,min=2,max=100"`
+	Email string `json:"email" validate:"required,email"`
+{{- if .Has "auth"}}
+	Password string `json:"-" validate:"required,min=8"`
+{{- end}}
+}
+
+// APIError is the standard JSON error envelope returned by all endpoints.
+// For validation failures, Errors contains per-field messages keyed by
+// the JSON field name.
+type APIError struct {
+	Error   string            `json:"error"             example:"validation failed"`
+	Details map[string]string `json:"details,omitempty"`
+}

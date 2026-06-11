@@ -1,0 +1,28 @@
+# Go build cache and artifacts
+/bin/
+/tmp/
+/dist/
+/.gocache/
+
+# Local environment
+.env
+*.local.yaml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Test artifacts
+/test-app/
+/test-base/
+/test-auth/
+/test-add/
+/test-redis/
+/test-mongo/
+
+# test folders
+/test*
+
+# rev binary
+rev

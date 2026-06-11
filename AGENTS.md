@@ -1,0 +1,350 @@
+# Agent Guide — rev
+
+## Project Overview
+
+A modular CLI tool that scaffolds production-ready Go backend services and wraps common development tools as subcommands. Given a project name and a list of features, it generates a clean, layered Go service with sensible defaults and optional modules (auth, postgres, redis, mongodb). All day-to-day development tasks (build, test, migrate, swag, etc.) are accessible through the `rev` CLI so developers never need to leave it.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Language | Go 1.21 |
+| CLI Framework | Cobra (`github.com/spf13/cobra`) |
+| Config (generated) | Viper + YAML + .env |
+| HTTP (generated) | Echo v4 |
+| Docs (generated) | Swagger via [swaggo/swag](https://github.com/swaggo/swag) + [echo-swagger](https://github.com/swaggo/echo-swagger) |
+| ORM (generated) | Bun |
+| Logging (generated) | `log/slog` (stdlib) |
+| Migrations (generated) | golang-migrate |
+| Templating | `text/template` + `embed.FS` |
+| YAML parsing | `gopkg.in/yaml.v3` |
+
+## Build & Run
+
+```bash
+# Build the CLI binary
+go build -o rev ./cmd/bootstrap
+
+# Scaffold a new project (tools are checked/installed automatically)
+./rev init myapp --features=base,auth,postgres
+
+# List available features
+./rev list
+
+# List available tool subcommands
+./rev tools
+
+# Add a feature to an existing project
+./rev add redis --project=./myapp
+
+# Generate a migration
+./rev make migration create_orders --project=./myapp
+
+# Run migrations (with --project or from inside the project directory)
+./rev migrate up --project=./myapp
+cd myapp && ./rev migrate up
+
+# Run a generated project
+./rev run --project=./myapp
+cd myapp && ./rev run
+
+# Other tool subcommands (all accept --project or use current directory)
+./rev build --project=./myapp
+./rev test -v --project=./myapp
+./rev swag --project=./myapp
+./rev dev --project=./myapp
+./rev gofmt --project=./myapp
+./rev vet --project=./myapp
+./rev tidy --project=./myapp
+```
+
+## Architecture
+
+```
+rev/
+├── cmd/bootstrap/main.go                  # CLI entry point (Cobra root command)
+├── internal/
+│   ├── bootstrap/
+│   │   ├── feature.go                     # Feature interface, Registry, template rendering
+│   │   ├── tool.go                        # Tool interface, ToolInvocation, ToolRegistry
+│   │   ├── tool_registry.go               # GlobalToolRegistry singleton
+│   │   ├── generator.go                   # Generate() and Add() orchestration logic
+│   │   ├── context.go                     # Template context (ProjectName, ModulePath, Has())
+│   │   ├── manifest.go                    # .bootstrap.yaml encode/decode
+│   │   ├── registry.go                    # GlobalRegistry singleton
+│   │   ├── result.go                      # Result.FeaturesUsed() helper
+│   │   ├── commands/                      # One Cobra command per CLI subcommand
+│   │   │   ├── init.go                    # `rev init` (includes tool checking)
+│   │   │   ├── add.go                     # `rev add`
+│   │   │   ├── list.go                    # `rev list`
+│   │   │   ├── make.go                    # `rev make`
+│   │   │   └── tools.go                   # Generic tool command factory + `rev tools`
+│   │   ├── tools/                         # Tool wrappers (one package per external CLI)
+│   │   │   ├── install.go                 # Shared InstallGoTool helper
+│   │   │   ├── migrate/                   # `rev migrate` → golang-migrate
+│   │   │   ├── swag/                      # `rev swag` → swaggo/swag
+│   │   │   ├── build/                     # `rev build` → go build
+│   │   │   ├── run/                       # `rev run` → go run
+│   │   │   ├── dev/                       # `rev dev` → air
+│   │   │   ├── test/                      # `rev test` → go test
+│   │   │   ├── gofmt/                     # `rev gofmt` → gofmt
+│   │   │   ├── vet/                       # `rev vet` → go vet
+│   │   │   └── tidy/                      # `rev tidy` → go mod tidy
+│   │   └── features/                      # One package per installable module
+│   │       ├── base/                      # Echo + Viper + slog + dev tooling
+│   │       ├── auth/                      # JWT middleware + auth handlers
+│   │       ├── crypto/                    # AES-256-GCM encrypt/decrypt helpers
+│   │       ├── postgres/                  # Bun ORM + migrations
+│   │       ├── redis/                     # Redis client (placeholder)
+│   │       └── mongodb/                   # MongoDB client (placeholder)
+│   └── utils/
+│       ├── fileutil.go                    # EnsureDir, WriteFile, PathExists, etc.
+│       └── exec.go                        # FindBinary, RunExternal, ShellJoin
+├── test/                                  # Integration test artifacts (git-ignored)
+├── SPEC.md                                # Full product specification
+└── go.mod
+```
+
+## Key Abstractions
+
+### Feature Interface (`internal/bootstrap/feature.go`)
+
+Every installable module implements this:
+
+```go
+type Feature interface {
+    Name() string
+    Description() string
+    Files() []FileMapping
+    Templates() embed.FS
+}
+```
+
+- `Name()` — short identifier used in `--features` lists (e.g. `"base"`, `"auth"`, `"postgres"`)
+- `Description()` — shown by `rev list`
+- `Files()` — template-to-output path mappings
+- `Templates()` — the `embed.FS` containing `.tmpl` files
+
+### Tool Interface (`internal/bootstrap/tool.go`)
+
+Every external CLI wrapper implements this:
+
+```go
+type Tool interface {
+    Name() string                        // subcommand name (e.g. "migrate", "swag")
+    Description() string                 // short help text
+    LongDescription() string             // detailed help with examples
+    BinaryName() string                  // executable on PATH
+    InstallCmd() string                  // human-readable install instruction
+    RequiresFeatures() []string          // features that must be enabled
+    AddFlags(cmd *cobra.Command)         // register custom CLI flags
+    Prepare(projectDir string, cmd *cobra.Command) (*ToolInvocation, error)
+    Install() error                      // auto-install the tool
+}
+```
+
+- `Name()` — the subcommand name (e.g. `"migrate"` → `rev migrate`)
+- `BinaryName()` — the executable to look up on PATH (e.g. `"migrate"`, `"swag"`)
+- `InstallCmd()` — shown when the tool is missing; also used by `rev init` for auto-install
+- `RequiresFeatures()` — e.g. `migrate` requires `"postgres"`; empty means always available
+- `AddFlags()` — lets tools register custom flags (e.g. `--database-url`, `--steps`)
+- `Prepare()` — builds the `ToolInvocation` (args, working dir, stdin, env)
+- `Install()` — downloads/installs the tool (usually via `go install`)
+
+### ToolInvocation (`internal/bootstrap/tool.go`)
+
+```go
+type ToolInvocation struct {
+    Binary string   // full path to the binary
+    Args   []string // arguments (without binary name)
+    Dir    string   // working directory
+    Env    []string // additional KEY=VALUE env vars
+    Stdin  bool     // whether to pass os.Stdin through
+}
+```
+
+### FileMapping (`internal/bootstrap/feature.go`)
+
+```go
+type FileMapping struct {
+    TemplatePath string  // path inside the embedded FS
+    OutputPath   string  // destination relative to project root
+    SkipIfExists bool    // leave existing file untouched
+}
+```
+
+### Context (`internal/bootstrap/context.go`)
+
+Passed to every template during rendering:
+
+- `ProjectName` — user-supplied name
+- `ModulePath` — Go module path for `go.mod` / imports
+- `PackageName` — last segment of module path
+- `Features` — list of enabled feature names
+- `Has(name string) bool` — check if a feature is active (used in templates with `{{if .Has "postgres"}}...{{end}}`)
+- `Require(names ...string) error` — fail if a feature is missing
+
+### Registry (`internal/bootstrap/feature.go` + `registry.go`)
+
+- `GlobalRegistry` — process-wide singleton in `registry.go`
+- Features self-register in `init()` via `bootstrap.GlobalRegistry.MustRegister(feature{})`
+- `cmd/bootstrap/main.go` imports feature packages with `_` (blank import) to trigger registration
+
+### ToolRegistry (`internal/bootstrap/tool.go` + `tool_registry.go`)
+
+- `GlobalToolRegistry` — process-wide singleton in `tool_registry.go`
+- Tools self-register in `init()` via `bootstrap.GlobalToolRegistry.MustRegister(tool{})`
+- `cmd/bootstrap/main.go` imports tool packages with `_` (blank import) to trigger registration
+- `ForFeatures(features)` — returns tools whose requirements are satisfied by the given feature set
+- `ForFeature(feature)` — returns tools that specifically require one feature
+
+### Generator (`internal/bootstrap/generator.go`)
+
+- `Generate(reg, opts)` — creates a new project from scratch; `base` is always first
+- `Add(reg, projectDir, featureName)` — adds a feature to an existing project; re-renders all features; updates `.bootstrap.yaml` manifest
+
+## Conventions & Patterns
+
+### Adding a New Feature
+
+1. Create `internal/bootstrap/features/<name>/feature.go`
+2. Create `internal/bootstrap/features/<name>/templates/` with `.tmpl` files
+3. Implement the `Feature` interface
+4. Self-register in `init()`:
+   ```go
+   func init() {
+       bootstrap.GlobalRegistry.MustRegister(feature{})
+   }
+   ```
+5. Add a blank import in `cmd/bootstrap/main.go`:
+   ```go
+   _ "github.com/anurag925/rev/internal/bootstrap/features/<name>"
+   ```
+
+### Adding a New Tool Wrapper
+
+1. Create `internal/bootstrap/tools/<name>/tool.go`
+2. Implement the `Tool` interface
+3. Self-register in `init()`:
+   ```go
+   func init() {
+       bootstrap.GlobalToolRegistry.MustRegister(&tool{})
+   }
+   ```
+4. If the tool needs custom flags, implement `AddFlags(cmd *cobra.Command)` and read them in `Prepare()` via `cmd.Flags()`
+5. Add a blank import in `cmd/bootstrap/main.go`:
+   ```go
+   _ "github.com/anurag925/rev/internal/bootstrap/tools/<name>"
+   ```
+
+The command factory in `commands/tools.go` handles everything else: `--project` flag, binary lookup, auto-install on missing, and execution.
+
+### Adding Custom Validators
+
+The generated project includes a ready-to-use [`go-playground/validator`](https://github.com/go-playground/validator) setup in `internal/validator/`. To add a custom validator:
+
+1. Open `internal/validator/validator.go`
+2. Inside `Init()`, register your validator **before** the closing comment block:
+   ```go
+   validate.RegisterValidation("notblank", func(fl validator.FieldLevel) bool {
+       return strings.TrimSpace(fl.Field().String()) != ""
+   })
+   ```
+3. Use the tag in your structs: `validate:"required,notblank"`
+4. Add a human-readable message for the tag in `internal/validator/errors.go` → `humanMessage()`
+
+### Adding Validation Tags to Structs
+
+Add `validate` struct tags to any request/model struct. The custom Echo binder runs validation automatically after `c.Bind()`:
+
+```go
+type CreateOrderInput struct {
+    ProductID string  `json:"product_id" validate:"required,uuid"`
+    Quantity  int     `json:"quantity"  validate:"required,gt=0,lte=999"`
+    Notes     string  `json:"notes"     validate:"max=500"`
+}
+```
+
+Handlers only need `c.Bind(&input)` — if it returns `nil`, the input is valid.
+
+### Template Conventions
+
+- Template files use `.tmpl` extension
+- Naming convention: `<path_with_underscores>.<ext>.tmpl` (e.g., `internal_handler_user.go.tmpl`)
+- Use `{{.ProjectName}}`, `{{.ModulePath}}`, `{{.PackageName}}` for project-specific values
+- Use `{{if .Has "feature"}}...{{end}}` for conditional sections
+- Templates use `text/template` with `missingkey=error` option
+
+### Code Style
+
+- Standard Go formatting (`gofmt`)
+- Error wrapping with `fmt.Errorf("context: %w", err)`
+- No external linters configured; follow idiomatic Go
+- `internal/` package convention — nothing is importable outside the module
+- Utility functions live in `internal/utils/`
+
+### Configuration Strategy (Generated Projects)
+
+Config files live in a top-level `configs/` directory, following the
+[golang-standards/project-layout](https://github.com/golang-standards/project-layout#configs) convention.
+
+- `configs/config.yaml` — safe defaults, committed to source
+- `.env.example` — template for local env overrides
+- `.env` — secrets and env-specific values, git-ignored
+- Viper searches `./configs` first, then `.` as fallback
+- Viper priority: env vars > .env > configs/config.yaml
+
+## What Lives Where
+
+| Concern | Location |
+|---------|----------|
+| CLI entry point & root command | `cmd/bootstrap/main.go` |
+| Subcommand definitions | `internal/bootstrap/commands/*.go` |
+| Feature interface & registry | `internal/bootstrap/feature.go` |
+| Tool interface & registry | `internal/bootstrap/tool.go` + `tool_registry.go` |
+| Tool command factory | `internal/bootstrap/commands/tools.go` |
+| Tool implementations | `internal/bootstrap/tools/<name>/tool.go` |
+| Tool install helper | `internal/bootstrap/tools/install.go` |
+| Exec utilities | `internal/utils/exec.go` |
+| Global feature registry | `internal/bootstrap/registry.go` |
+| Global tool registry | `internal/bootstrap/tool_registry.go` |
+| Project generation logic | `internal/bootstrap/generator.go` |
+| Template context | `internal/bootstrap/context.go` |
+| Manifest I/O (.bootstrap.yaml) | `internal/bootstrap/manifest.go` |
+| Result helpers | `internal/bootstrap/result.go` |
+| Filesystem utilities | `internal/utils/fileutil.go` |
+| Feature implementations | `internal/bootstrap/features/<name>/feature.go` |
+| Feature templates | `internal/bootstrap/features/<name>/templates/*.tmpl` |
+| Generated test projects | `test/` (git-ignored) |
+
+## Available Tool Subcommands
+
+| Subcommand | Wraps | Binary | Requires |
+|------------|-------|--------|----------|
+| `rev migrate` | golang-migrate | `migrate` | `postgres` feature |
+| `rev swag` | swaggo/swag | `swag` | — |
+| `rev build` | `go build` | `go` | — |
+| `rev run` | `go run ./cmd/server` | `go` | — |
+| `rev dev` | air (live reload) | `air` | — |
+| `rev test` | `go test ./...` | `go` | — |
+| `rev gofmt` | `gofmt -s -w .` | `gofmt` | — |
+| `rev vet` | `go vet ./...` | `go` | — |
+| `rev tidy` | `go mod tidy` | `go` | — |
+
+All tools accept `--project <dir>`. If `--project` is not specified, the current directory is used as the project root.
+
+## Testing
+
+There are currently no Go unit tests (`*_test.go`) in the project. The `test/` directory contains a generated sample project (`test/myapp/`) used for manual/integration verification. To validate changes:
+
+1. Build the CLI: `go build -o rev ./cmd/bootstrap`
+2. Generate a test project: `./rev init testapp --features=base,auth,postgres`
+3. Verify the output structure and generated files
+
+## Dependencies
+
+Direct dependencies (from `go.mod`):
+- `github.com/spf13/cobra v1.8.0` — CLI framework
+- `gopkg.in/yaml.v3 v3.0.1` — YAML manifest parsing
+
+Generated projects pull in their own dependencies (Echo, Bun, Viper, etc.) via their `go.mod` templates.

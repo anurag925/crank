@@ -1,0 +1,23 @@
+# Binaries
+/bin/
+/tmp/
+
+# Local config
+.env
+*.local.yaml
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Build artifacts
+/dist/
+/out/
+
+# Generated Swagger docs (re-generate with `make swag`)
+/docs/
+{{- if .Has "postgres"}}
+# Local DB volume
+data/
+{{- end}}

@@ -1,0 +1,79 @@
+# {{.ProjectName}}
+
+Production-ready Go backend scaffolded by [rev](#).
+
+## Stack
+
+- HTTP: [Echo v4](https://echo.labstack.com)
+- Config: [Viper](https://github.com/spf13/viper) (`configs/config.yaml` + env vars)
+- Docs: [Swagger](https://swagger.io) via [swaggo/swag](https://github.com/swaggo/swag) (`/swagger/*`)
+- Logging: `log/slog`
+{{- if .Has "auth"}}
+- Auth: JWT ([golang-jwt/jwt](https://github.com/golang-jwt/jwt))
+{{- end}}
+{{- if .Has "postgres"}}
+- Database: PostgreSQL via [Bun](https://bun.uptrace.dev)
+- Migrations: [golang-migrate](https://github.com/golang-migrate/migrate)
+{{- end}}
+
+## Quick start
+
+```bash
+# 1. fetch dependencies
+make tidy
+
+# 2. copy environment template and adjust as needed
+cp .env.example .env
+
+# 3. run the server
+make run
+```
+
+The server listens on `http://localhost:8080` by default. Health probe: `GET /health`.
+API docs (Swagger UI): `http://localhost:8080/swagger/index.html` (run `make swag` first).
+
+## Configuration
+
+`configs/config.yaml` ships with safe defaults that are safe to commit. Local secrets belong in
+`.env` (git-ignored). Environment variables override file values; keys are derived from
+the dotted path with underscores (e.g. `database.password` -> `DATABASE_PASSWORD`).
+
+## Layout
+
+```
+.
+├── cmd/server          # application entry point
+├── configs             # config files (golang-standards/project-layout)
+│   └── config.yaml     # non-secret defaults
+├── internal
+│   ├── config          # Viper-backed configuration
+│   ├── handler         # HTTP handlers
+│   ├── middleware      # Echo middleware
+│   ├── model           # domain models
+│   ├── repository      # data access
+│   └── service         # business logic
+{{- if .Has "postgres"}}
+├── migrations          # golang-migrate SQL files
+{{- end}}
+├── .env.example        # environment template
+├── Makefile
+├── Dockerfile
+└── air.toml            # live-reload config
+```
+
+## Make targets
+
+| Target | Purpose |
+| ------ | ------- |
+| `make build` | Compile a static binary into `bin/{{.ProjectName}}` (also generates swagger docs) |
+| `make run` | Run the application |
+| `make test` | Run all tests |
+| `make tidy` | Sync module dependencies |
+| `make fmt` | Run `gofmt` |
+| `make vet` | Run `go vet` |
+| `make swag` | Generate Swagger/OpenAPI docs into `docs/` |
+{{- if .Has "postgres"}}
+| `make migrate-up` | Apply all pending migrations |
+| `make migrate-down` | Roll back the last migration |
+| `make migrate-create name=foo` | Generate a new up/down migration pair |
+{{- end}}

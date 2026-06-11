@@ -1,0 +1,126 @@
+package middleware
+
+import (
+	"net/http"
+	"net/http/httptest"
+	"testing"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+)
+
+func issueTestToken(secret, subject, typ string) string {
+	claims := jwt.MapClaims{
+		"sub": subject,
+		"typ": typ,
+		"exp": time.Now().Add(time.Hour).Unix(),
+		"iat": time.Now().Unix(),
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, _ := tok.SignedString([]byte(secret))
+	return signed
+}
+
+func TestJWTAuth_ValidToken(t *testing.T) {
+	secret := "test-secret"
+	token := issueTestToken(secret, "user-123", "access")
+
+	e := echo.New()
+	e.Use(JWTAuth(secret))
+	e.GET("/protected", func(c echo.Context) error {
+		uid := c.Get("user_id").(string)
+		return c.String(http.StatusOK, uid)
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "user-123", rec.Body.String())
+}
+
+func TestJWTAuth_MissingHeader(t *testing.T) {
+	e := echo.New()
+	e.Use(JWTAuth("secret"))
+	e.GET("/protected", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestJWTAuth_InvalidFormat(t *testing.T) {
+	e := echo.New()
+	e.Use(JWTAuth("secret"))
+	e.GET("/protected", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Basic dXNlcjpwYXNz")
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestJWTAuth_InvalidToken(t *testing.T) {
+	e := echo.New()
+	e.Use(JWTAuth("secret"))
+	e.GET("/protected", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer totally.invalid.token")
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestJWTAuth_WrongSecret(t *testing.T) {
+	token := issueTestToken("wrong-secret", "user-123", "access")
+
+	e := echo.New()
+	e.Use(JWTAuth("correct-secret"))
+	e.GET("/protected", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer "+token)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestJWTAuth_OnlyBearer(t *testing.T) {
+	e := echo.New()
+	e.Use(JWTAuth("secret"))
+	e.GET("/protected", func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/protected", nil)
+	req.Header.Set("Authorization", "Bearer")
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}

@@ -1,0 +1,129 @@
+package service
+
+import (
+	"testing"
+	"time"
+
+	"{{.ModulePath}}/internal/config"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func newTestJWTService() *JWTService {
+	return NewJWTService(config.JWTConfig{
+		Secret:            "test-secret-key-for-testing-only",
+		Expiration:        time.Hour,
+		RefreshExpiration: time.Hour * 24,
+	})
+}
+
+func TestJWTService_Issue(t *testing.T) {
+	svc := newTestJWTService()
+
+	pair, err := svc.Issue("user-123")
+
+	require.NoError(t, err)
+	assert.NotEmpty(t, pair.AccessToken)
+	assert.NotEmpty(t, pair.RefreshToken)
+	assert.Greater(t, pair.ExpiresAt, int64(0))
+}
+
+func TestJWTService_Parse_AccessToken(t *testing.T) {
+	svc := newTestJWTService()
+
+	pair, err := svc.Issue("user-123")
+	require.NoError(t, err)
+
+	claims, err := svc.Parse(pair.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, "user-123", claims.Subject)
+	assert.Equal(t, "access", claims.Type)
+}
+
+func TestJWTService_Parse_RefreshToken(t *testing.T) {
+	svc := newTestJWTService()
+
+	pair, err := svc.Issue("user-123")
+	require.NoError(t, err)
+
+	claims, err := svc.Parse(pair.RefreshToken)
+	require.NoError(t, err)
+	assert.Equal(t, "user-123", claims.Subject)
+	assert.Equal(t, "refresh", claims.Type)
+}
+
+func TestJWTService_Parse_InvalidToken(t *testing.T) {
+	svc := newTestJWTService()
+
+	_, err := svc.Parse("invalid.token.string")
+	assert.Error(t, err)
+}
+
+func TestJWTService_Parse_WrongSecret(t *testing.T) {
+	svc1 := newTestJWTService()
+	svc2 := NewJWTService(config.JWTConfig{
+		Secret:            "different-secret",
+		Expiration:        time.Hour,
+		RefreshExpiration: time.Hour * 24,
+	})
+
+	pair, err := svc1.Issue("user-123")
+	require.NoError(t, err)
+
+	_, err = svc2.Parse(pair.AccessToken)
+	assert.Error(t, err)
+}
+
+func TestJWTService_Refresh(t *testing.T) {
+	svc := newTestJWTService()
+
+	pair, err := svc.Issue("user-123")
+	require.NoError(t, err)
+
+	newPair, err := svc.Refresh(pair.RefreshToken)
+	require.NoError(t, err)
+	assert.NotEmpty(t, newPair.AccessToken)
+	assert.NotEmpty(t, newPair.RefreshToken)
+
+	// The new access token should still identify the same user.
+	claims, err := svc.Parse(newPair.AccessToken)
+	require.NoError(t, err)
+	assert.Equal(t, "user-123", claims.Subject)
+}
+
+func TestJWTService_Refresh_WithAccessToken_ShouldFail(t *testing.T) {
+	svc := newTestJWTService()
+
+	pair, err := svc.Issue("user-123")
+	require.NoError(t, err)
+
+	_, err = svc.Refresh(pair.AccessToken)
+	assert.Error(t, err)
+}
+
+func TestJWTService_Secret(t *testing.T) {
+	svc := newTestJWTService()
+	assert.Equal(t, "test-secret-key-for-testing-only", svc.Secret())
+}
+
+func TestHashPassword(t *testing.T) {
+	hash, err := HashPassword("mypassword")
+	require.NoError(t, err)
+	assert.NotEmpty(t, hash)
+	assert.NotEqual(t, "mypassword", hash)
+}
+
+func TestCheckPassword_Valid(t *testing.T) {
+	hash, err := HashPassword("mypassword")
+	require.NoError(t, err)
+
+	assert.True(t, CheckPassword(hash, "mypassword"))
+}
+
+func TestCheckPassword_Invalid(t *testing.T) {
+	hash, err := HashPassword("mypassword")
+	require.NoError(t, err)
+
+	assert.False(t, CheckPassword(hash, "wrongpassword"))
+}

@@ -1,0 +1,74 @@
+APP_NAME := {{.ProjectName}}
+MODULE   := {{.ModulePath}}
+BIN_DIR  := bin
+BIN      := $(BIN_DIR)/$(APP_NAME)
+{{if .Has "postgres"}}
+MIGRATIONS_DIR := migrations
+MIGRATE := migrate -path $(MIGRATIONS_DIR) -database "$$DATABASE_URL"
+{{end}}
+
+.PHONY: help tidy build run test clean fmt vet lint swag{{if .Has "postgres"}} migrate-up migrate-down migrate-create{{end}}
+
+help:
+	@echo "Available targets:"
+	@echo "  tidy            - sync module dependencies"
+	@echo "  build           - compile binary into $(BIN)"
+	@echo "  run             - run the application"
+	@echo "  test            - run all tests"
+	@echo "  fmt             - run gofmt"
+	@echo "  vet             - run go vet"
+	@echo "  clean           - remove build artifacts"
+	@echo "  swag            - generate Swagger docs"
+{{- if .Has "postgres"}}
+	@echo "  migrate-up      - apply all up migrations"
+	@echo "  migrate-down    - roll back the last migration"
+	@echo "  migrate-create  - create a new migration pair (use name=foo_bar)"
+{{- end}}
+
+tidy:
+	go mod tidy
+
+build: tidy swag
+	@mkdir -p $(BIN_DIR)
+	go build -o $(BIN) ./cmd/server
+
+run:
+	go run ./cmd/server
+
+test:
+	go test ./...
+
+fmt:
+	gofmt -s -w .
+
+vet:
+	go vet ./...
+
+clean:
+	rm -rf $(BIN_DIR)
+
+swag:
+	swag init -g cmd/server/main.go -o docs --parseInternal --parseDependency
+{{if .Has "postgres"}}
+migrate-up:
+	@if [ -z "$$DATABASE_URL" ]; then \
+		echo "DATABASE_URL is not set; falling back to configs/config.yaml settings"; \
+		export DATABASE_URL="postgres://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_NAME?sslmode=$$DB_SSLMODE"; \
+	fi
+	$(MIGRATE) up
+
+migrate-down:
+	@if [ -z "$$DATABASE_URL" ]; then \
+		echo "DATABASE_URL is not set; falling back to configs/config.yaml settings"; \
+		export DATABASE_URL="postgres://$$DB_USER:$$DB_PASSWORD@$$DB_HOST:$$DB_PORT/$$DB_NAME?sslmode=$$DB_SSLMODE"; \
+	fi
+	$(MIGRATE) down 1
+
+migrate-create:
+	@if [ -z "$$name" ]; then \
+		echo "Usage: make migrate-create name=create_users_table"; \
+		exit 1; \
+	fi
+	@ts=$$(date +%Y%m%d%H%M%S); \
+	migrate create -ext sql -dir $(MIGRATIONS_DIR) -seq $${ts}_$$name
+{{end}}

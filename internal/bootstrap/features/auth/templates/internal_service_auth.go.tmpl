@@ -1,0 +1,120 @@
+package service
+
+import (
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+	"golang.org/x/crypto/bcrypt"
+
+	"{{.ModulePath}}/internal/config"
+)
+
+// JWTService issues and validates access and refresh tokens.
+type JWTService struct {
+	cfg config.JWTConfig
+}
+
+// NewJWTService constructs a JWTService from the application config.
+func NewJWTService(cfg config.JWTConfig) *JWTService {
+	return &JWTService{cfg: cfg}
+}
+
+// Secret returns the configured signing secret. Useful for middleware wiring.
+func (s *JWTService) Secret() string { return s.cfg.Secret }
+
+// TokenPair is the response returned to clients on login/refresh.
+type TokenPair struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresAt    int64  `json:"expires_at"`
+}
+
+// Claims is the JWT body used by this service.
+type Claims struct {
+	jwt.RegisteredClaims
+	Type string `json:"typ"`
+}
+
+// Issue produces a fresh access+refresh token pair for the given subject (user id).
+func (s *JWTService) Issue(subject string) (*TokenPair, error) {
+	now := time.Now()
+	access, accessExp, err := s.signToken(subject, "access", now, s.cfg.Expiration)
+	if err != nil {
+		return nil, err
+	}
+	refresh, _, err := s.signToken(subject, "refresh", now, s.cfg.RefreshExpiration)
+	if err != nil {
+		return nil, err
+	}
+	return &TokenPair{
+		AccessToken:  access,
+		RefreshToken: refresh,
+		ExpiresAt:    accessExp.Unix(),
+	}, nil
+}
+
+// Refresh exchanges a valid refresh token for a new pair.
+func (s *JWTService) Refresh(refreshToken string) (*TokenPair, error) {
+	claims, err := s.Parse(refreshToken)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Type != "refresh" {
+		return nil, errors.New("token is not a refresh token")
+	}
+	return s.Issue(claims.Subject)
+}
+
+// Parse validates a token string and returns its claims.
+func (s *JWTService) Parse(token string) (*Claims, error) {
+	parsed, err := jwt.ParseWithClaims(token, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrTokenSignatureInvalid
+		}
+		return []byte(s.cfg.Secret), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := parsed.Claims.(*Claims)
+	if !ok || !parsed.Valid {
+		return nil, errors.New("invalid token")
+	}
+	return claims, nil
+}
+
+func (s *JWTService) signToken(subject, typ string, now time.Time, ttl time.Duration) (string, time.Time, error) {
+	exp := now.Add(ttl)
+	claims := Claims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   subject,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(exp),
+			ID:        uuid.NewString(),
+		},
+		Type: typ,
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString([]byte(s.cfg.Secret))
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("sign token: %w", err)
+	}
+	return signed, exp, nil
+}
+
+// HashPassword returns a bcrypt hash of the supplied plaintext password.
+func HashPassword(plain string) (string, error) {
+	h, err := bcrypt.GenerateFromPassword([]byte(plain), bcrypt.DefaultCost)
+	if err != nil {
+		return "", err
+	}
+	return string(h), nil
+}
+
+// CheckPassword reports whether the supplied plaintext matches a stored bcrypt hash.
+func CheckPassword(hash, plain string) bool {
+	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(plain)) == nil
+}

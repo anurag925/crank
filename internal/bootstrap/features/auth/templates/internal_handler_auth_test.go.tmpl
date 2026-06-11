@@ -1,0 +1,211 @@
+package handler
+
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+
+	"{{.ModulePath}}/internal/config"
+	"{{.ModulePath}}/internal/service"
+	"{{.ModulePath}}/internal/validator"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func newTestJWTService() *service.JWTService {
+	return service.NewJWTService(config.JWTConfig{
+		Secret:            "test-secret-key-for-testing",
+		Expiration:        3600000000000, // 1 hour in nanoseconds
+		RefreshExpiration: 86400000000000, // 24 hours in nanoseconds
+	})
+}
+
+func newTestEchoWithHandler(jwtSvc *service.JWTService) (*echo.Echo, *AuthHandler) {
+	e := echo.New()
+	e.HideBanner = true
+	e.Binder = &echoBinder{defaultBinder: new(echo.DefaultBinder)}
+
+	// Register the same HTTP error handler as the real server so validation
+	// errors return 422 instead of 500.
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		if c.Response().Committed {
+			return
+		}
+		if ve, ok := err.(*validator.ValidationError); ok {
+			_ = c.JSON(ve.HTTPStatus, validator.ErrorResponse{
+				Error:   ve.Message,
+				Details: ve.Errors,
+			})
+			return
+		}
+		if he, ok := err.(*echo.HTTPError); ok {
+			_ = c.JSON(he.Code, echo.Map{"error": he.Message})
+			return
+		}
+		_ = c.JSON(http.StatusInternalServerError, echo.Map{"error": "internal server error"})
+	}
+
+	h := NewAuthHandler(jwtSvc)
+	h.Register(e)
+	return e, h
+}
+
+func TestAuthHandler_Register(t *testing.T) {
+	e, _ := newTestEchoWithHandler(newTestJWTService())
+
+	// Verify routes exist.
+	routes := []struct {
+		method string
+		path   string
+	}{
+		{http.MethodPost, "/auth/register"},
+		{http.MethodPost, "/auth/login"},
+		{http.MethodPost, "/auth/refresh"},
+		{http.MethodGet, "/me"},
+	}
+
+	for _, r := range routes {
+		req := httptest.NewRequest(r.method, r.path, nil)
+		rec := httptest.NewRecorder()
+		e.ServeHTTP(rec, req)
+		assert.NotEqual(t, http.StatusNotFound, rec.Code, "route %s %s should exist", r.method, r.path)
+	}
+}
+
+func TestAuthHandler_RegisterUser(t *testing.T) {
+	e, _ := newTestEchoWithHandler(newTestJWTService())
+
+	body, _ := json.Marshal(map[string]string{
+		"email":    "alice@example.com",
+		"password": "securepass123",
+		"name":     "Alice",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Contains(t, resp, "user")
+	assert.Contains(t, resp, "tokens")
+}
+
+func TestAuthHandler_RegisterUser_InvalidEmail(t *testing.T) {
+	e, _ := newTestEchoWithHandler(newTestJWTService())
+
+	body, _ := json.Marshal(map[string]string{
+		"email":    "not-an-email",
+		"password": "securepass123",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/register", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnprocessableEntity, rec.Code)
+}
+
+func TestAuthHandler_Login(t *testing.T) {
+	e, _ := newTestEchoWithHandler(newTestJWTService())
+
+	body, _ := json.Marshal(map[string]string{
+		"email":    "alice@example.com",
+		"password": "securepass123",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/login", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var tokens service.TokenPair
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &tokens))
+	assert.NotEmpty(t, tokens.AccessToken)
+	assert.NotEmpty(t, tokens.RefreshToken)
+}
+
+func TestAuthHandler_Refresh(t *testing.T) {
+	jwtSvc := newTestJWTService()
+	e, _ := newTestEchoWithHandler(jwtSvc)
+
+	// First, issue a token pair.
+	pair, err := jwtSvc.Issue("user-123")
+	require.NoError(t, err)
+
+	body, _ := json.Marshal(map[string]string{
+		"refresh_token": pair.RefreshToken,
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var newTokens service.TokenPair
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &newTokens))
+	assert.NotEmpty(t, newTokens.AccessToken)
+}
+
+func TestAuthHandler_Refresh_InvalidToken(t *testing.T) {
+	e, _ := newTestEchoWithHandler(newTestJWTService())
+
+	body, _ := json.Marshal(map[string]string{
+		"refresh_token": "invalid.token.here",
+	})
+
+	req := httptest.NewRequest(http.MethodPost, "/auth/refresh", bytes.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}
+
+func TestAuthHandler_Me_WithToken(t *testing.T) {
+	jwtSvc := newTestJWTService()
+	e, _ := newTestEchoWithHandler(jwtSvc)
+
+	pair, err := jwtSvc.Issue("user-123")
+	require.NoError(t, err)
+
+	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+
+	var resp map[string]interface{}
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	assert.Equal(t, "user-123", resp["user_id"])
+}
+
+func TestAuthHandler_Me_NoToken(t *testing.T) {
+	e, _ := newTestEchoWithHandler(newTestJWTService())
+
+	req := httptest.NewRequest(http.MethodGet, "/me", nil)
+	rec := httptest.NewRecorder()
+
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusUnauthorized, rec.Code)
+}

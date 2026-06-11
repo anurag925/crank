@@ -1,0 +1,128 @@
+package config
+
+import (
+	"fmt"
+	"strings"
+{{- if .Has "auth"}}
+	"time"
+{{- end}}
+
+	"github.com/spf13/viper"
+)
+
+// Config is the top-level application configuration loaded from configs/config.yaml and
+// overridden by environment variables.
+type Config struct {
+	App AppConfig `mapstructure:"app"`
+{{- if .Has "postgres"}}
+	Database DatabaseConfig `mapstructure:"database"`
+{{- end}}
+{{- if .Has "auth"}}
+	JWT JWTConfig `mapstructure:"jwt"`
+{{- end}}
+{{- if .Has "crypto"}}
+	Crypto CryptoConfig `mapstructure:"crypto"`
+{{- end}}
+	Logging LoggingConfig `mapstructure:"logging"`
+}
+
+// AppConfig holds settings for the HTTP server itself.
+type AppConfig struct {
+	Name string `mapstructure:"name"`
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
+	Env  string `mapstructure:"env"`
+}
+{{if .Has "postgres"}}
+// DatabaseConfig holds PostgreSQL connection settings.
+type DatabaseConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+	Name     string `mapstructure:"name"`
+	SSLMode  string `mapstructure:"sslmode"`
+}
+
+// DSN returns a libpq-style connection string.
+func (d DatabaseConfig) DSN() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		d.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode)
+}
+{{end}}
+{{if .Has "auth"}}
+// JWTConfig holds settings for JWT issuance and validation.
+type JWTConfig struct {
+	Secret            string        `mapstructure:"secret"`
+	Expiration        time.Duration `mapstructure:"expiration"`
+	RefreshExpiration time.Duration `mapstructure:"refresh_expiration"`
+}
+{{end}}
+{{if .Has "crypto"}}
+// CryptoConfig holds the encryption secret used by the crypto package.
+// The secret is read from the CRYPTO_SECRET environment variable.
+// Generate a strong secret with: openssl rand -base64 32
+//
+// IMPORTANT: Never commit the real secret. Use .env for local development
+// and your platform's secret manager in production.
+type CryptoConfig struct {
+	Secret string `mapstructure:"secret"`
+}
+{{end}}
+// LoggingConfig controls slog output.
+type LoggingConfig struct {
+	Level     string `mapstructure:"level"`
+	Format    string `mapstructure:"format"`
+	AddSource bool   `mapstructure:"add_source"`
+}
+
+// Load reads configuration from configs/config.yaml and overrides values with environment
+// variables (e.g. APP_PORT, DATABASE_PASSWORD, JWT_SECRET).
+func Load() *Config {
+	v := viper.New()
+	v.SetConfigName("config")
+	v.SetConfigType("yaml")
+	v.AddConfigPath("./configs")
+	v.AddConfigPath(".")
+	v.SetEnvPrefix("")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	setDefaults(v)
+
+	if err := v.ReadInConfig(); err != nil {
+		fmt.Printf("warning: could not read configs/config.yaml: %v\n", err)
+	}
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		panic(fmt.Errorf("fatal: cannot parse configuration: %w", err))
+	}
+	return &cfg
+}
+
+func setDefaults(v *viper.Viper) {
+	v.SetDefault("app.name", "{{.ProjectName}}")
+	v.SetDefault("app.host", "0.0.0.0")
+	v.SetDefault("app.port", 8080)
+	v.SetDefault("app.env", "development")
+{{- if .Has "postgres"}}
+	v.SetDefault("database.host", "localhost")
+	v.SetDefault("database.port", 5432)
+	v.SetDefault("database.user", "postgres")
+	v.SetDefault("database.password", "postgres")
+	v.SetDefault("database.name", "{{.PackageName}}")
+	v.SetDefault("database.sslmode", "disable")
+{{- end}}
+{{- if .Has "auth"}}
+	v.SetDefault("jwt.secret", "change-me-in-production")
+	v.SetDefault("jwt.expiration", "24h")
+	v.SetDefault("jwt.refresh_expiration", "168h")
+{{- end}}
+{{- if .Has "crypto"}}
+	v.SetDefault("crypto.secret", "change-me-in-production")
+{{- end}}
+	v.SetDefault("logging.level", "info")
+	v.SetDefault("logging.format", "json")
+	v.SetDefault("logging.add_source", false)
+}

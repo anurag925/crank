@@ -1,0 +1,179 @@
+package main
+
+import (
+	"context"
+	"log/slog"
+	"net/http"
+	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
+	"time"
+
+	"github.com/labstack/echo/v4"
+	echomw "github.com/labstack/echo/v4/middleware"
+	echoSwagger "github.com/swaggo/echo-swagger"
+
+	_ "{{.ModulePath}}/docs"
+	"{{.ModulePath}}/internal/config"
+	"{{.ModulePath}}/internal/handler"
+	"{{.ModulePath}}/internal/logging"
+	"{{.ModulePath}}/internal/middleware"
+	"{{.ModulePath}}/internal/model"
+	"{{.ModulePath}}/internal/validator"
+{{- if .Has "postgres"}}
+
+	"{{.ModulePath}}/internal/database"
+{{- end}}
+{{- if .Has "auth"}}
+
+	"{{.ModulePath}}/internal/service"
+{{- end}}
+)
+
+// @title           {{.ProjectName}} API
+// @version         1.0
+// @description     Production-ready backend service scaffolded by rev.
+//
+// @host            localhost:8080
+// @BasePath        /
+//
+// @accept          json
+// @produce         json
+//
+// @securityDefinitions.apikey BearerAuth
+// @in   header
+// @name Authorization
+// @description Enter "Bearer {token}" to authenticate.
+
+func main() {
+	cfg := config.Load()
+
+	// Configure structured logging with redaction and compressed source paths.
+	level := parseLevel(cfg.Logging.Level)
+	logger := logging.New(level, cfg.Logging.AddSource)
+	slog.SetDefault(logger)
+
+	logger.Info("starting application",
+		"app", cfg.App.Name,
+		"env", cfg.App.Env,
+		"log_level", cfg.Logging.Level,
+	)
+{{if .Has "postgres"}}
+	db, err := database.NewPostgres(cfg.Database)
+	if err != nil {
+		logger.Error("failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = db.Close() }()
+{{end}}
+{{if .Has "auth"}}
+	jwtService := service.NewJWTService(cfg.JWT)
+{{end}}
+
+	e := echo.New()
+	e.HideBanner = true
+	e.HidePort = true
+	e.Use(echomw.Recover())
+	e.Use(middleware.RequestLogger())
+
+	// Swagger UI — serves the generated OpenAPI docs at /swagger/*
+	e.GET("/swagger/*", echoSwagger.EchoWrapHandler())
+
+	// Custom HTTP error handler that returns structured JSON for all errors,
+	// including validation failures from the custom binder.
+	e.HTTPErrorHandler = func(err error, c echo.Context) {
+		if c.Response().Committed {
+			return
+		}
+
+		reqLog := logging.FromContext(c.Request().Context())
+
+		// Validation errors from the custom binder.
+		if ve, ok := err.(*validator.ValidationError); ok {
+			reqLog.Warn("validation failed",
+				"errors", ve.Errors,
+			)
+			if sendErr := c.JSON(ve.HTTPStatus, model.APIError{
+				Error:   ve.Message,
+				Details: ve.Errors,
+			}); sendErr != nil {
+				reqLog.Error("failed to send validation error response", "error", sendErr)
+			}
+			return
+		}
+
+		// Echo HTTP errors (e.g. from echo.NewHTTPError).
+		if he, ok := err.(*echo.HTTPError); ok {
+			msg, ok := he.Message.(string)
+			if ok {
+				if sendErr := c.JSON(he.Code, model.APIError{Error: msg}); sendErr != nil {
+					reqLog.Error("failed to send error response", "error", sendErr)
+				}
+				return
+			}
+			if sendErr := c.JSON(he.Code, echo.Map{"error": he.Message}); sendErr != nil {
+				reqLog.Error("failed to send error response", "error", sendErr)
+			}
+			return
+		}
+
+		// Fallback for unexpected errors.
+		reqLog.Error("unhandled error", "error", err)
+		if sendErr := c.JSON(http.StatusInternalServerError, model.APIError{
+			Error: "internal server error",
+		}); sendErr != nil {
+			reqLog.Error("failed to send error response", "error", sendErr)
+		}
+	}
+
+	deps := handler.Deps{
+{{- if .Has "postgres"}}
+		DB: db,
+{{- end}}
+{{- if .Has "auth"}}
+		JWT: jwtService,
+{{- end}}
+	}
+	h := handler.New(deps)
+	h.Register(e)
+{{if .Has "auth"}}
+	authHandler := handler.NewAuthHandler(jwtService)
+	authHandler.Register(e)
+{{end}}
+
+	addr := cfg.App.Host + ":" + strconv.Itoa(cfg.App.Port)
+	logger.Info("server listening", "addr", addr)
+
+	go func() {
+		if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
+			logger.Error("server error", "error", err)
+			os.Exit(1)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	logger.Info("shutting down server")
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(ctx); err != nil {
+		logger.Error("server forced to shutdown", "error", err)
+	}
+}
+
+// parseLevel converts a config string to a slog.Level. Defaults to Info.
+func parseLevel(s string) slog.Level {
+	switch s {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}
