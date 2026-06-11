@@ -88,7 +88,7 @@ rev/
    - Middleware chain
 
 7. **Development Tools**
-   - Air.toml for live reload (debug mode)
+   - .air.toml for live reload (debug mode)
    - Makefile with common commands
    - Docker configuration for deployment
    - .env.example template
@@ -178,7 +178,7 @@ myapp/
 │   └── 000001_init.down.sql
 ├── .env.example              # Environment template
 ├── Makefile                  # Build commands
-├── air.toml                  # Live reload config
+├── .air.toml                 # Live reload config
 ├── Dockerfile                # Container image
 └── go.mod
 ```

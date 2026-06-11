@@ -29,7 +29,11 @@ so the bootstrapper knows which module path and feature set to use.`,
 				fmt.Println("    + " + f)
 			}
 			fmt.Println()
-			fmt.Println("Don't forget to run `go mod tidy` to pull in any new dependencies.")
+
+			// Install the new feature's dependencies via go get.
+			if err := bootstrap.GoGet(result.ProjectDir, result.Dependencies); err != nil {
+				return fmt.Errorf("install dependencies: %w", err)
+			}
 			return nil
 		},
 	}

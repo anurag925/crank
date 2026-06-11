@@ -23,6 +23,12 @@ func (feature) Description() string {
 }
 func (feature) Templates() embed.FS { return tmpls }
 
+func (feature) Dependencies() []string {
+	return []string{
+		"go.mongodb.org/mongo-driver",
+	}
+}
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_mongo_client.go.tmpl", OutputPath: "internal/mongo/client.go"},

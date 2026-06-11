@@ -15,8 +15,10 @@
 /dist/
 /out/
 
-# Generated Swagger docs (re-generate with `make swag`)
-/docs/
+# Generated Swagger spec (re-generate with `rev swag`).
+# docs/docs.go is committed so the project always compiles; swag overwrites it.
+/docs/swagger.json
+/docs/swagger.yaml
 {{- if .Has "postgres"}}
 # Local DB volume
 data/

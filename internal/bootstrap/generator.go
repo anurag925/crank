@@ -25,9 +25,10 @@ type Options struct {
 
 // Result reports the files written during a generation.
 type Result struct {
-	ProjectDir string
-	Files      []string
-	Features   []string
+	ProjectDir   string
+	Files        []string
+	Features     []string
+	Dependencies []string // Go module paths that need `go get`
 }
 
 // Generate creates a new project at TargetDir/ProjectName using the named features.
@@ -72,6 +73,7 @@ func Generate(reg *Registry, opts Options) (*Result, error) {
 	ctx := NewContext(opts.ProjectName, opts.ModulePath, features)
 
 	var all []string
+	var allDeps []string
 	for _, name := range features {
 		f, _ := reg.resolve(name)
 		written, err := generateFeature(projectDir, f, ctx)
@@ -79,10 +81,16 @@ func Generate(reg *Registry, opts Options) (*Result, error) {
 			return nil, err
 		}
 		all = append(all, written...)
+		allDeps = append(allDeps, f.Dependencies()...)
 	}
 	sort.Strings(all)
 
-	return &Result{ProjectDir: projectDir, Files: all, Features: features}, nil
+	return &Result{
+		ProjectDir:   projectDir,
+		Files:        all,
+		Features:     features,
+		Dependencies: uniqueDeps(allDeps),
+	}, nil
 }
 
 // Add applies a feature to an existing project directory. The base feature is
@@ -109,6 +117,7 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 	}
 
 	var written []string
+	var newDeps []string
 	for _, name := range features {
 		ftr, _ := reg.resolve(name)
 		out, err := generateFeature(projectDir, ftr, ctx)
@@ -116,6 +125,10 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 			return nil, err
 		}
 		written = append(written, out...)
+		// Collect deps only from the newly added feature.
+		if name == featureName {
+			newDeps = append(newDeps, ftr.Dependencies()...)
+		}
 	}
 	sort.Strings(written)
 	written = unique(written)
@@ -123,7 +136,13 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 	if err := writeManifest(projectDir, manifest, features); err != nil {
 		return nil, err
 	}
-	return &Result{ProjectDir: projectDir, Files: written, Features: features}, nil
+
+	return &Result{
+		ProjectDir:   projectDir,
+		Files:        written,
+		Features:     features,
+		Dependencies: uniqueDeps(newDeps),
+	}, nil
 }
 
 func appendUnique(list []string, items ...string) []string {
@@ -178,6 +197,20 @@ func contains(list []string, target string) bool {
 		}
 	}
 	return false
+}
+
+// uniqueDeps deduplicates dependency module paths.
+func uniqueDeps(deps []string) []string {
+	seen := make(map[string]bool, len(deps))
+	var out []string
+	for _, d := range deps {
+		if d == "" || seen[d] {
+			continue
+		}
+		seen[d] = true
+		out = append(out, d)
+	}
+	return out
 }
 
 // manifest records which features were applied to a generated project.

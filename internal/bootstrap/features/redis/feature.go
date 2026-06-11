@@ -23,6 +23,12 @@ func (feature) Description() string {
 }
 func (feature) Templates() embed.FS { return tmpls }
 
+func (feature) Dependencies() []string {
+	return []string{
+		"github.com/redis/go-redis/v9",
+	}
+}
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_redis_client.go.tmpl", OutputPath: "internal/redis/client.go"},

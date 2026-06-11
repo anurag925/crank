@@ -23,9 +23,22 @@ func (feature) Description() string {
 }
 func (feature) Templates() embed.FS { return tmpls }
 
+func (feature) Dependencies() []string {
+	return []string{
+		"github.com/labstack/echo/v4",
+		"github.com/spf13/viper",
+		"github.com/go-playground/validator/v10",
+		"github.com/stretchr/testify",
+		"github.com/swaggo/echo-swagger",
+		"github.com/swaggo/files",
+		"github.com/swaggo/swag",
+	}
+}
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/cmd_server_main.go.tmpl", OutputPath: "cmd/server/main.go"},
+		{TemplatePath: "templates/docs_docs.go.tmpl", OutputPath: "docs/docs.go", SkipIfExists: true},
 		{TemplatePath: "templates/internal_config_config.go.tmpl", OutputPath: "internal/config/config.go"},
 		{TemplatePath: "templates/internal_handler_handler.go.tmpl", OutputPath: "internal/handler/handler.go"},
 		{TemplatePath: "templates/internal_handler_handler_test.go.tmpl", OutputPath: "internal/handler/handler_test.go"},
@@ -46,7 +59,7 @@ func (feature) Files() []bootstrap.FileMapping {
 		{TemplatePath: "templates/config.yaml.tmpl", OutputPath: "configs/config.yaml"},
 		{TemplatePath: "templates/.env.example.tmpl", OutputPath: ".env.example"},
 		{TemplatePath: "templates/Makefile.tmpl", OutputPath: "Makefile"},
-		{TemplatePath: "templates/air.toml.tmpl", OutputPath: "air.toml"},
+		{TemplatePath: "templates/air.toml.tmpl", OutputPath: ".air.toml"},
 		{TemplatePath: "templates/Dockerfile.tmpl", OutputPath: "Dockerfile"},
 		{TemplatePath: "templates/.gitignore.tmpl", OutputPath: ".gitignore"},
 		{TemplatePath: "templates/go.mod.tmpl", OutputPath: "go.mod"},

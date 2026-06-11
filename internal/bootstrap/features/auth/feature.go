@@ -23,6 +23,14 @@ func (feature) Description() string {
 }
 func (feature) Templates() embed.FS { return tmpls }
 
+func (feature) Dependencies() []string {
+	return []string{
+		"github.com/golang-jwt/jwt/v5",
+		"github.com/google/uuid",
+		"golang.org/x/crypto",
+	}
+}
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_middleware_auth.go.tmpl", OutputPath: "internal/middleware/auth.go"},

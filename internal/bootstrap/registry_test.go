@@ -10,10 +10,11 @@ type testFeature struct {
 	name string
 }
 
-func (f testFeature) Name() string         { return f.name }
-func (f testFeature) Description() string  { return "test feature " + f.name }
-func (f testFeature) Files() []FileMapping { return nil }
-func (f testFeature) Templates() embed.FS  { return embed.FS{} }
+func (f testFeature) Name() string           { return f.name }
+func (f testFeature) Description() string    { return "test feature " + f.name }
+func (f testFeature) Files() []FileMapping   { return nil }
+func (f testFeature) Templates() embed.FS    { return embed.FS{} }
+func (f testFeature) Dependencies() []string { return nil }
 
 func TestRegistry_RegisterAndGet(t *testing.T) {
 	reg := NewRegistry()

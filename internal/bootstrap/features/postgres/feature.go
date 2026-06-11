@@ -23,6 +23,15 @@ func (feature) Description() string {
 }
 func (feature) Templates() embed.FS { return tmpls }
 
+func (feature) Dependencies() []string {
+	return []string{
+		"github.com/uptrace/bun",
+		"github.com/uptrace/bun/dialect/pgdialect",
+		"github.com/uptrace/bun/driver/pgdriver",
+		"github.com/golang-migrate/migrate/v4",
+	}
+}
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_database_postgres.go.tmpl", OutputPath: "internal/database/postgres.go"},

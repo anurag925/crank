@@ -83,6 +83,28 @@ func assertNotContains(t *testing.T, content, substr, label string) {
 	}
 }
 
+// assertDepsContains checks that deps contains a module path.
+func assertDepsContains(t *testing.T, deps []string, module, label string) {
+	t.Helper()
+	for _, d := range deps {
+		if strings.Contains(d, module) {
+			return
+		}
+	}
+	t.Errorf("%s: expected deps to contain %q, got %v", label, module, deps)
+}
+
+// assertDepsNotContains checks that deps does NOT contain a module path.
+func assertDepsNotContains(t *testing.T, deps []string, module, label string) {
+	t.Helper()
+	for _, d := range deps {
+		if strings.Contains(d, module) {
+			t.Errorf("%s: expected deps NOT to contain %q", label, module)
+			return
+		}
+	}
+}
+
 // --- Global registry tests ---
 
 func TestGlobalRegistry_HasAllFeatures(t *testing.T) {
@@ -128,6 +150,7 @@ func TestBase_FilesExist_BaseOnly(t *testing.T) {
 
 	expectedFiles := []string{
 		"cmd/server/main.go",
+		"docs/docs.go",
 		"internal/config/config.go",
 		"internal/handler/handler.go",
 		"internal/handler/user.go",
@@ -140,7 +163,7 @@ func TestBase_FilesExist_BaseOnly(t *testing.T) {
 		"configs/config.yaml",
 		".env.example",
 		"Makefile",
-		"air.toml",
+		".air.toml",
 		"Dockerfile",
 		".gitignore",
 		"go.mod",
@@ -157,9 +180,11 @@ func TestBase_GoMod_ModulePath(t *testing.T) {
 	content := readFile(t, r.ProjectDir, "go.mod")
 	assertContains(t, content, "module github.com/example/mymod", "go.mod")
 	assertContains(t, content, "go 1.21", "go.mod")
-	assertContains(t, content, "github.com/labstack/echo/v4", "go.mod")
-	assertContains(t, content, "github.com/spf13/viper", "go.mod")
-	assertContains(t, content, "github.com/go-playground/validator/v10", "go.mod validator dep")
+
+	// Dependencies are now returned via Result and installed via go get.
+	assertDepsContains(t, r.Dependencies, "github.com/labstack/echo/v4", "base deps")
+	assertDepsContains(t, r.Dependencies, "github.com/spf13/viper", "base deps")
+	assertDepsContains(t, r.Dependencies, "github.com/go-playground/validator/v10", "base deps")
 }
 
 func TestBase_GoMod_NoAuthDeps(t *testing.T) {
@@ -167,7 +192,10 @@ func TestBase_GoMod_NoAuthDeps(t *testing.T) {
 	content := readFile(t, r.ProjectDir, "go.mod")
 	assertNotContains(t, content, "golang-jwt", "go.mod without auth")
 	assertNotContains(t, content, "golang.org/x/crypto", "go.mod without auth")
-	assertContains(t, content, "go-playground/validator", "go.mod always has validator")
+
+	// Dependencies are now returned via Result.
+	assertDepsNotContains(t, r.Dependencies, "golang-jwt/jwt/v5", "base has no jwt dep")
+	assertDepsContains(t, r.Dependencies, "github.com/go-playground/validator/v10", "base always has validator")
 }
 
 func TestBase_GoMod_NoPostgresDeps(t *testing.T) {
@@ -175,6 +203,9 @@ func TestBase_GoMod_NoPostgresDeps(t *testing.T) {
 	content := readFile(t, r.ProjectDir, "go.mod")
 	assertNotContains(t, content, "uptrace/bun", "go.mod without postgres")
 	assertNotContains(t, content, "golang-migrate", "go.mod without postgres")
+
+	assertDepsNotContains(t, r.Dependencies, "uptrace/bun", "base has no bun dep")
+	assertDepsNotContains(t, r.Dependencies, "golang-migrate/migrate/v4", "base has no migrate dep")
 }
 
 func TestBase_Config_ProjectName(t *testing.T) {
@@ -230,7 +261,8 @@ func TestBase_MiddlewareLogging(t *testing.T) {
 	r := generateProject(t, "mwlog", nil)
 	content := readFile(t, r.ProjectDir, "internal/middleware/logging.go")
 	assertContains(t, content, "func RequestLogger()", "logging middleware")
-	assertContains(t, content, "slog.Info", "logging middleware uses slog")
+	assertContains(t, content, "log/slog", "logging middleware imports slog")
+	assertContains(t, content, "slog.LevelInfo", "logging middleware uses slog")
 }
 
 func TestBase_MainGo_HasValidatorImport(t *testing.T) {
@@ -238,7 +270,7 @@ func TestBase_MainGo_HasValidatorImport(t *testing.T) {
 	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
 	assertContains(t, content, `"github.com/example/valmain/internal/validator"`, "main.go validator import")
 	assertContains(t, content, "validator.ValidationError", "main.go checks ValidationError")
-	assertContains(t, content, "validator.ErrorResponse", "main.go uses ErrorResponse")
+	assertContains(t, content, "model.APIError", "main.go returns APIError responses")
 	assertContains(t, content, "HTTPErrorHandler", "main.go sets custom error handler")
 }
 
@@ -316,9 +348,11 @@ func TestAuth_FilesExist(t *testing.T) {
 func TestAuth_GoMod_Deps(t *testing.T) {
 	r := generateProject(t, "authgomod", []string{"auth"})
 	content := readFile(t, r.ProjectDir, "go.mod")
-	assertContains(t, content, "github.com/golang-jwt/jwt/v5", "go.mod jwt dep")
-	assertContains(t, content, "github.com/google/uuid", "go.mod uuid dep")
-	assertContains(t, content, "golang.org/x/crypto", "go.mod crypto dep")
+	assertContains(t, content, "module", "go.mod")
+	// Dependencies are returned via Result and installed via go get.
+	assertDepsContains(t, r.Dependencies, "github.com/golang-jwt/jwt/v5", "auth deps")
+	assertDepsContains(t, r.Dependencies, "github.com/google/uuid", "auth deps")
+	assertDepsContains(t, r.Dependencies, "golang.org/x/crypto", "auth deps")
 }
 
 func TestAuth_Config_HasJWTSection(t *testing.T) {
@@ -418,10 +452,12 @@ func TestPostgres_FilesExist(t *testing.T) {
 func TestPostgres_GoMod_Deps(t *testing.T) {
 	r := generateProject(t, "pggomod", []string{"postgres"})
 	content := readFile(t, r.ProjectDir, "go.mod")
-	assertContains(t, content, "github.com/uptrace/bun", "go.mod bun dep")
-	assertContains(t, content, "github.com/uptrace/bun/dialect/pgdialect", "go.mod pgdialect")
-	assertContains(t, content, "github.com/uptrace/bun/driver/pgdriver", "go.mod pgdriver")
-	assertContains(t, content, "github.com/golang-migrate/migrate/v4", "go.mod migrate dep")
+	assertContains(t, content, "module", "go.mod")
+	// Dependencies are returned via Result and installed via go get.
+	assertDepsContains(t, r.Dependencies, "github.com/uptrace/bun", "postgres deps")
+	assertDepsContains(t, r.Dependencies, "github.com/uptrace/bun/dialect/pgdialect", "postgres deps")
+	assertDepsContains(t, r.Dependencies, "github.com/uptrace/bun/driver/pgdriver", "postgres deps")
+	assertDepsContains(t, r.Dependencies, "github.com/golang-migrate/migrate/v4", "postgres deps")
 }
 
 func TestPostgres_Config_HasDatabaseSection(t *testing.T) {
@@ -554,7 +590,8 @@ func TestValidator_FilesExist(t *testing.T) {
 func TestValidator_GoMod_HasDep(t *testing.T) {
 	r := generateProject(t, "valgomod", nil)
 	content := readFile(t, r.ProjectDir, "go.mod")
-	assertContains(t, content, "github.com/go-playground/validator/v10", "go.mod validator dep")
+	assertContains(t, content, "module", "go.mod")
+	assertDepsContains(t, r.Dependencies, "github.com/go-playground/validator/v10", "validator dep")
 }
 
 func TestValidator_ValidatorGo_Structures(t *testing.T) {
@@ -722,10 +759,11 @@ func TestAuthPostgres_ConfigGo_HasBothConfigs(t *testing.T) {
 func TestAuthPostgres_GoMod_HasAllDeps(t *testing.T) {
 	r := generateProject(t, "authpggomod", []string{"auth", "postgres"})
 	content := readFile(t, r.ProjectDir, "go.mod")
-	assertContains(t, content, "golang-jwt", "go.mod has jwt")
-	assertContains(t, content, "golang.org/x/crypto", "go.mod has crypto")
-	assertContains(t, content, "uptrace/bun", "go.mod has bun")
-	assertContains(t, content, "golang-migrate", "go.mod has migrate")
+	assertContains(t, content, "module", "go.mod")
+	assertDepsContains(t, r.Dependencies, "golang-jwt/jwt/v5", "auth+pg deps")
+	assertDepsContains(t, r.Dependencies, "golang.org/x/crypto", "auth+pg deps")
+	assertDepsContains(t, r.Dependencies, "uptrace/bun", "auth+pg deps")
+	assertDepsContains(t, r.Dependencies, "golang-migrate/migrate/v4", "auth+pg deps")
 }
 
 func TestAuthPostgres_BootstrapManifest(t *testing.T) {
@@ -859,11 +897,13 @@ func TestCrypto_BootstrapManifest(t *testing.T) {
 }
 
 func TestCrypto_NoExtraGoModDeps(t *testing.T) {
-	// Crypto uses only stdlib — verify no extra dependencies
+	// Crypto uses only stdlib — verify it adds no deps beyond what base provides.
 	r := generateProject(t, "cryptogomod", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "go.mod")
-	// Should not add any crypto-specific third-party dep
-	assertNotContains(t, content, "crypto/aes", "go.mod should not list stdlib imports")
+	// base is auto-included and has its own deps; crypto should add none.
+	baseResult := generateProject(t, "cryptobaseonly", nil)
+	if len(r.Dependencies) != len(baseResult.Dependencies) {
+		t.Errorf("crypto should not add deps beyond base: got %d deps, base has %d", len(r.Dependencies), len(baseResult.Dependencies))
+	}
 }
 
 func TestCrypto_AuthCombined_CryptoConfigPresent(t *testing.T) {
@@ -948,12 +988,11 @@ func TestAll_Features(t *testing.T) {
 	// mongodb files
 	assertFileExists(t, dir, "internal/mongo/client.go")
 
-	// Verify go.mod has all deps
-	gomod := readFile(t, dir, "go.mod")
-	assertContains(t, gomod, "golang-jwt", "go.mod jwt")
-	assertContains(t, gomod, "uptrace/bun", "go.mod bun")
-	assertContains(t, gomod, "golang-migrate", "go.mod migrate")
-	assertContains(t, gomod, "go-playground/validator", "go.mod validator")
+	// Verify deps are returned via Result
+	assertDepsContains(t, r.Dependencies, "golang-jwt", "all features deps")
+	assertDepsContains(t, r.Dependencies, "uptrace/bun", "all features deps")
+	assertDepsContains(t, r.Dependencies, "golang-migrate", "all features deps")
+	assertDepsContains(t, r.Dependencies, "go-playground/validator", "all features deps")
 
 	// Verify config has all sections
 	cfg := readFile(t, dir, "configs/config.yaml")
@@ -1003,8 +1042,7 @@ func TestAdd_AuthToBaseProject(t *testing.T) {
 	assertContains(t, manifest, "- auth", "manifest after add auth")
 
 	// go.mod should now include auth deps
-	gomod := readFile(t, r2.ProjectDir, "go.mod")
-	assertContains(t, gomod, "golang-jwt", "go.mod after add auth")
+	assertDepsContains(t, r2.Dependencies, "golang-jwt/jwt/v5", "add auth deps")
 }
 
 func TestAdd_PostgresToBaseProject(t *testing.T) {

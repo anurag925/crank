@@ -49,13 +49,18 @@ Examples:
 			fmt.Printf("  %d files written.\n", len(result.Files))
 			fmt.Println()
 
+			// Install dependencies via go get.
+			if err := bootstrap.GoGet(result.ProjectDir, result.Dependencies); err != nil {
+				return fmt.Errorf("install dependencies: %w", err)
+			}
+			fmt.Println()
+
 			// Check and install required tools for the enabled features.
 			checkAndInstallTools(toolReg, result.Features)
 
 			fmt.Println()
 			fmt.Println("Next steps:")
 			fmt.Println("  cd " + result.ProjectDir)
-			fmt.Println("  rev tidy")
 			fmt.Println("  rev run")
 			return nil
 		},

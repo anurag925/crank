@@ -23,6 +23,10 @@ func (feature) Description() string {
 }
 func (feature) Templates() embed.FS { return tmpls }
 
+func (feature) Dependencies() []string {
+	return nil // uses only stdlib
+}
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_crypto_crypto.go.tmpl", OutputPath: "internal/crypto/crypto.go"},

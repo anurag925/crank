@@ -34,6 +34,9 @@ type Feature interface {
 	Files() []FileMapping
 	// Templates returns the embedded FS containing the feature's .tmpl files.
 	Templates() embed.FS
+	// Dependencies returns the Go module paths this feature requires.
+	// These are fetched via `go get` in the generated project after scaffolding.
+	Dependencies() []string
 }
 
 // Registry holds the set of features known to the bootstrapper.

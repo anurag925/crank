@@ -73,6 +73,7 @@ rev/
 │   │   ├── manifest.go                    # .bootstrap.yaml encode/decode
 │   │   ├── registry.go                    # GlobalRegistry singleton
 │   │   ├── result.go                      # Result.FeaturesUsed() helper
+│   │   ├── gomod.go                       # GoGet, Tidy helpers (go get + go mod tidy)
 │   │   ├── commands/                      # One Cobra command per CLI subcommand
 │   │   │   ├── init.go                    # `rev init` (includes tool checking)
 │   │   │   ├── add.go                     # `rev add`
@@ -117,11 +118,13 @@ type Feature interface {
     Description() string
     Files() []FileMapping
     Templates() embed.FS
+    Dependencies() []string
 }
 ```
 
 - `Name()` — short identifier used in `--features` lists (e.g. `"base"`, `"auth"`, `"postgres"`)
 - `Description()` — shown by `rev list`
+- `Dependencies()` — Go module paths fetched via `go get` after scaffolding
 - `Files()` — template-to-output path mappings
 - `Templates()` — the `embed.FS` containing `.tmpl` files
 
@@ -200,8 +203,10 @@ Passed to every template during rendering:
 
 ### Generator (`internal/bootstrap/generator.go`)
 
-- `Generate(reg, opts)` — creates a new project from scratch; `base` is always first
-- `Add(reg, projectDir, featureName)` — adds a feature to an existing project; re-renders all features; updates `.bootstrap.yaml` manifest
+- `Generate(reg, opts)` — creates a new project from scratch; `base` is always first; returns `Result.Dependencies` for the caller to run `go get`
+- `Add(reg, projectDir, featureName)` — adds a feature to an existing project; re-renders all features; updates `.bootstrap.yaml` manifest; returns `Result.Dependencies` with only the new feature's deps
+- `GoGet(projectDir, deps)` — runs `go get <deps...>` then `go mod tidy` in the project directory
+- `Tidy(projectDir)` — runs `go mod tidy` in the project directory
 
 ## Conventions & Patterns
 
