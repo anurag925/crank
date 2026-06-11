@@ -1,5 +1,3 @@
-//go:build e2e
-
 package e2e
 
 import (
@@ -42,7 +40,7 @@ func TestMain(m *testing.M) {
 	}
 	crankBin = filepath.Join(binDir, "crank")
 
-	build := exec.Command("go", "build", "-o", crankBin, "./cmd/bootstrap")
+	build := exec.Command("go", "build", "-o", crankBin, "./cmd/crank")
 	build.Dir = root
 	build.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	if out, err := build.CombinedOutput(); err != nil {

@@ -75,7 +75,7 @@ CRANK_VERSION=v0.1.0 CRANK_INSTALL_DIR="$HOME/bin" \
 ### go install
 
 ```bash
-go install github.com/anurag925/crank/cmd/bootstrap@latest
+go install github.com/anurag925/crank/cmd/crank@latest
 ```
 
 Note: this produces a binary named `bootstrap`. Rename it to `crank` if you like:
@@ -93,7 +93,7 @@ included), extract it, and move the `crank` binary onto your `PATH`.
 ### Build from source
 
 ```bash
-go build -o crank ./cmd/bootstrap
+make build   # → ./bin/crank
 ```
 
 Verify your installation with:
@@ -182,7 +182,7 @@ auto-install before giving up.
 1. Create `internal/bootstrap/tools/<name>/tool.go`
 2. Implement the `bootstrap.Tool` interface
 3. Self-register in `init()`: `bootstrap.GlobalToolRegistry.MustRegister(&tool{})`
-4. Add a blank import in `cmd/bootstrap/main.go`
+4. Add a blank import in `cmd/crank/main.go`
 
 The command factory handles `--project`, binary lookup, auto-install, and execution.
 
@@ -190,7 +190,7 @@ The command factory handles `--project`, binary lookup, auto-install, and execut
 
 ```
 crank/
-├── cmd/bootstrap/main.go          # CLI entry point (cobra)
+├── cmd/crank/main.go          # CLI entry point (cobra)
 ├── internal/
 │   ├── bootstrap/                 # generation engine + tool wrapper system
 │   │   ├── generator.go           # Generate / Add entry points

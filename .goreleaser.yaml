@@ -10,7 +10,7 @@ before:
 
 builds:
   - id: crank
-    main: ./cmd/bootstrap
+    main: ./cmd/crank
     binary: crank
     env:
       - CGO_ENABLED=0

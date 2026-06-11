@@ -23,7 +23,7 @@ A modular CLI tool that scaffolds production-ready Go backend services and wraps
 
 ```bash
 # Build the CLI binary
-go build -o crank ./cmd/bootstrap
+make build   # → ./bin/crank
 
 # Scaffold a new project (tools are checked/installed automatically)
 ./crank init myapp --features=base,auth,postgres
@@ -62,7 +62,7 @@ cd myapp && ./crank run
 
 ```
 crank/
-├── cmd/bootstrap/main.go                  # CLI entry point (Cobra root command)
+├── cmd/crank/main.go                  # CLI entry point (Cobra root command)
 ├── internal/
 │   ├── bootstrap/
 │   │   ├── feature.go                     # Feature interface, Registry, template rendering
@@ -191,13 +191,13 @@ Passed to every template during rendering:
 
 - `GlobalRegistry` — process-wide singleton in `registry.go`
 - Features self-register in `init()` via `bootstrap.GlobalRegistry.MustRegister(feature{})`
-- `cmd/bootstrap/main.go` imports feature packages with `_` (blank import) to trigger registration
+- `cmd/crank/main.go` imports feature packages with `_` (blank import) to trigger registration
 
 ### ToolRegistry (`internal/bootstrap/tool.go` + `tool_registry.go`)
 
 - `GlobalToolRegistry` — process-wide singleton in `tool_registry.go`
 - Tools self-register in `init()` via `bootstrap.GlobalToolRegistry.MustRegister(tool{})`
-- `cmd/bootstrap/main.go` imports tool packages with `_` (blank import) to trigger registration
+- `cmd/crank/main.go` imports tool packages with `_` (blank import) to trigger registration
 - `ForFeatures(features)` — returns tools whose requirements are satisfied by the given feature set
 - `ForFeature(feature)` — returns tools that specifically require one feature
 
@@ -221,7 +221,7 @@ Passed to every template during rendering:
        bootstrap.GlobalRegistry.MustRegister(feature{})
    }
    ```
-5. Add a blank import in `cmd/bootstrap/main.go`:
+5. Add a blank import in `cmd/crank/main.go`:
    ```go
    _ "github.com/anurag925/crank/internal/bootstrap/features/<name>"
    ```
@@ -237,7 +237,7 @@ Passed to every template during rendering:
    }
    ```
 4. If the tool needs custom flags, implement `AddFlags(cmd *cobra.Command)` and read them in `Prepare()` via `cmd.Flags()`
-5. Add a blank import in `cmd/bootstrap/main.go`:
+5. Add a blank import in `cmd/crank/main.go`:
    ```go
    _ "github.com/anurag925/crank/internal/bootstrap/tools/<name>"
    ```
@@ -303,7 +303,7 @@ Config files live in a top-level `configs/` directory, following the
 
 | Concern | Location |
 |---------|----------|
-| CLI entry point & root command | `cmd/bootstrap/main.go` |
+| CLI entry point & root command | `cmd/crank/main.go` |
 | Subcommand definitions | `internal/bootstrap/commands/*.go` |
 | Feature interface & registry | `internal/bootstrap/feature.go` |
 | Tool interface & registry | `internal/bootstrap/tool.go` + `tool_registry.go` |
@@ -372,7 +372,7 @@ Precedence rules:
   no `Makefile`), crank reports the usual `unknown command` error.
 
 This is implemented in `internal/bootstrap/commands/makedelegate.go` and hooked
-into `cmd/bootstrap/main.go` before `cobra`'s `Execute()`. It also provides a
+into `cmd/crank/main.go` before `cobra`'s `Execute()`. It also provides a
 natural extension path: project-specific behavior can be expressed as Makefile
 targets without modifying crank itself.
 
