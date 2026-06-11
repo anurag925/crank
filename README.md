@@ -1,9 +1,37 @@
-# crank
+<div align="center">
 
-A modular CLI that scaffolds production-ready Go backend services and wraps common
-development tools as subcommands. Given a project name and a list of features, it
-generates a clean, layered Go service with sensible defaults and a curated set of
-optional modules. All day-to-day development tasks are accessible through `crank`.
+<img src="assets/logo.png" alt="crank" width="360">
+
+<p>
+  <a href="https://github.com/anurag925/crank/actions/workflows/ci.yml"><img src="https://github.com/anurag925/crank/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="https://github.com/anurag925/crank/releases/latest"><img src="https://img.shields.io/github/v/release/anurag925/crank?color=00ADD8&label=release" alt="Release"></a>
+  <a href="https://goreportcard.com/report/github.com/anurag925/crank"><img src="https://goreportcard.com/badge/github.com/anurag925/crank" alt="Go Report Card"></a>
+  <img src="https://img.shields.io/github/go-mod/go-version/anurag925/crank?color=00ADD8" alt="Go version">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+</p>
+
+<p><b>Scaffold production-ready Go backend services — and run your entire dev workflow — without leaving your terminal.</b></p>
+
+</div>
+
+---
+
+**crank** is a modular CLI that scaffolds clean, layered Go services from a curated set of
+optional modules, then wraps the everyday tools (`go`, `migrate`, `swag`, `air`, …) as first-class
+subcommands. Pick your features, get a sensible, idiomatic project, and never leave the CLI.
+
+## Quick start
+
+```bash
+# 1. Install
+curl -fsSL https://raw.githubusercontent.com/anurag925/crank/main/install.sh | sh
+
+# 2. Scaffold a service (required tools are checked & installed automatically)
+crank init myapp --features=base,auth,postgres
+
+# 3. Run it
+cd myapp && crank run
+```
 
 ## Features
 
@@ -235,3 +263,42 @@ as env vars. Environment variables always win. Config files follow the
 | 5 | Redis module | ✅ (placeholder) |
 | 6 | MongoDB module | ✅ (placeholder) |
 | 7 | Pluggable tool wrapper system | ✅ |
+
+## Testing
+
+crank has three test layers:
+
+| Layer | What it covers | Run |
+|-------|----------------|-----|
+| **Unit** | registry, context, manifest, generator, utils | `go test ./internal/... ./cmd/...` |
+| **Integration** | renders every feature/combo and asserts on generated files | `go test ./internal/...` |
+| **End-to-end** | builds the real binary, exercises the CLI, and compiles generated projects | `go test -tags e2e ./e2e/...` |
+
+A helper script wraps all of them:
+
+```bash
+./scripts/test.sh unit   # fast, network-free
+./scripts/test.sh e2e    # build binary + compile generated projects
+./scripts/test.sh all    # everything (default)
+```
+
+The e2e suite is gated behind the `e2e` build tag (it needs network access for
+`go get`), so the default `go test ./...` stays fast and offline. CI runs the
+fast suite and the e2e suite as separate jobs on every push and pull request.
+
+## Contributing
+
+Contributions are welcome! To get started:
+
+1. Fork and clone the repo.
+2. Make your change, keeping it idiomatic and `gofmt`-clean.
+3. Add tests (extend `integration_test.go` and the e2e `compileCases` for new features).
+4. Run `./scripts/test.sh all` and ensure everything passes.
+5. Open a pull request.
+
+See the [tool wrapper](#adding-a-new-tool-wrapper) extension point above, and
+`AGENTS.md` for a deeper guide to adding features and tools.
+
+## License
+
+Released under the [MIT License](LICENSE) © 2026 Anurag Upadhyay.
