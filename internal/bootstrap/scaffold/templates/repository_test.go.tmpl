@@ -1,0 +1,70 @@
+package repository
+{{if .Postgres}}
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
+
+// With postgres the repository needs a live database, so the CRUD methods are
+// not exercised here. These tests cover the parts that do not require a *bun.DB.
+func Test{{.R.Pascal}}Repository_New(t *testing.T) {
+	assert.NotNil(t, New{{.R.Pascal}}Repository(nil))
+}
+
+func TestErr{{.R.Pascal}}NotFound(t *testing.T) {
+	assert.EqualError(t, Err{{.R.Pascal}}NotFound, "{{.R.Snake}} not found")
+}
+{{else}}
+import (
+	"context"
+	"testing"
+
+	"{{.Module}}/internal/model"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func Test{{.R.Pascal}}Repository_CRUD(t *testing.T) {
+	repo := New{{.R.Pascal}}Repository()
+	ctx := context.Background()
+
+	// Empty to start.
+	items, err := repo.List(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, items)
+
+	// Create assigns an incrementing id.
+	m := &model.{{.R.Pascal}}{}
+	require.NoError(t, repo.Create(ctx, m))
+	assert.Equal(t, int64(1), m.ID)
+
+	// Get returns the stored item.
+	got, err := repo.Get(ctx, m.ID)
+	require.NoError(t, err)
+	assert.Equal(t, m.ID, got.ID)
+
+	// Update succeeds for an existing item.
+	require.NoError(t, repo.Update(ctx, m))
+
+	items, err = repo.List(ctx)
+	require.NoError(t, err)
+	assert.Len(t, items, 1)
+
+	// Delete removes it.
+	require.NoError(t, repo.Delete(ctx, m.ID))
+	_, err = repo.Get(ctx, m.ID)
+	assert.ErrorIs(t, err, Err{{.R.Pascal}}NotFound)
+}
+
+func Test{{.R.Pascal}}Repository_NotFound(t *testing.T) {
+	repo := New{{.R.Pascal}}Repository()
+	ctx := context.Background()
+
+	_, err := repo.Get(ctx, 999)
+	assert.ErrorIs(t, err, Err{{.R.Pascal}}NotFound)
+	assert.ErrorIs(t, repo.Update(ctx, &model.{{.R.Pascal}}{ID: 999}), Err{{.R.Pascal}}NotFound)
+	assert.ErrorIs(t, repo.Delete(ctx, 999), Err{{.R.Pascal}}NotFound)
+}
+{{end}}

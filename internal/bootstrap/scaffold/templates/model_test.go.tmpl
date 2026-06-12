@@ -1,0 +1,20 @@
+package model
+
+import (
+	"encoding/json"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func Test{{.R.Pascal}}_JSONRoundTrip(t *testing.T) {
+	in := {{.R.Pascal}}{ID: 1}
+
+	data, err := json.Marshal(in)
+	require.NoError(t, err)
+
+	var out {{.R.Pascal}}
+	require.NoError(t, json.Unmarshal(data, &out))
+	assert.Equal(t, int64(1), out.ID)
+}

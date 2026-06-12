@@ -40,6 +40,15 @@ make build   # → ./bin/crank
 # Generate a migration
 ./crank make migration create_orders --project=./myapp
 
+# Generate application code (Rails/Laravel-style generators)
+./crank make model Order customer:string total:float --project=./myapp
+./crank make handler Product title:string price:float --project=./myapp   # handler + model + repo/service + route wiring (+ migration if postgres)
+./crank make handler Product --only --project=./myapp                     # just the handler
+./crank make scaffold Invoice number:string amount:float --project=./myapp # the full stack
+./crank make scaffold Invoice number:string --tests --project=./myapp      # the full stack + _test.go files
+./crank make repository Ticket --project=./myapp
+./crank make service Cart --project=./myapp
+
 # Run migrations (with --project or from inside the project directory)
 ./crank migrate up --project=./myapp
 cd myapp && ./crank migrate up
@@ -71,6 +80,7 @@ crank/
 │   │   ├── generator.go                   # Generate() and Add() orchestration logic
 │   │   ├── context.go                     # Template context (ProjectName, ModulePath, Has())
 │   │   ├── manifest.go                    # .crank.yaml encode/decode
+│   │   ├── project.go                     # LoadProjectInfo() — public manifest reader for tooling
 │   │   ├── registry.go                    # GlobalRegistry singleton
 │   │   ├── result.go                      # Result.FeaturesUsed() helper
 │   │   ├── gomod.go                       # GoGet, Tidy helpers (go get + go mod tidy)
@@ -78,8 +88,14 @@ crank/
 │   │   │   ├── init.go                    # `crank init` (includes tool checking)
 │   │   │   ├── add.go                     # `crank add`
 │   │   │   ├── list.go                    # `crank list`
-│   │   │   ├── make.go                    # `crank make`
+│   │   │   ├── make.go                    # `crank make` (migration + code generators)
 │   │   │   └── tools.go                   # Generic tool command factory + `crank tools`
+│   │   ├── scaffold/                      # `crank make` code generators (model/repo/service/handler/scaffold)
+│   │   │   ├── scaffold.go                # Generate() orchestration + artifact planning
+│   │   │   ├── names.go                   # Resource name inflection (singular/plural, cases)
+│   │   │   ├── fields.go                  # "name:type" field-spec parsing
+│   │   │   ├── wire.go                    # Auto-registers generated handlers in handler.go
+│   │   │   └── templates/                 # model/repository/service/handler/migration .tmpl files
 │   │   ├── tools/                         # Tool wrappers (one package per external CLI)
 │   │   │   ├── install.go                 # Shared InstallGoTool helper
 │   │   │   ├── migrate/                   # `crank migrate` → golang-migrate
@@ -244,6 +260,50 @@ Passed to every template during rendering:
 
 The command factory in `commands/tools.go` handles everything else: `--project` flag, binary lookup, auto-install on missing, and execution.
 
+### Code Generators (`crank make`)
+
+The `crank make` family (in `internal/bootstrap/scaffold/`) generates layered
+application code inside an existing project, Rails/Laravel style. Kinds:
+`model`, `repository`, `service`, `handler`, `scaffold` (plus the standalone
+`migration` kind handled directly in `commands/make.go`).
+
+Key behaviors to preserve when modifying this subsystem:
+
+- **Postgres-aware.** `scaffold.Generate` reads the project manifest via
+  `bootstrap.LoadProjectInfo`. When the `postgres` feature is present it emits a
+  Bun-backed `repository` plus a create-table migration; otherwise it emits an
+  in-memory `service`. Both layers expose the same method set
+  (`List/Get/Create/Update/Delete`) so handlers depend on either uniformly.
+- **Dependency pull-in.** A `handler`/`scaffold` generates its model and
+  repository/service too (unless `--only` is passed). Generators never overwrite
+  existing dependency files — they are skipped. The explicitly requested
+  ("primary") artifact errors if it already exists unless `--force` is given.
+- **Test generation.** `--tests` adds a `_test.go` beside every generated Go
+  layer (template suffix `*_test.go.tmpl`). Test artifacts are expanded from the
+  base plan in `withTestArtifacts` and are always non-primary (skipped, never
+  errored, if they already exist). For postgres, repository/handler tests are
+  route/sentinel-only (no live DB); the in-memory path exercises full CRUD,
+  using per-type sample literals (`Field.Sample`) so request bodies satisfy the
+  generated validation tags.
+- **Name inflection** lives in `names.go` (`NewResource`): it singularizes the
+  input and derives Pascal/camel/snake/kebab + plural forms used across the
+  templates (struct names, table names, route paths, file names).
+- **Field specs** (`fields.go`) parse `name:type` pairs into model fields,
+  validation tags and SQL columns. Supported types are listed in `fieldTypes`.
+- **Route wiring** (`wire.go`) splices the new handler into
+  `internal/handler/handler.go` at the `// crank:handler-*` marker comments
+  emitted by the base template, falling back to brace-based insertion for older
+  projects. Edits are validated with `go/format` before writing, so a failed
+  splice never corrupts the file — it prints a manual hint instead. Wiring is
+  idempotent.
+- **Formatting.** Rendered Go files are run through `go/format` (`format.Source`)
+  before being written, so templates don't need hand-aligned struct tags.
+
+To add a new generator kind: add a `Kind*` constant + case in
+`scaffold.buildPlan`, a `*.tmpl` under `scaffold/templates/`, and a case in the
+`commands/make.go` switch. To make it `--tests`-aware, add a `*_test.go.tmpl`
+and set `testTmpl` on the artifact.
+
 ### Adding Custom Validators
 
 The generated project includes a ready-to-use [`go-playground/validator`](https://github.com/go-playground/validator) setup in `internal/validator/`. To add a custom validator:
@@ -317,6 +377,9 @@ Config files live in a top-level `configs/` directory, following the
 | Project generation logic | `internal/bootstrap/generator.go` |
 | Template context | `internal/bootstrap/context.go` |
 | Manifest I/O (.crank.yaml) | `internal/bootstrap/manifest.go` |
+| Public manifest reader | `internal/bootstrap/project.go` |
+| Code generators (`crank make`) | `internal/bootstrap/scaffold/*.go` |
+| Generator templates | `internal/bootstrap/scaffold/templates/*.tmpl` |
 | Result helpers | `internal/bootstrap/result.go` |
 | Filesystem utilities | `internal/utils/fileutil.go` |
 | Feature implementations | `internal/bootstrap/features/<name>/feature.go` |
@@ -382,7 +445,7 @@ The project has three test layers:
 
 | Layer | Location | Speed | Network | How to run |
 |-------|----------|-------|---------|------------|
-| **Unit** | `internal/bootstrap/*_test.go` (`registry`, `context`, `manifest`, `result`, `generator`), `internal/bootstrap/commands/makedelegate_test.go`, `internal/utils/fileutil_test.go` | fast | no | `go test ./internal/... ./cmd/...` |
+| **Unit** | `internal/bootstrap/*_test.go` (`registry`, `context`, `manifest`, `result`, `generator`), `internal/bootstrap/scaffold/*_test.go` (name inflection, field parsing, code generation + wiring), `internal/bootstrap/commands/makedelegate_test.go`, `internal/utils/fileutil_test.go` | fast | no | `go test ./internal/... ./cmd/...` |
 | **Integration** | `internal/bootstrap/integration_test.go` — renders every feature/combo into a temp dir and asserts on the generated file contents | fast | no | `go test ./internal/...` |
 | **End-to-end** | `e2e/e2e_test.go` (build tag `e2e`) — builds the real `crank` binary, exercises the CLI surface (`--version`, `list`, `tools`, ...), and scaffolds projects that are then compiled with `go build`/`go vet` to prove the generated code is valid | slow | yes (`go get`) | `go test -tags e2e ./e2e/...` |
 

@@ -1,0 +1,80 @@
+package service
+
+import (
+	"context"
+	"errors"
+	"sync"
+	"sync/atomic"
+
+	"{{.Module}}/internal/model"
+)
+
+// Err{{.R.Pascal}}NotFound is returned when a {{.R.Snake}} lookup fails.
+var Err{{.R.Pascal}}NotFound = errors.New("{{.R.Snake}} not found")
+
+// {{.R.Pascal}}Service is an in-memory {{.R.Snake}} store. It exposes the same method set as
+// the repository layer so handlers can depend on either interchangeably. Replace
+// the internal map with calls into a repository when you need persistence.
+type {{.R.Pascal}}Service struct {
+	mu     sync.RWMutex
+	nextID int64
+	items  map[int64]model.{{.R.Pascal}}
+}
+
+// New{{.R.Pascal}}Service constructs an empty in-memory {{.R.Pascal}}Service.
+func New{{.R.Pascal}}Service() *{{.R.Pascal}}Service {
+	return &{{.R.Pascal}}Service{items: make(map[int64]model.{{.R.Pascal}})}
+}
+
+// List returns every {{.R.Snake}}.
+func ({{.R.Receiver}} *{{.R.Pascal}}Service) List(ctx context.Context) ([]model.{{.R.Pascal}}, error) {
+	{{.R.Receiver}}.mu.RLock()
+	defer {{.R.Receiver}}.mu.RUnlock()
+	out := make([]model.{{.R.Pascal}}, 0, len({{.R.Receiver}}.items))
+	for _, m := range {{.R.Receiver}}.items {
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+// Get returns a {{.R.Snake}} by id.
+func ({{.R.Receiver}} *{{.R.Pascal}}Service) Get(ctx context.Context, id int64) (model.{{.R.Pascal}}, error) {
+	{{.R.Receiver}}.mu.RLock()
+	defer {{.R.Receiver}}.mu.RUnlock()
+	m, ok := {{.R.Receiver}}.items[id]
+	if !ok {
+		return model.{{.R.Pascal}}{}, Err{{.R.Pascal}}NotFound
+	}
+	return m, nil
+}
+
+// Create stores a new {{.R.Snake}} and assigns it an id.
+func ({{.R.Receiver}} *{{.R.Pascal}}Service) Create(ctx context.Context, m *model.{{.R.Pascal}}) error {
+	{{.R.Receiver}}.mu.Lock()
+	defer {{.R.Receiver}}.mu.Unlock()
+	m.ID = atomic.AddInt64(&{{.R.Receiver}}.nextID, 1)
+	{{.R.Receiver}}.items[m.ID] = *m
+	return nil
+}
+
+// Update replaces an existing {{.R.Snake}}.
+func ({{.R.Receiver}} *{{.R.Pascal}}Service) Update(ctx context.Context, m *model.{{.R.Pascal}}) error {
+	{{.R.Receiver}}.mu.Lock()
+	defer {{.R.Receiver}}.mu.Unlock()
+	if _, ok := {{.R.Receiver}}.items[m.ID]; !ok {
+		return Err{{.R.Pascal}}NotFound
+	}
+	{{.R.Receiver}}.items[m.ID] = *m
+	return nil
+}
+
+// Delete removes a {{.R.Snake}} by id.
+func ({{.R.Receiver}} *{{.R.Pascal}}Service) Delete(ctx context.Context, id int64) error {
+	{{.R.Receiver}}.mu.Lock()
+	defer {{.R.Receiver}}.mu.Unlock()
+	if _, ok := {{.R.Receiver}}.items[id]; !ok {
+		return Err{{.R.Pascal}}NotFound
+	}
+	delete({{.R.Receiver}}.items, id)
+	return nil
+}

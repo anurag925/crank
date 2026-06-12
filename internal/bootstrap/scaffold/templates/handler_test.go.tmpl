@@ -1,0 +1,147 @@
+package handler
+{{if .Postgres}}
+import (
+	"testing"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+)
+
+// With postgres the handler needs a live database, so handlers are not invoked
+// against a nil *bun.DB. This test verifies the routes are registered.
+func Test{{.R.Pascal}}Handler_Routes(t *testing.T) {
+	e := echo.New()
+	e.HideBanner = true
+
+	New{{.R.Pascal}}Handler(Deps{}).Register(e)
+
+	routes := map[string]bool{}
+	for _, r := range e.Routes() {
+		routes[r.Method+" "+r.Path] = true
+	}
+
+	assert.True(t, routes["GET /{{.R.KebabPlural}}"], "list route should exist")
+	assert.True(t, routes["POST /{{.R.KebabPlural}}"], "create route should exist")
+	assert.True(t, routes["GET /{{.R.KebabPlural}}/:id"], "get route should exist")
+	assert.True(t, routes["PUT /{{.R.KebabPlural}}/:id"], "update route should exist")
+	assert.True(t, routes["DELETE /{{.R.KebabPlural}}/:id"], "delete route should exist")
+}
+{{else}}
+import (
+	"bytes"
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"testing"
+{{- if .HasTime}}
+	"time"
+{{- end}}
+
+	"{{.Module}}/internal/model"
+
+	"github.com/labstack/echo/v4"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+// new{{.R.Pascal}}TestEcho returns an Echo instance wired with the validating
+// binder so handler tests exercise the same binding/validation path as production.
+func new{{.R.Pascal}}TestEcho() *echo.Echo {
+	e := echo.New()
+	e.HideBanner = true
+	e.Binder = &echoBinder{defaultBinder: new(echo.DefaultBinder)}
+	return e
+}
+
+// sample{{.R.Pascal}} builds a {{.R.Snake}} payload whose fields satisfy the model's
+// validation rules.
+func sample{{.R.Pascal}}() model.{{.R.Pascal}} {
+	return model.{{.R.Pascal}}{
+{{- range .Fields}}
+		{{.GoName}}: {{.Sample}},
+{{- end}}
+	}
+}
+
+func Test{{.R.Pascal}}Handler_Routes(t *testing.T) {
+	e := new{{.R.Pascal}}TestEcho()
+	New{{.R.Pascal}}Handler(Deps{}).Register(e)
+
+	routes := map[string]bool{}
+	for _, r := range e.Routes() {
+		routes[r.Method+" "+r.Path] = true
+	}
+
+	assert.True(t, routes["GET /{{.R.KebabPlural}}"], "list route should exist")
+	assert.True(t, routes["POST /{{.R.KebabPlural}}"], "create route should exist")
+	assert.True(t, routes["GET /{{.R.KebabPlural}}/:id"], "get route should exist")
+	assert.True(t, routes["PUT /{{.R.KebabPlural}}/:id"], "update route should exist")
+	assert.True(t, routes["DELETE /{{.R.KebabPlural}}/:id"], "delete route should exist")
+}
+
+func Test{{.R.Pascal}}Handler_ListEmpty(t *testing.T) {
+	e := new{{.R.Pascal}}TestEcho()
+	req := httptest.NewRequest(http.MethodGet, "/{{.R.KebabPlural}}", nil)
+	rec := httptest.NewRecorder()
+
+	h := New{{.R.Pascal}}Handler(Deps{})
+	require.NoError(t, h.List(e.NewContext(req, rec)))
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func Test{{.R.Pascal}}Handler_CreateAndGet(t *testing.T) {
+	e := new{{.R.Pascal}}TestEcho()
+	h := New{{.R.Pascal}}Handler(Deps{})
+
+	body, err := json.Marshal(sample{{.R.Pascal}}())
+	require.NoError(t, err)
+
+	createReq := httptest.NewRequest(http.MethodPost, "/{{.R.KebabPlural}}", bytes.NewReader(body))
+	createReq.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	createRec := httptest.NewRecorder()
+	require.NoError(t, h.Create(e.NewContext(createReq, createRec)))
+	require.Equal(t, http.StatusCreated, createRec.Code)
+
+	var created model.{{.R.Pascal}}
+	require.NoError(t, json.Unmarshal(createRec.Body.Bytes(), &created))
+	assert.Equal(t, int64(1), created.ID)
+
+	getReq := httptest.NewRequest(http.MethodGet, "/", nil)
+	getRec := httptest.NewRecorder()
+	c := e.NewContext(getReq, getRec)
+	c.SetPath("/{{.R.KebabPlural}}/:id")
+	c.SetParamNames("id")
+	c.SetParamValues("1")
+
+	require.NoError(t, h.Get(c))
+	assert.Equal(t, http.StatusOK, getRec.Code)
+}
+
+func Test{{.R.Pascal}}Handler_GetNotFound(t *testing.T) {
+	e := new{{.R.Pascal}}TestEcho()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetPath("/{{.R.KebabPlural}}/:id")
+	c.SetParamNames("id")
+	c.SetParamValues("999")
+
+	h := New{{.R.Pascal}}Handler(Deps{})
+	require.NoError(t, h.Get(c))
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func Test{{.R.Pascal}}Handler_GetInvalidID(t *testing.T) {
+	e := new{{.R.Pascal}}TestEcho()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetPath("/{{.R.KebabPlural}}/:id")
+	c.SetParamNames("id")
+	c.SetParamValues("abc")
+
+	h := New{{.R.Pascal}}Handler(Deps{})
+	require.NoError(t, h.Get(c))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+{{end}}

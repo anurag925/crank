@@ -1,0 +1,158 @@
+package handler
+
+import (
+	"errors"
+	"net/http"
+	"strconv"
+
+	"github.com/labstack/echo/v4"
+
+	"{{.Module}}/internal/model"
+	"{{.Module}}/internal/{{.StorePkg}}"
+)
+
+// {{.R.Pascal}}Handler exposes CRUD HTTP endpoints for {{.R.SnakePlural}}. The backing store
+// ({{.StorePkg}}.{{.R.Pascal}}{{.StoreType}}) can be swapped for any type with the same method
+// set without touching the route handlers.
+type {{.R.Pascal}}Handler struct {
+	store *{{.StorePkg}}.{{.R.Pascal}}{{.StoreType}}
+}
+
+// New{{.R.Pascal}}Handler builds a {{.R.Pascal}}Handler from the shared Deps.
+func New{{.R.Pascal}}Handler(deps Deps) *{{.R.Pascal}}Handler {
+	return &{{.R.Pascal}}Handler{store: {{.StorePkg}}.New{{.R.Pascal}}{{.StoreType}}({{.StoreCtorArg}})}
+}
+
+// Register attaches {{.R.Snake}} routes to the Echo instance.
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Register(e *echo.Echo) {
+	g := e.Group("/{{.R.KebabPlural}}")
+	g.GET("", {{.R.Receiver}}.List)
+	g.POST("", {{.R.Receiver}}.Create)
+	g.GET("/:id", {{.R.Receiver}}.Get)
+	g.PUT("/:id", {{.R.Receiver}}.Update)
+	g.DELETE("/:id", {{.R.Receiver}}.Delete)
+}
+
+// List godoc
+//
+//	@Summary      List {{.R.SnakePlural}}
+//	@Description  Returns all {{.R.SnakePlural}}.
+//	@Tags         {{.R.SnakePlural}}
+//	@Produce      json
+//	@Success      200  {array}   model.{{.R.Pascal}}
+//	@Failure      500  {object}  model.APIError
+//	@Router       /{{.R.KebabPlural}} [get]
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) List(c echo.Context) error {
+	items, err := {{.R.Receiver}}.store.List(c.Request().Context())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusOK, items)
+}
+
+// Create godoc
+//
+//	@Summary      Create a {{.R.Snake}}
+//	@Description  Creates a new {{.R.Snake}}. The request body is validated automatically.
+//	@Tags         {{.R.SnakePlural}}
+//	@Accept       json
+//	@Produce      json
+//	@Param        {{.R.Snake}}  body      model.{{.R.Pascal}}  true  "{{.R.Pascal}} payload"
+//	@Success      201   {object}  model.{{.R.Pascal}}
+//	@Failure      422   {object}  model.APIError
+//	@Failure      500   {object}  model.APIError
+//	@Router       /{{.R.KebabPlural}} [post]
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Create(c echo.Context) error {
+	var in model.{{.R.Pascal}}
+	if err := c.Bind(&in); err != nil {
+		return err
+	}
+	if err := {{.R.Receiver}}.store.Create(c.Request().Context(), &in); err != nil {
+		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusCreated, in)
+}
+
+// Get godoc
+//
+//	@Summary      Get a {{.R.Snake}}
+//	@Description  Returns a single {{.R.Snake}} by ID.
+//	@Tags         {{.R.SnakePlural}}
+//	@Produce      json
+//	@Param        id   path      int  true  "{{.R.Pascal}} ID"
+//	@Success      200  {object}  model.{{.R.Pascal}}
+//	@Failure      400  {object}  model.APIError
+//	@Failure      404  {object}  model.APIError
+//	@Router       /{{.R.KebabPlural}}/{id} [get]
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Get(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, model.APIError{Error: "invalid id"})
+	}
+	m, err := {{.R.Receiver}}.store.Get(c.Request().Context(), id)
+	if errors.Is(err, {{.StorePkg}}.Err{{.R.Pascal}}NotFound) {
+		return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusOK, m)
+}
+
+// Update godoc
+//
+//	@Summary      Update a {{.R.Snake}}
+//	@Description  Updates an existing {{.R.Snake}} by ID.
+//	@Tags         {{.R.SnakePlural}}
+//	@Accept       json
+//	@Produce      json
+//	@Param        id        path      int          true  "{{.R.Pascal}} ID"
+//	@Param        {{.R.Snake}}  body      model.{{.R.Pascal}}  true  "{{.R.Pascal}} payload"
+//	@Success      200  {object}  model.{{.R.Pascal}}
+//	@Failure      400  {object}  model.APIError
+//	@Failure      404  {object}  model.APIError
+//	@Failure      422  {object}  model.APIError
+//	@Router       /{{.R.KebabPlural}}/{id} [put]
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Update(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, model.APIError{Error: "invalid id"})
+	}
+	var in model.{{.R.Pascal}}
+	if err := c.Bind(&in); err != nil {
+		return err
+	}
+	in.ID = id
+	if err := {{.R.Receiver}}.store.Update(c.Request().Context(), &in); err != nil {
+		if errors.Is(err, {{.StorePkg}}.Err{{.R.Pascal}}NotFound) {
+			return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusOK, in)
+}
+
+// Delete godoc
+//
+//	@Summary      Delete a {{.R.Snake}}
+//	@Description  Deletes a {{.R.Snake}} by ID.
+//	@Tags         {{.R.SnakePlural}}
+//	@Produce      json
+//	@Param        id   path      int  true  "{{.R.Pascal}} ID"
+//	@Success      204  "No Content"
+//	@Failure      400  {object}  model.APIError
+//	@Failure      404  {object}  model.APIError
+//	@Router       /{{.R.KebabPlural}}/{id} [delete]
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Delete(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, model.APIError{Error: "invalid id"})
+	}
+	if err := {{.R.Receiver}}.store.Delete(c.Request().Context(), id); err != nil {
+		if errors.Is(err, {{.StorePkg}}.Err{{.R.Pascal}}NotFound) {
+			return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+		}
+		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}

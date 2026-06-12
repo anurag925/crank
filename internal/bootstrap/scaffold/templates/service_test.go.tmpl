@@ -1,0 +1,53 @@
+package service
+
+import (
+	"context"
+	"testing"
+
+	"{{.Module}}/internal/model"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func Test{{.R.Pascal}}Service_CRUD(t *testing.T) {
+	svc := New{{.R.Pascal}}Service()
+	ctx := context.Background()
+
+	// Empty to start.
+	items, err := svc.List(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, items)
+
+	// Create assigns an incrementing id.
+	m := &model.{{.R.Pascal}}{}
+	require.NoError(t, svc.Create(ctx, m))
+	assert.Equal(t, int64(1), m.ID)
+
+	// Get returns the stored item.
+	got, err := svc.Get(ctx, m.ID)
+	require.NoError(t, err)
+	assert.Equal(t, m.ID, got.ID)
+
+	// Update succeeds for an existing item.
+	require.NoError(t, svc.Update(ctx, m))
+
+	items, err = svc.List(ctx)
+	require.NoError(t, err)
+	assert.Len(t, items, 1)
+
+	// Delete removes it.
+	require.NoError(t, svc.Delete(ctx, m.ID))
+	_, err = svc.Get(ctx, m.ID)
+	assert.ErrorIs(t, err, Err{{.R.Pascal}}NotFound)
+}
+
+func Test{{.R.Pascal}}Service_NotFound(t *testing.T) {
+	svc := New{{.R.Pascal}}Service()
+	ctx := context.Background()
+
+	_, err := svc.Get(ctx, 999)
+	assert.ErrorIs(t, err, Err{{.R.Pascal}}NotFound)
+	assert.ErrorIs(t, svc.Update(ctx, &model.{{.R.Pascal}}{ID: 999}), Err{{.R.Pascal}}NotFound)
+	assert.ErrorIs(t, svc.Delete(ctx, 999), Err{{.R.Pascal}}NotFound)
+}

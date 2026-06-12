@@ -29,6 +29,7 @@ type Deps struct {
 type Handler struct {
 	deps Deps
 	users *UserHandler
+	// crank:handler-fields (do not remove — `crank make handler` inserts fields here)
 }
 
 // New constructs a Handler. Feature-specific dependencies are wired in via Deps.
@@ -36,6 +37,7 @@ func New(deps Deps) *Handler {
 	return &Handler{
 		deps:  deps,
 		users: NewUserHandler(deps),
+		// crank:handler-init (do not remove — `crank make handler` inserts initializers here)
 	}
 }
 
@@ -47,6 +49,7 @@ func (h *Handler) Register(e *echo.Echo) {
 
 	e.GET("/health", h.Health)
 	h.users.Register(e)
+	// crank:handler-register (do not remove — `crank make handler` inserts route registrations here)
 }
 
 // Health godoc
