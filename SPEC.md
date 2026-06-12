@@ -9,7 +9,7 @@ A modular CLI tool that scaffolds production-ready Golang backend applications w
 ```
 crank/
 ├── cmd/
-│   └── bootstrap/
+│   └── crank/
 │       └── main.go           # CLI entry point
 ├── internal/
 │   ├── bootstrap/
@@ -236,13 +236,14 @@ This approach allows:
 - **Local development**: .env file for convenience
 - **CI/CD**: Environment variables set by the pipeline
 
-### Bootstrap CLI vs Generated Projects
+### crank CLI vs Generated Projects
 
-| File | Bootstrap CLI | Generated Projects |
-|------|---------------|-------------------|
-| config.yaml | Bootstrapper's own config (install paths, options) | `configs/config.yaml` — full application config with all settings |
+| File | crank CLI | Generated Projects |
+|------|-----------|-------------------|
+| config.yaml | Not used (CLI doesn't connect to DBs) | `configs/config.yaml` — full application config with all settings |
 | .env | Not needed (CLI doesn't connect to DBs) | `.env` — local secrets (git-ignored) |
 | .env.example | Not applicable | `.env.example` — template showing which env vars to set |
+| .crank.yaml | Not applicable | `.crank.yaml` — tracks project name, module path, features, crank version |
 
 ## Technical Decisions
 

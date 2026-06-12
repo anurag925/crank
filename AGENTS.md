@@ -204,7 +204,7 @@ Passed to every template during rendering:
 ### Generator (`internal/bootstrap/generator.go`)
 
 - `Generate(reg, opts)` — creates a new project from scratch; `base` is always first; returns `Result.Dependencies` for the caller to run `go get`
-- `Add(reg, projectDir, featureName)` — adds a feature to an existing project; re-renders all features; updates `.crank.yaml` manifest; returns `Result.Dependencies` with only the new feature's deps
+- `Add(reg, projectDir, featureName)` — adds a feature to an existing project; renders only the new feature's templates (existing files are never touched); updates `.crank.yaml` manifest; returns `Result.Dependencies` with the new feature's deps
 - `GoGet(projectDir, deps)` — runs `go get <deps...>` then `go mod tidy` in the project directory
 - `Tidy(projectDir)` — runs `go mod tidy` in the project directory
 
