@@ -19,7 +19,7 @@ func NewLogger(logger *slog.Logger) log.Logger {
 	return &slogLogger{logger: logger}
 }
 
-func (l *slogLogger) Debug(msg string, keyvals ...interface{}) { l.logger.Debug(msg, keyvals...) }
-func (l *slogLogger) Info(msg string, keyvals ...interface{})  { l.logger.Info(msg, keyvals...) }
-func (l *slogLogger) Warn(msg string, keyvals ...interface{})  { l.logger.Warn(msg, keyvals...) }
-func (l *slogLogger) Error(msg string, keyvals ...interface{}) { l.logger.Error(msg, keyvals...) }
+func (l *slogLogger) Debug(msg string, keyvals ...any) { l.logger.Debug(msg, keyvals...) }
+func (l *slogLogger) Info(msg string, keyvals ...any)  { l.logger.Info(msg, keyvals...) }
+func (l *slogLogger) Warn(msg string, keyvals ...any)  { l.logger.Warn(msg, keyvals...) }
+func (l *slogLogger) Error(msg string, keyvals ...any) { l.logger.Error(msg, keyvals...) }

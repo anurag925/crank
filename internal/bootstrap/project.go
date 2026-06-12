@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/anurag925/crank/internal/utils"
@@ -45,12 +46,7 @@ func LoadProjectInfo(projectDir string) (*ProjectInfo, error) {
 
 // Has reports whether the named feature is enabled in the project.
 func (p *ProjectInfo) Has(name string) bool {
-	for _, f := range p.Features {
-		if f == name {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(p.Features, name)
 }
 
 // moduleFromGoMod returns the module path declared in projectDir/go.mod, or ""

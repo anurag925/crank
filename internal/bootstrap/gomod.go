@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strings"
 )
 
 // GoGet runs `go get` for each dependency in the generated project directory,
@@ -62,9 +63,10 @@ func joinDeps(deps []string) string {
 	if len(deps) == 0 {
 		return ""
 	}
-	out := deps[0]
+	var out strings.Builder
+	out.WriteString(deps[0])
 	for _, d := range deps[1:] {
-		out += " " + d
+		out.WriteString(" " + d)
 	}
-	return out
+	return out.String()
 }

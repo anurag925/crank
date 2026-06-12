@@ -70,7 +70,7 @@ func (s *JWTService) Refresh(refreshToken string) (*TokenPair, error) {
 
 // Parse validates a token string and returns its claims.
 func (s *JWTService) Parse(token string) (*Claims, error) {
-	parsed, err := jwt.ParseWithClaims(token, &Claims{}, func(t *jwt.Token) (interface{}, error) {
+	parsed, err := jwt.ParseWithClaims(token, &Claims{}, func(t *jwt.Token) (any, error) {
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 			return nil, jwt.ErrTokenSignatureInvalid
 		}

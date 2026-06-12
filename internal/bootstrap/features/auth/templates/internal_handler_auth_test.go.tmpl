@@ -93,7 +93,7 @@ func TestAuthHandler_RegisterUser(t *testing.T) {
 
 	assert.Equal(t, http.StatusCreated, rec.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Contains(t, resp, "user")
 	assert.Contains(t, resp, "tokens")
@@ -194,7 +194,7 @@ func TestAuthHandler_Me_WithToken(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 
-	var resp map[string]interface{}
+	var resp map[string]any
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	assert.Equal(t, "user-123", resp["user_id"])
 }

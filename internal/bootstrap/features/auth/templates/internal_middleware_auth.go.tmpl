@@ -22,7 +22,7 @@ func JWTAuth(secret string) echo.MiddlewareFunc {
 				return echo.NewHTTPError(http.StatusUnauthorized, "invalid authorization header")
 			}
 
-			tok, err := jwt.Parse(parts[1], func(t *jwt.Token) (interface{}, error) {
+			tok, err := jwt.Parse(parts[1], func(t *jwt.Token) (any, error) {
 				if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
 					return nil, jwt.ErrTokenSignatureInvalid
 				}

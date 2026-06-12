@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 
 	"github.com/anurag925/crank/internal/utils"
@@ -196,12 +197,7 @@ func validateFeatures(reg *Registry, features []string) error {
 }
 
 func contains(list []string, target string) bool {
-	for _, v := range list {
-		if v == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, target)
 }
 
 // uniqueDeps deduplicates dependency module paths.
