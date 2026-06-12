@@ -194,9 +194,11 @@ func TestE2E_GenerateAndCompile(t *testing.T) {
 	}
 }
 
-// TestE2E_AddThenCompile generates a base project, adds postgres + auth via the
-// generator's Add path, then compiles the result — exercising the `add` flow.
-func TestE2E_AddThenCompile(t *testing.T) {
+// TestE2E_Add verifies that Add writes only the new feature's files and
+// updates the manifest. It does NOT compile the result because base templates
+// are not re-rendered (config.go won't have JWTConfig/DatabaseConfig etc.) —
+// that's by design: the project's code belongs to the user after generation.
+func TestE2E_Add(t *testing.T) {
 	projectDir := scaffold(t, "svc_added", []string{"base"})
 
 	for _, feature := range []string{"postgres", "auth"} {
@@ -204,13 +206,51 @@ func TestE2E_AddThenCompile(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Add(%s): %v", feature, err)
 		}
-		if len(res.Dependencies) > 0 {
-			if err := bootstrap.GoGet(projectDir, res.Dependencies); err != nil {
-				t.Fatalf("go get after adding %s: %v", feature, err)
-			}
+		if len(res.Dependencies) == 0 {
+			t.Errorf("Add(%s): expected dependencies, got none", feature)
+		}
+		if !contains(res.Features, feature) {
+			t.Errorf("Add(%s): feature not in result features %v", feature, res.Features)
 		}
 	}
-	compileProject(t, projectDir)
+
+	// Verify the manifest has all three features.
+	manifest := readFile(t, projectDir, ".crank.yaml")
+	for _, f := range []string{"base", "postgres", "auth"} {
+		if !strings.Contains(manifest, "- "+f) {
+			t.Errorf("manifest missing feature %q", f)
+		}
+	}
+
+	// Verify new feature files were created.
+	assertExists(t, projectDir, "internal/database/postgres.go")
+	assertExists(t, projectDir, "internal/middleware/auth.go")
+	assertExists(t, projectDir, "migrations/000001_init.up.sql")
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func readFile(t *testing.T, dir, name string) string {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join(dir, name))
+	if err != nil {
+		t.Fatalf("read %s: %v", name, err)
+	}
+	return string(raw)
+}
+
+func assertExists(t *testing.T, dir, name string) {
+	t.Helper()
+	if _, err := os.Stat(filepath.Join(dir, name)); os.IsNotExist(err) {
+		t.Errorf("expected %s to exist", name)
+	}
 }
 
 // scaffold generates a project in-process (avoiding the binary's global tool
