@@ -72,17 +72,13 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 	for _, rel := range []string{
 		"internal/model/order.go",
 		"internal/repository/order.go",
+		"internal/service/order.go",
 		"internal/handler/order.go",
 	} {
 		if !exists(dir, rel) {
 			t.Errorf("expected %s to be generated", rel)
 		}
 		assertParses(t, dir, rel)
-	}
-
-	// A non-postgres service should NOT be generated when postgres is present.
-	if exists(dir, "internal/service/order.go") {
-		t.Error("did not expect service/order.go for a postgres project")
 	}
 
 	// Model carries Bun tags and the supplied fields.
@@ -147,13 +143,14 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 		t.Fatalf("Generate handler: %v", err)
 	}
 
-	// Non-postgres projects get a service, not a repository, and no migration.
+	// Both repository and service are generated regardless of postgres.
 	if !exists(dir, "internal/service/ticket.go") {
-		t.Error("expected service/ticket.go for a non-postgres project")
+		t.Error("expected service/ticket.go")
 	}
-	if exists(dir, "internal/repository/ticket.go") {
-		t.Error("did not expect repository/ticket.go for a non-postgres project")
+	if !exists(dir, "internal/repository/ticket.go") {
+		t.Error("expected repository/ticket.go")
 	}
+	// No migration without postgres.
 	ups, _ := filepath.Glob(filepath.Join(dir, "migrations", "*_create_tickets.up.sql"))
 	if len(ups) != 0 {
 		t.Errorf("did not expect a migration for a non-postgres project, found %d", len(ups))
@@ -207,8 +204,8 @@ func TestHandlerOnlySkipsDependencies(t *testing.T) {
 	if !exists(dir, "internal/handler/coupon.go") {
 		t.Error("expected handler/coupon.go")
 	}
-	if exists(dir, "internal/model/coupon.go") || exists(dir, "internal/repository/coupon.go") {
-		t.Error("--only should not generate model or repository")
+	if exists(dir, "internal/model/coupon.go") || exists(dir, "internal/repository/coupon.go") || exists(dir, "internal/service/coupon.go") {
+		t.Error("--only should not generate model, repository or service")
 	}
 }
 
@@ -253,10 +250,9 @@ func TestGenerateWithTests(t *testing.T) {
 	for _, tc := range []struct {
 		name     string
 		features []string
-		storeRel string // the generated store test (repository vs service)
 	}{
-		{"postgres", []string{"postgres"}, "internal/repository/order_test.go"},
-		{"in_memory", nil, "internal/service/order_test.go"},
+		{"postgres", []string{"postgres"}},
+		{"in_memory", nil},
 	} {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
@@ -276,8 +272,9 @@ func TestGenerateWithTests(t *testing.T) {
 			// Every generated layer gets a syntactically valid test file.
 			want := []string{
 				"internal/model/order_test.go",
+				"internal/repository/order_test.go",
+				"internal/service/order_test.go",
 				"internal/handler/order_test.go",
-				tc.storeRel,
 			}
 			for _, rel := range want {
 				if !exists(dir, rel) {

@@ -18,8 +18,11 @@ func NewAddCmd(reg *bootstrap.Registry) *cobra.Command {
 		Long: `add copies the templates of a single feature into a project previously
 created with ` + "`init`" + `. The project must contain a .crank.yaml manifest
 so crank knows which module path and feature set to use.`,
-		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				cmd.Help()
+				return nil
+			}
 			result, err := bootstrap.Add(reg, projectDir, args[0])
 			if err != nil {
 				return err

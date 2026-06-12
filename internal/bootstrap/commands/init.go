@@ -1,10 +1,15 @@
 package commands
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"golang.org/x/term"
 
 	"github.com/anurag925/crank/internal/bootstrap"
 	"github.com/anurag925/crank/internal/utils"
@@ -20,26 +25,97 @@ func NewInitCmd(reg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *cobra
 	)
 
 	cmd := &cobra.Command{
-		Use:   "init <project>",
-		Short: "Scaffold a new backend project",
+		Use:   "init [project]",
+		Short: "Scaffold a new backend project (interactive)",
 		Long: `init creates a new directory named <project> inside the current working
 directory and populates it with a production-ready Go backend. The base feature
-is always included; additional modules are opt-in via --features.
+is always included; additional modules are opt-in.
 
-After scaffolding, crank checks that all CLI tools required by the selected
-features are installed and offers to install any that are missing.
+When run without explicit flags, init enters interactive mode and prompts you
+for each setting step by step. Pass flags to skip the wizard and run
+non-interactively.
 
 Examples:
   crank init myapp --features=base,auth,postgres
   crank init myapp --module=github.com/org/myapp --features=base,redis`,
-		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			list := splitCSV(features)
+			interactive := shouldRunInteractive(cmd)
+
+			var projectName string
+			var featList []string
+
+			if interactive {
+				reader := bufio.NewReader(os.Stdin)
+
+				// Step 1: Project name.
+				if len(args) >= 1 {
+					projectName = args[0]
+					fmt.Printf("Project name: %s\n", projectName)
+				} else {
+					projectName = prompt(reader, "Project name")
+					if projectName == "" {
+						return fmt.Errorf("project name is required")
+					}
+				}
+
+				// Step 2: Go module path.
+				defaultModule := projectName
+				if module != "" {
+					defaultModule = module
+				}
+				moduleInput := prompt(reader, fmt.Sprintf("Go module path (default: %s)", defaultModule))
+				if moduleInput == "" {
+					moduleInput = defaultModule
+				}
+				module = moduleInput
+
+				// Step 3: Select features.
+				fmt.Println()
+				fmt.Println("Available features:")
+				allFeatures := reg.All()
+				var optional []bootstrap.Feature
+				for _, f := range allFeatures {
+					if f.Name() == "base" {
+						fmt.Printf("  [always] %s - %s\n", f.Name(), f.Description())
+					} else {
+						optional = append(optional, f)
+						fmt.Printf("  [%d]      %s - %s\n", len(optional), f.Name(), f.Description())
+					}
+				}
+				fmt.Println()
+				featInput := prompt(reader, "Select features (comma-separated numbers, e.g. 2,3 or 'all')")
+				featList = parseFeatureSelection(featInput, optional)
+				// base is always first.
+				featList = append([]string{"base"}, featList...)
+
+				// Step 4: Target directory.
+				defaultTarget := target
+				if defaultTarget == "" {
+					defaultTarget = "."
+				}
+				targetInput := prompt(reader, fmt.Sprintf("Target directory (default: %s)", defaultTarget))
+				if targetInput != "" {
+					target = targetInput
+				}
+
+				// Step 5: Force overwrite.
+				projectDir := filepath.Join(target, projectName)
+				if utils.PathExists(projectDir) && !force {
+					force = confirm(reader, "Directory already exists. Overwrite")
+				}
+			} else {
+				if len(args) < 1 {
+					return fmt.Errorf("project name is required (run 'crank init' without flags for interactive mode)")
+				}
+				projectName = args[0]
+				featList = splitCSV(features)
+			}
+
 			result, err := bootstrap.Generate(reg, bootstrap.Options{
-				ProjectName: args[0],
+				ProjectName: projectName,
 				ModulePath:  module,
 				TargetDir:   target,
-				Features:    list,
+				Features:    featList,
 				Force:       force,
 			})
 			if err != nil {
@@ -72,6 +148,66 @@ Examples:
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing non-empty target directory")
 
 	return cmd
+}
+
+// shouldRunInteractive decides whether to run the interactive wizard.
+// It returns true when no flags are explicitly set and stdin is a terminal.
+func shouldRunInteractive(cmd *cobra.Command) bool {
+	if cmd.Flags().Changed("features") ||
+		cmd.Flags().Changed("module") ||
+		cmd.Flags().Changed("target") ||
+		cmd.Flags().Changed("force") {
+		return false
+	}
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+// prompt prints a question and reads a line from the user.
+func prompt(reader *bufio.Reader, question string) string {
+	fmt.Printf("%s: ", question)
+	text, err := reader.ReadString('\n')
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(text)
+}
+
+// confirm asks a yes/no question and returns true if the answer is "y" or "yes".
+func confirm(reader *bufio.Reader, question string) bool {
+	answer := prompt(reader, question+" (y/N)")
+	lower := strings.ToLower(answer)
+	return lower == "y" || lower == "yes"
+}
+
+// parseFeatureSelection converts a user input like "1,3" or "all" into a list
+// of feature names using the provided ordered feature slice.
+func parseFeatureSelection(input string, features []bootstrap.Feature) []string {
+	input = strings.TrimSpace(strings.ToLower(input))
+	if input == "" {
+		return nil
+	}
+	if input == "all" {
+		var out []string
+		for _, f := range features {
+			out = append(out, f.Name())
+		}
+		return out
+	}
+	var out []string
+	parts := strings.Split(input, ",")
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p == "" {
+			continue
+		}
+		n, err := strconv.Atoi(p)
+		if err != nil || n < 1 || n > len(features) {
+			fmt.Printf("  ⚠ Ignoring invalid selection: %q\n", p)
+			continue
+		}
+		out = append(out, features[n-1].Name())
+	}
+	return out
 }
 
 // checkAndInstallTools verifies that the tools required by the enabled features

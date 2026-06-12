@@ -229,7 +229,7 @@ type manifest struct {
 func readManifest(projectDir string) (*manifest, error) {
 	path := filepath.Join(projectDir, ".crank.yaml")
 	if !utils.PathExists(path) {
-		return nil, fmt.Errorf("no .crank.yaml manifest found in %s; is this a crank-generated project?", projectDir)
+		return nil, fmt.Errorf("no .crank.yaml manifest found in %s\n\nThis directory does not appear to be a crank-generated project. You can:\n  1. Run 'crank init' to create a new project, or\n  2. Use --project <dir> to point to an existing crank project.", projectDir)
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {

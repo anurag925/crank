@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"bufio"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -25,7 +26,7 @@ type ProjectInfo struct {
 func LoadProjectInfo(projectDir string) (*ProjectInfo, error) {
 	m, err := readManifest(projectDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("load project info: %w", err)
 	}
 	mod := strings.TrimSpace(m.ModulePath)
 	if mod == "" {

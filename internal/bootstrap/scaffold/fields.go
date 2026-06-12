@@ -62,11 +62,11 @@ func ParseFields(specs []string) ([]Field, error) {
 
 		words := splitWords(name)
 		if len(words) == 0 {
-			return nil, fmt.Errorf("invalid field spec %q: empty name", spec)
+			return nil, fmt.Errorf("invalid field spec %q: empty name\n\nEach field must follow the format 'name:type' or just 'name'.\nExample: crank make scaffold Order title:string price:float", spec)
 		}
 		mapping, ok := fieldTypes[typ]
 		if !ok {
-			return nil, fmt.Errorf("unknown field type %q in %q (supported: %s)", typ, spec, supportedTypes())
+			return nil, fmt.Errorf("unknown field type %q in %q\n\nSupported types: %s\n\nExample: crank make scaffold Order title:string price:float paid:bool", typ, spec, supportedTypes())
 		}
 
 		fields = append(fields, Field{

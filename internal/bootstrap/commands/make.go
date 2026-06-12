@@ -13,6 +13,32 @@ import (
 	"github.com/anurag925/crank/internal/utils"
 )
 
+const makeLongDesc = `Generate boilerplate code: model, repository, service, handler, scaffold, workflow, activity, migration.
+
+Kinds:
+  model       Domain struct (+ migration if postgres)
+  repository  Data-access layer ( Bun ORM or in-memory)
+  service     CRUD service layer
+  handler     HTTP handler (Echo router)
+  scaffold    Full stack (model + repo + handler + wiring)
+  workflow    Temporal workflow
+  activity    Temporal activity
+  migration   Blank SQL migration pair
+
+Fields: optional "name:type" pairs. Types: string, text, int, int64, float, float64, bool, time, uuid, email
+
+Examples:
+  crank make model Order
+  crank make model Order customer:string total:float
+  crank make handler Product title:string price:float
+  crank make handler Product --only
+  crank make scaffold Invoice number:string amount:float
+  crank make scaffold Invoice number:string --tests
+  crank make workflow OrderFulfillment order_id:uuid
+  crank make activity ChargeCard amount:float --tests
+  crank make repository Ticket
+  crank make migration add_index_to_orders`
+
 // NewMakeCmd returns the `make` cobra command which generates scaffolding inside
 // an existing project (models, repositories, services, handlers and migrations).
 func NewMakeCmd() *cobra.Command {
@@ -26,49 +52,31 @@ func NewMakeCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "make <kind> <name> [field:type ...]",
-		Short: "Generate project scaffolding (models, repositories, services, handlers, migrations)",
-		Long: `make generates boilerplate inside a project created by ` + "`init`" + `, in the
-spirit of Rails generators and Laravel's artisan make commands.
-
-Kinds:
-  model       A domain model (plus a create-table migration when postgres is enabled).
-  repository  A repository (Bun-backed with postgres, in-memory otherwise) + its model.
-  service     An in-memory service layer + its model.
-  handler     An HTTP CRUD handler + its model + repository/service, auto-wired into
-              the Echo router (and a migration when postgres is enabled).
-  scaffold    The full stack: model + repository/service + handler + migration + wiring.
-  workflow    A Temporal workflow, auto-registered with the worker (requires temporal).
-  activity    A Temporal activity, auto-registered with the worker (requires temporal).
-  migration   A blank SQL migration pair in the migrations/ directory.
-
-Fields are optional "name:type" pairs that populate the model, validation tags
-and migration columns. Supported types: string, text, int, int64, float, bool,
-time, uuid, email (defaulting to string).
-
-Pass --tests to also generate _test.go files for each generated layer.
-
-Examples:
-  crank make model Order
-  crank make model Order customer:string total:float paid:bool
-  crank make handler Product title:string price:float        # handler + model + repo/service + wiring
-  crank make handler Product --only                          # just the handler
-  crank make scaffold Invoice number:string amount:float     # the whole stack
-  crank make scaffold Invoice number:string --tests          # the whole stack + tests
-  crank make workflow OrderFulfillment order_id:uuid         # Temporal workflow + worker wiring
-  crank make activity ChargeCard amount:float --tests        # Temporal activity + worker wiring + test
-  crank make repository Ticket --project ./myapp
-  crank make migration add_index_to_orders`,
-		Args: cobra.MinimumNArgs(1),
+		Short: "Generate models, handlers, migrations, and more",
+		Long:  makeLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) < 1 {
+				cmd.Help()
+				return nil
+			}
 			kind := args[0]
 			name := ""
 			if len(args) > 1 {
 				name = args[1]
 			}
-			fields := args[2:]
+			var fields []string
+			if len(args) > 2 {
+				fields = args[2:]
+			}
+
+			validKinds := []string{"migration"}
+			validKinds = append(validKinds, scaffold.Kinds()...)
 
 			switch kind {
 			case "migration":
+				if name == "" {
+					return fmt.Errorf("migration name is required\n\nUsage: crank make %s <name>\n\nExample: crank make migration create_users_table", kind)
+				}
 				return makeMigration(projectDir, name)
 			case scaffold.KindModel,
 				scaffold.KindRepository,
@@ -77,6 +85,9 @@ Examples:
 				scaffold.KindScaffold,
 				scaffold.KindWorkflow,
 				scaffold.KindActivity:
+				if name == "" {
+					return fmt.Errorf("%s name is required\n\nUsage: crank make %s <name> [field:type ...]\n\nExample: crank make %s Order customer:string total:float", kind, kind, kind)
+				}
 				return runScaffold(scaffold.Options{
 					ProjectDir:    projectDir,
 					Kind:          kind,
@@ -88,16 +99,16 @@ Examples:
 					Tests:         tests,
 				})
 			default:
-				return fmt.Errorf("unknown kind %q (supported: %s, migration)", kind, strings.Join(scaffold.Kinds(), ", "))
+				return fmt.Errorf("unknown kind %q\n\nSupported kinds: %s\n\nTip: Run 'crank make --help' to see all available kinds and examples.", kind, strings.Join(validKinds, ", "))
 			}
 		},
 	}
 
-	cmd.Flags().StringVar(&projectDir, "project", ".", "path to the project directory")
-	cmd.Flags().BoolVar(&only, "only", false, "generate only the requested artifact, skipping dependencies (handler/repository/service)")
+	cmd.Flags().StringVar(&projectDir, "project", ".", "path to the crank project directory")
+	cmd.Flags().BoolVar(&only, "only", false, "generate only the requested kind, skipping dependencies (model, repo/service)")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite the target file if it already exists")
 	cmd.Flags().BoolVar(&skipMigration, "skip-migration", false, "do not generate a table migration even when postgres is enabled")
-	cmd.Flags().BoolVar(&tests, "tests", false, "also generate _test.go files for each generated model/repository/service/handler")
+	cmd.Flags().BoolVar(&tests, "tests", false, "generate _test.go files alongside each generated layer")
 	return cmd
 }
 
@@ -127,9 +138,6 @@ func runScaffold(opts scaffold.Options) error {
 }
 
 func makeMigration(projectDir, name string) error {
-	if name == "" {
-		return fmt.Errorf("migration name is required (e.g. `make migration create_users_table`)")
-	}
 	name = sanitizeName(name)
 	dir := filepath.Join(projectDir, "migrations")
 	if err := utils.EnsureDir(dir); err != nil {

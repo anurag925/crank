@@ -89,12 +89,12 @@ type artifact struct {
 // router.
 func Generate(opts Options) (*Result, error) {
 	if opts.Name == "" {
-		return nil, fmt.Errorf("a resource name is required (e.g. `crank make %s Order`)", opts.Kind)
+		return nil, fmt.Errorf("a resource name is required\n\nUsage: crank make %s <Name> [field:type ...]\n\nExample: crank make %s Order", opts.Kind, opts.Kind)
 	}
 
 	res := NewResource(opts.Name)
 	if res.Pascal == "" {
-		return nil, fmt.Errorf("resource name %q does not resolve to a valid identifier", opts.Name)
+		return nil, fmt.Errorf("invalid resource name %q: could not derive a Go identifier from it\n\nNames must start with a letter and contain at least one alphanumeric character.\nExamples: Order, OrderItem, order_item", opts.Name)
 	}
 
 	fields, err := ParseFields(opts.Fields)
@@ -104,12 +104,12 @@ func Generate(opts Options) (*Result, error) {
 
 	info, err := bootstrap.LoadProjectInfo(opts.ProjectDir)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("cannot load project: %w", err)
 	}
 
 	if opts.Kind == KindWorkflow || opts.Kind == KindActivity {
 		if !info.Has("temporal") {
-			return nil, fmt.Errorf("the %s generator requires the temporal feature (add it with `crank add temporal`)", opts.Kind)
+			return nil, fmt.Errorf("the %s generator requires the temporal feature\n\nTo add it, run:\n  crank add temporal --project %s", opts.Kind, opts.ProjectDir)
 		}
 	}
 
@@ -138,7 +138,7 @@ func Generate(opts Options) (*Result, error) {
 		dest := filepath.Join(opts.ProjectDir, a.out)
 		if utils.PathExists(dest) {
 			if a.primary && !opts.Force {
-				return nil, fmt.Errorf("%s already exists (use --force to overwrite)", a.out)
+				return nil, fmt.Errorf("file %s already exists\n\nTo overwrite it, run:\n  crank make %s %s --force", a.out, opts.Kind, opts.Name)
 			}
 			if !a.primary {
 				result.Skipped = append(result.Skipped, a.out)
@@ -236,11 +236,8 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 		plan = []artifact{handler}
 		if !only {
 			plan = append(plan, model)
-			if data.Postgres {
-				plan = append(plan, repo)
-			} else {
-				plan = append(plan, svc)
-			}
+			plan = append(plan, repo)
+			plan = append(plan, svc)
 		}
 		wantMigration = migration
 		wire = wireHandlerTarget
@@ -256,7 +253,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 		wire = wireActivityTarget
 
 	default:
-		return nil, false, wireNone, fmt.Errorf("unknown kind %q (supported: %s)", opts.Kind, strings.Join(Kinds(), ", "))
+		return nil, false, wireNone, fmt.Errorf("unknown generator kind %q\n\nSupported kinds: %s\nRun 'crank make --help' for details.", opts.Kind, strings.Join(Kinds(), ", "))
 	}
 
 	if opts.Tests {

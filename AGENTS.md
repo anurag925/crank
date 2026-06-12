@@ -22,9 +22,6 @@ A modular CLI tool that scaffolds production-ready Go backend services and wraps
 ## Build & Run
 
 ```bash
-# Build the CLI binary
-make build   # → ./bin/crank
-
 # Scaffold a new project (tools are checked/installed automatically)
 ./crank init myapp --features=base,auth,postgres
 
@@ -37,9 +34,6 @@ make build   # → ./bin/crank
 # Add a feature to an existing project
 ./crank add redis --project=./myapp
 
-# Generate a migration
-./crank make migration create_orders --project=./myapp
-
 # Generate application code (Rails/Laravel-style generators)
 ./crank make model Order customer:string total:float --project=./myapp
 ./crank make handler Product title:string price:float --project=./myapp   # handler + model + repo/service + route wiring (+ migration if postgres)
@@ -50,6 +44,9 @@ make build   # → ./bin/crank
 ./crank make activity ChargeCard amount:float --tests --project=./myapp    # Temporal activity (+ worker wiring; requires temporal)
 ./crank make repository Ticket --project=./myapp
 ./crank make service Cart --project=./myapp
+
+# Generate a migration
+./crank make migration create_orders --project=./myapp
 
 # Run migrations (with --project or from inside the project directory)
 ./crank migrate up --project=./myapp
