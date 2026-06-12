@@ -29,7 +29,7 @@ func (feature) Dependencies() []string {
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
-		{TemplatePath: "templates/internal_crypto_crypto.go.tmpl", OutputPath: "internal/crypto/crypto.go"},
-		{TemplatePath: "templates/internal_crypto_crypto_test.go.tmpl", OutputPath: "internal/crypto/crypto_test.go"},
+		{TemplatePath: "templates/pkg_crypto_crypto.go.tmpl", OutputPath: "pkg/crypto/crypto.go"},
+		{TemplatePath: "templates/pkg_crypto_crypto_test.go.tmpl", OutputPath: "pkg/crypto/crypto_test.go"},
 	}
 }

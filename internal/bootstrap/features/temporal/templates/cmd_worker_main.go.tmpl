@@ -7,12 +7,12 @@ import (
 	"go.temporal.io/sdk/worker"
 
 	"{{.ModulePath}}/internal/config"
-	"{{.ModulePath}}/internal/logging"
-	"{{.ModulePath}}/internal/temporal"
+	"{{.ModulePath}}/pkg/logging"
+	"{{.ModulePath}}/pkg/temporal"
 )
 
 // The Temporal worker process. It connects to Temporal, registers all
-// workflows and activities (see internal/temporal/worker.go) and polls the
+// workflows and activities (see pkg/temporal/worker.go) and polls the
 // configured task queue until interrupted (Ctrl+C / SIGTERM).
 //
 // Run it alongside the API server with:

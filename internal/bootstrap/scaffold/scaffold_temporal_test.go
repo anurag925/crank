@@ -54,7 +54,7 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 	}
 
 	// The worker now registers both, and still parses.
-	worker := read(t, dir, "internal/temporal/worker.go")
+	worker := read(t, dir, "pkg/temporal/worker.go")
 	for _, want := range []string{
 		"w.RegisterWorkflow(workflow.OrderFulfillmentWorkflow)",
 		"w.RegisterActivity(activity.ChargeCardActivity)",
@@ -63,7 +63,7 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 			t.Errorf("worker.go missing %q:\n%s", want, worker)
 		}
 	}
-	assertParses(t, dir, "internal/temporal/worker.go")
+	assertParses(t, dir, "pkg/temporal/worker.go")
 }
 
 func TestWorkflowGeneratorRequiresTemporalFeature(t *testing.T) {
@@ -98,7 +98,7 @@ func TestTemporalWiringIsIdempotent(t *testing.T) {
 		t.Fatalf("regenerate: %v", err)
 	}
 
-	worker := read(t, dir, "internal/temporal/worker.go")
+	worker := read(t, dir, "pkg/temporal/worker.go")
 	if n := strings.Count(worker, "w.RegisterActivity(activity.NotifyActivity)"); n != 1 {
 		t.Errorf("expected exactly one Notify registration, got %d:\n%s", n, worker)
 	}

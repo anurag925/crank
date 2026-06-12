@@ -31,7 +31,7 @@ func (feature) Dependencies() []string {
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
-		{TemplatePath: "templates/internal_redis_client.go.tmpl", OutputPath: "internal/redis/client.go"},
-		{TemplatePath: "templates/internal_redis_client_test.go.tmpl", OutputPath: "internal/redis/client_test.go"},
+		{TemplatePath: "templates/pkg_redis_client.go.tmpl", OutputPath: "pkg/redis/client.go"},
+		{TemplatePath: "templates/pkg_redis_client_test.go.tmpl", OutputPath: "pkg/redis/client_test.go"},
 	}
 }

@@ -181,7 +181,7 @@ func TestBase_GoMod_ModulePath(t *testing.T) {
 	r := generateProject(t, "mymod", nil)
 	content := readFile(t, r.ProjectDir, "go.mod")
 	assertContains(t, content, "module github.com/example/mymod", "go.mod")
-	assertContains(t, content, "go 1.25", "go.mod")
+	assertContains(t, content, "go 1.26", "go.mod")
 
 	// Dependencies are now returned via Result and installed via go get.
 	assertDepsContains(t, r.Dependencies, "github.com/labstack/echo/v4", "base deps")
@@ -783,12 +783,12 @@ func TestAuthPostgres_BootstrapManifest(t *testing.T) {
 
 func TestRedis_FilesExist(t *testing.T) {
 	r := generateProject(t, "redistest", []string{"redis"})
-	assertFileExists(t, r.ProjectDir, "internal/redis/client.go")
+	assertFileExists(t, r.ProjectDir, "pkg/redis/client.go")
 }
 
 func TestRedis_Client(t *testing.T) {
 	r := generateProject(t, "redisclient", []string{"redis"})
-	content := readFile(t, r.ProjectDir, "internal/redis/client.go")
+	content := readFile(t, r.ProjectDir, "pkg/redis/client.go")
 	assertContains(t, content, "package redis", "redis client package")
 	assertContains(t, content, "func NewClient(", "redis client NewClient")
 	assertContains(t, content, "redis.NewClient", "redis client uses go-redis")
@@ -831,12 +831,12 @@ func TestRedis_BootstrapManifest(t *testing.T) {
 
 func TestCrypto_FilesExist(t *testing.T) {
 	r := generateProject(t, "cryptotest", []string{"crypto"})
-	assertFileExists(t, r.ProjectDir, "internal/crypto/crypto.go")
+	assertFileExists(t, r.ProjectDir, "pkg/crypto/crypto.go")
 }
 
 func TestCrypto_CryptoGo_PackageAndType(t *testing.T) {
 	r := generateProject(t, "cryptopkg", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/crypto/crypto.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/crypto.go")
 	assertContains(t, content, "package crypto", "crypto package")
 	assertContains(t, content, "type Crypto struct", "Crypto struct")
 	assertContains(t, content, "aead cipher.AEAD", "Crypto has AEAD field")
@@ -844,7 +844,7 @@ func TestCrypto_CryptoGo_PackageAndType(t *testing.T) {
 
 func TestCrypto_CryptoGo_NewFunction(t *testing.T) {
 	r := generateProject(t, "cryptonew", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/crypto/crypto.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/crypto.go")
 	assertContains(t, content, "func New(secret string) (*Crypto, error)", "New function signature")
 	assertContains(t, content, "secret must not be empty", "New rejects empty secret")
 	assertContains(t, content, "sha256.Sum256", "New derives key via SHA-256")
@@ -854,7 +854,7 @@ func TestCrypto_CryptoGo_NewFunction(t *testing.T) {
 
 func TestCrypto_CryptoGo_EncryptFunction(t *testing.T) {
 	r := generateProject(t, "cryptoenc", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/crypto/crypto.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/crypto.go")
 	assertContains(t, content, "func (c *Crypto) Encrypt(plaintext string) (string, error)", "Encrypt signature")
 	assertContains(t, content, "c.aead.NonceSize()", "Encrypt uses nonce")
 	assertContains(t, content, "rand.Reader", "Encrypt uses crypto/rand")
@@ -864,7 +864,7 @@ func TestCrypto_CryptoGo_EncryptFunction(t *testing.T) {
 
 func TestCrypto_CryptoGo_DecryptFunction(t *testing.T) {
 	r := generateProject(t, "cryptodec", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/crypto/crypto.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/crypto.go")
 	assertContains(t, content, "func (c *Crypto) Decrypt(encoded string) (string, error)", "Decrypt signature")
 	assertContains(t, content, "base64.RawURLEncoding.DecodeString", "Decrypt decodes base64-url")
 	assertContains(t, content, "ciphertext too short", "Decrypt rejects short ciphertext")
@@ -873,7 +873,7 @@ func TestCrypto_CryptoGo_DecryptFunction(t *testing.T) {
 
 func TestCrypto_CryptoGo_Imports(t *testing.T) {
 	r := generateProject(t, "cryptoimports", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/crypto/crypto.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/crypto.go")
 	assertContains(t, content, "crypto/aes", "imports crypto/aes")
 	assertContains(t, content, "crypto/cipher", "imports crypto/cipher")
 	assertContains(t, content, "crypto/rand", "imports crypto/rand")
@@ -949,7 +949,7 @@ func TestCrypto_PostgresCombined_AllSections(t *testing.T) {
 	cfg := readFile(t, r.ProjectDir, "configs/config.yaml")
 	assertContains(t, cfg, "crypto:", "config has crypto section")
 	assertContains(t, cfg, "database:", "config has database section")
-	assertFileExists(t, r.ProjectDir, "internal/crypto/crypto.go")
+	assertFileExists(t, r.ProjectDir, "pkg/crypto/crypto.go")
 	assertFileExists(t, r.ProjectDir, "internal/database/postgres.go")
 }
 
@@ -959,12 +959,12 @@ func TestCrypto_PostgresCombined_AllSections(t *testing.T) {
 
 func TestMongodb_FilesExist(t *testing.T) {
 	r := generateProject(t, "mongotest", []string{"mongodb"})
-	assertFileExists(t, r.ProjectDir, "internal/mongo/client.go")
+	assertFileExists(t, r.ProjectDir, "pkg/mongo/client.go")
 }
 
 func TestMongodb_Client(t *testing.T) {
 	r := generateProject(t, "mongoclient", []string{"mongodb"})
-	content := readFile(t, r.ProjectDir, "internal/mongo/client.go")
+	content := readFile(t, r.ProjectDir, "pkg/mongo/client.go")
 	assertContains(t, content, "package mongo", "mongo client package")
 	assertContains(t, content, "func NewClient(", "mongo client NewClient")
 	assertContains(t, content, "mongo.Connect", "mongo client uses mongo driver")
@@ -1005,9 +1005,9 @@ func TestMongodb_BootstrapManifest(t *testing.T) {
 func TestTemporal_FilesExist(t *testing.T) {
 	r := generateProject(t, "temporaltest", []string{"temporal"})
 	for _, rel := range []string{
-		"internal/temporal/client.go",
-		"internal/temporal/logger.go",
-		"internal/temporal/worker.go",
+		"pkg/temporal/client.go",
+		"pkg/temporal/logger.go",
+		"pkg/temporal/worker.go",
 		"internal/workflow/greeting.go",
 		"internal/activity/greeting.go",
 		"cmd/worker/main.go",
@@ -1023,7 +1023,7 @@ func TestTemporal_GoMod_Deps(t *testing.T) {
 
 func TestTemporal_Worker_RegistersAndHasMarkers(t *testing.T) {
 	r := generateProject(t, "temporalworker", []string{"temporal"})
-	content := readFile(t, r.ProjectDir, "internal/temporal/worker.go")
+	content := readFile(t, r.ProjectDir, "pkg/temporal/worker.go")
 	assertContains(t, content, "// crank:workflow-register", "worker workflow marker")
 	assertContains(t, content, "// crank:activity-register", "worker activity marker")
 	assertContains(t, content, "w.RegisterWorkflow(workflow.GreetingWorkflow)", "worker registers example workflow")
@@ -1056,14 +1056,14 @@ func TestTemporal_ConfigGo_NoTemporalConfig(t *testing.T) {
 
 func TestTemporal_Logger_BridgesSlog(t *testing.T) {
 	r := generateProject(t, "temporallogger", []string{"temporal"})
-	content := readFile(t, r.ProjectDir, "internal/temporal/logger.go")
+	content := readFile(t, r.ProjectDir, "pkg/temporal/logger.go")
 	assertContains(t, content, "go.temporal.io/sdk/log", "logger imports temporal log")
 	assertContains(t, content, "func NewLogger(logger *slog.Logger) log.Logger", "logger adapter constructor")
 }
 
 func TestTemporal_Client_UsesDial(t *testing.T) {
 	r := generateProject(t, "temporalclient", []string{"temporal"})
-	content := readFile(t, r.ProjectDir, "internal/temporal/client.go")
+	content := readFile(t, r.ProjectDir, "pkg/temporal/client.go")
 	assertContains(t, content, "client.Dial(client.Options{", "client dials temporal")
 	assertContains(t, content, "config.TemporalConfig", "client uses shared config type")
 	assertContains(t, content, "Logger:    NewLogger(logger)", "client wires slog logger")
@@ -1073,8 +1073,8 @@ func TestTemporal_WorkerMain_UsesConfigAndLogging(t *testing.T) {
 	r := generateProject(t, "temporalmain", []string{"temporal"})
 	content := readFile(t, r.ProjectDir, "cmd/worker/main.go")
 	assertContains(t, content, "/internal/config", "worker main imports config")
-	assertContains(t, content, "/internal/temporal", "worker main imports temporal pkg")
-	assertContains(t, content, "/internal/logging", "worker main imports logging")
+	assertContains(t, content, "/pkg/temporal", "worker main imports temporal pkg")
+	assertContains(t, content, "/pkg/logging", "worker main imports logging")
 	assertContains(t, content, "cfg.Temporal", "worker uses shared temporal config")
 	assertContains(t, content, "worker.InterruptCh()", "worker main runs until interrupt")
 }
@@ -1090,7 +1090,7 @@ func TestTemporal_BootstrapManifest(t *testing.T) {
 func TestTemporal_NotPresent_NoWorker(t *testing.T) {
 	r := generateProject(t, "notemporal", []string{"base"})
 	assertFileNotExists(t, r.ProjectDir, "cmd/worker/main.go")
-	assertFileNotExists(t, r.ProjectDir, "internal/temporal/worker.go")
+	assertFileNotExists(t, r.ProjectDir, "pkg/temporal/worker.go")
 	assertDepsNotContains(t, r.Dependencies, "go.temporal.io/sdk", "base-only deps")
 }
 
@@ -1114,7 +1114,7 @@ func TestAll_Features(t *testing.T) {
 	assertFileExists(t, dir, "internal/validator/errors.go")
 
 	// crypto files
-	assertFileExists(t, dir, "internal/crypto/crypto.go")
+	assertFileExists(t, dir, "pkg/crypto/crypto.go")
 
 	// auth files
 	assertFileExists(t, dir, "internal/middleware/auth.go")
@@ -1128,13 +1128,13 @@ func TestAll_Features(t *testing.T) {
 	assertFileExists(t, dir, "migrations/000001_init.down.sql")
 
 	// redis files
-	assertFileExists(t, dir, "internal/redis/client.go")
+	assertFileExists(t, dir, "pkg/redis/client.go")
 
 	// mongodb files
-	assertFileExists(t, dir, "internal/mongo/client.go")
+	assertFileExists(t, dir, "pkg/mongo/client.go")
 
 	// temporal files
-	assertFileExists(t, dir, "internal/temporal/worker.go")
+	assertFileExists(t, dir, "pkg/temporal/worker.go")
 	assertFileExists(t, dir, "internal/workflow/greeting.go")
 	assertFileExists(t, dir, "internal/activity/greeting.go")
 	assertFileExists(t, dir, "cmd/worker/main.go")
@@ -1294,5 +1294,5 @@ func TestAdd_TemporalToBaseProject_UpdatesConfig(t *testing.T) {
 	assertContains(t, yaml, "temporal:", "config.yaml has temporal section")
 
 	// No standalone config.go should exist in temporal package
-	assertFileNotExists(t, r2.ProjectDir, "internal/temporal/config.go")
+	assertFileNotExists(t, r2.ProjectDir, "pkg/temporal/config.go")
 }

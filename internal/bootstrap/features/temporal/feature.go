@@ -31,9 +31,9 @@ func (feature) Dependencies() []string {
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
-		{TemplatePath: "templates/internal_temporal_logger.go.tmpl", OutputPath: "internal/temporal/logger.go"},
-		{TemplatePath: "templates/internal_temporal_client.go.tmpl", OutputPath: "internal/temporal/client.go"},
-		{TemplatePath: "templates/internal_temporal_worker.go.tmpl", OutputPath: "internal/temporal/worker.go"},
+		{TemplatePath: "templates/pkg_temporal_logger.go.tmpl", OutputPath: "pkg/temporal/logger.go"},
+		{TemplatePath: "templates/pkg_temporal_client.go.tmpl", OutputPath: "pkg/temporal/client.go"},
+		{TemplatePath: "templates/pkg_temporal_worker.go.tmpl", OutputPath: "pkg/temporal/worker.go"},
 		{TemplatePath: "templates/internal_workflow_greeting.go.tmpl", OutputPath: "internal/workflow/greeting.go"},
 		{TemplatePath: "templates/internal_workflow_greeting_test.go.tmpl", OutputPath: "internal/workflow/greeting_test.go"},
 		{TemplatePath: "templates/internal_activity_greeting.go.tmpl", OutputPath: "internal/activity/greeting.go"},

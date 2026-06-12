@@ -393,7 +393,7 @@ func TestE2E_MakeTemporal(t *testing.T) {
 	assertExists(t, projectDir, "internal/activity/charge_card_test.go")
 
 	// Both are wired into the worker aggregator (alongside the shipped examples).
-	worker := readFile(t, projectDir, "internal/temporal/worker.go")
+	worker := readFile(t, projectDir, "pkg/temporal/worker.go")
 	for _, want := range []string{
 		"w.RegisterWorkflow(workflow.GreetingWorkflow)",
 		"w.RegisterWorkflow(workflow.OrderFulfillmentWorkflow)",
