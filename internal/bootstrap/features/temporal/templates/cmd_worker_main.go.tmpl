@@ -1,0 +1,61 @@
+package main
+
+import (
+	"log/slog"
+	"os"
+
+	"go.temporal.io/sdk/worker"
+
+	"{{.ModulePath}}/internal/config"
+	"{{.ModulePath}}/internal/logging"
+	"{{.ModulePath}}/internal/temporal"
+)
+
+// The Temporal worker process. It connects to Temporal, registers all
+// workflows and activities (see internal/temporal/worker.go) and polls the
+// configured task queue until interrupted (Ctrl+C / SIGTERM).
+//
+// Run it alongside the API server with:
+//
+//	go run ./cmd/worker
+func main() {
+	cfg := config.Load()
+
+	logger := logging.New(parseLevel(cfg.Logging.Level), cfg.Logging.AddSource)
+	slog.SetDefault(logger)
+
+	logger.Info("starting temporal worker",
+		"host_port", cfg.Temporal.HostPort,
+		"namespace", cfg.Temporal.Namespace,
+		"task_queue", cfg.Temporal.TaskQueue,
+	)
+
+	c, err := temporal.NewClient(cfg.Temporal, logger)
+	if err != nil {
+		logger.Error("failed to connect to temporal", "error", err)
+		os.Exit(1)
+	}
+	defer c.Close()
+
+	w := temporal.NewWorker(c, cfg.Temporal)
+
+	logger.Info("temporal worker running; press Ctrl+C to stop", "task_queue", cfg.Temporal.TaskQueue)
+	if err := w.Run(worker.InterruptCh()); err != nil {
+		logger.Error("temporal worker stopped with error", "error", err)
+		os.Exit(1)
+	}
+}
+
+// parseLevel converts a config string to a slog.Level. Defaults to Info.
+func parseLevel(s string) slog.Level {
+	switch s {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
+}

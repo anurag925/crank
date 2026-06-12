@@ -97,6 +97,10 @@ func Generate(reg *Registry, opts Options) (*Result, error) {
 // feature's templates are written. Files that already exist are skipped
 // unless SkipIfExists is false (e.g. the manifest). The manifest is always
 // re-written to reflect the updated feature set and crank version.
+//
+// Additionally, config files (config.go, config.yaml, .env.example) gain the
+// new feature's sections via marker-based injection so existing user content
+// is preserved.
 func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 	if !utils.PathExists(projectDir) {
 		return nil, fmt.Errorf("project directory %s does not exist", projectDir)
@@ -122,6 +126,15 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	// Inject the feature's config sections into config.go, config.yaml,
+	// and .env.example using marker-based injection. This preserves any
+	// manual edits the user has already made.
+	configWritten, err := injectConfig(projectDir, featureName, ctx.PackageName)
+	if err != nil {
+		return nil, err
+	}
+	written = append(written, configWritten...)
 
 	// Always re-write the manifest with updated features + crank version.
 	if err := writeManifest(projectDir, manifest, features); err != nil {

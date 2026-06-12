@@ -7,17 +7,14 @@ import (
 
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
+
+	"{{.ModulePath}}/internal/config"
 )
 
-// Config holds the connection parameters for the MongoDB client.
-type Config struct {
-	URI      string
-	Database string
-}
-
-// NewClient connects to MongoDB and returns a *mongo.Client bound to the configured
-// database. The caller is responsible for Disconnect during shutdown.
-func NewClient(ctx context.Context, cfg Config) (*mongo.Database, error) {
+// NewClient connects to MongoDB using the application config and returns a
+// *mongo.Database bound to the configured database. The caller is responsible
+// for Disconnect during shutdown.
+func NewClient(ctx context.Context, cfg config.MongoDBConfig) (*mongo.Database, error) {
 	dialCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
 	defer cancel()
 

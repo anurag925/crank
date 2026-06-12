@@ -55,7 +55,7 @@ vet: ## Run go vet
 lint: fmt vet ## Format + vet
 
 tidy: ## Run go mod tidy
-	GOTOOLCHAIN=local $(GO) mod tidy
+	$(GO) mod tidy
 
 ## ── Release ─────────────────────────────────────────────────────────────────
 

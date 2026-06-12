@@ -1,0 +1,21 @@
+package activity
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"go.temporal.io/sdk/testsuite"
+)
+
+func Test{{.R.Pascal}}Activity(t *testing.T) {
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestActivityEnvironment()
+	env.RegisterActivity({{.R.Pascal}}Activity)
+
+	val, err := env.ExecuteActivity({{.R.Pascal}}Activity, {{.R.Pascal}}Input{})
+	require.NoError(t, err)
+
+	var out {{.R.Pascal}}Output
+	require.NoError(t, val.Get(&out))
+	require.Equal(t, "{{.R.Snake}} processed", out.Message)
+}

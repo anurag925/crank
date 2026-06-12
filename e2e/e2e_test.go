@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -19,6 +20,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 )
 
 // crankBin is the path to the crank binary built once in TestMain.
@@ -26,7 +28,7 @@ var crankBin string
 
 // allFeatureNames lists every feature the application ships, used to validate
 // the `crank list` output and to drive the "all features" compile test.
-var allFeatureNames = []string{"base", "auth", "crypto", "postgres", "redis", "mongodb"}
+var allFeatureNames = []string{"base", "auth", "crypto", "postgres", "redis", "mongodb", "temporal"}
 
 // allToolNames lists every tool subcommand the application wraps.
 var allToolNames = []string{"migrate", "swag", "build", "run", "dev", "test", "gofmt", "vet", "tidy"}
@@ -42,7 +44,6 @@ func TestMain(m *testing.M) {
 
 	build := exec.Command("go", "build", "-o", crankBin, "./cmd/crank")
 	build.Dir = root
-	build.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	if out, err := build.CombinedOutput(); err != nil {
 		os.RemoveAll(binDir)
 		panic("build crank binary failed: " + err.Error() + "\n" + string(out))
@@ -79,7 +80,6 @@ func runCrankRaw(t *testing.T, dir string, args ...string) (string, error) {
 	if dir != "" {
 		cmd.Dir = dir
 	}
-	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -89,7 +89,6 @@ func runGo(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("go", args...)
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go %s failed in %s: %v\n%s", strings.Join(args, " "), dir, err, out)
 	}
@@ -180,6 +179,7 @@ var compileCases = []struct {
 	{"redis", []string{"redis"}},
 	{"mongodb", []string{"mongodb"}},
 	{"crypto", []string{"crypto"}},
+	{"temporal", []string{"temporal"}},
 	{"auth_postgres_crypto", []string{"auth", "postgres", "crypto"}},
 	{"all", allFeatureNames},
 }
@@ -376,10 +376,47 @@ func TestE2E_MakeFlags(t *testing.T) {
 	}
 }
 
-// TestE2E_Add verifies that Add writes only the new feature's files and
-// updates the manifest. It does NOT compile the result because base templates
-// are not re-rendered (config.go won't have JWTConfig/DatabaseConfig etc.) —
-// that's by design: the project's code belongs to the user after generation.
+// TestE2E_MakeTemporal exercises the Temporal workflow/activity generators end
+// to end: it scaffolds a temporal-enabled project, generates a workflow and an
+// activity (with tests), verifies they are auto-registered with the worker, and
+// proves the whole project — example greeting workflow/activity, generated code
+// and all generated tests — compiles, vets and passes against the real SDK.
+func TestE2E_MakeTemporal(t *testing.T) {
+	projectDir := scaffold(t, "make_temporal", []string{"temporal"})
+
+	runCrank(t, "", "make", "workflow", "OrderFulfillment", "order_id:uuid", "--tests", "--project", projectDir)
+	runCrank(t, "", "make", "activity", "ChargeCard", "amount:float", "--tests", "--project", projectDir)
+
+	assertExists(t, projectDir, "internal/workflow/order_fulfillment.go")
+	assertExists(t, projectDir, "internal/workflow/order_fulfillment_test.go")
+	assertExists(t, projectDir, "internal/activity/charge_card.go")
+	assertExists(t, projectDir, "internal/activity/charge_card_test.go")
+
+	// Both are wired into the worker aggregator (alongside the shipped examples).
+	worker := readFile(t, projectDir, "internal/temporal/worker.go")
+	for _, want := range []string{
+		"w.RegisterWorkflow(workflow.GreetingWorkflow)",
+		"w.RegisterWorkflow(workflow.OrderFulfillmentWorkflow)",
+		"w.RegisterActivity(activity.Greet)",
+		"w.RegisterActivity(activity.ChargeCardActivity)",
+	} {
+		if !strings.Contains(worker, want) {
+			t.Errorf("worker.go missing registration %q", want)
+		}
+	}
+
+	compileProject(t, projectDir)
+	runGo(t, projectDir, "test", "./internal/...")
+
+	// The generators are gated behind the temporal feature.
+	baseDir := scaffoldNoDeps(t, "no_temporal", []string{"base"})
+	if out, err := runCrankRaw(t, "", "make", "workflow", "Foo", "--project", baseDir); err == nil {
+		t.Errorf("expected `make workflow` to fail without the temporal feature:\n%s", out)
+	}
+}
+
+// TestE2E_Add verifies that Add writes the new feature's files, injects
+// config sections via markers (preserving existing content), and updates the manifest.
 func TestE2E_Add(t *testing.T) {
 	projectDir := scaffold(t, "svc_added", []string{"base"})
 
@@ -408,15 +445,26 @@ func TestE2E_Add(t *testing.T) {
 	assertExists(t, projectDir, "internal/database/postgres.go")
 	assertExists(t, projectDir, "internal/middleware/auth.go")
 	assertExists(t, projectDir, "migrations/000001_init.up.sql")
+
+	// Verify config sections were injected via markers.
+	cfgGo := readFile(t, projectDir, "internal/config/config.go")
+	if !strings.Contains(cfgGo, "DatabaseConfig") {
+		t.Error("config.go after Add should contain DatabaseConfig")
+	}
+	if !strings.Contains(cfgGo, "JWTConfig") {
+		t.Error("config.go after Add should contain JWTConfig")
+	}
+	// Verify markers are still present (so future Add calls work).
+	if !strings.Contains(cfgGo, "// crank:config-fields") {
+		t.Error("config.go should still have config-fields marker")
+	}
+	if !strings.Contains(cfgGo, "// crank:config-structs") {
+		t.Error("config.go should still have config-structs marker")
+	}
 }
 
 func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, s)
 }
 
 func readFile(t *testing.T, dir, name string) string {

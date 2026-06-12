@@ -46,6 +46,8 @@ make build   # → ./bin/crank
 ./crank make handler Product --only --project=./myapp                     # just the handler
 ./crank make scaffold Invoice number:string amount:float --project=./myapp # the full stack
 ./crank make scaffold Invoice number:string --tests --project=./myapp      # the full stack + _test.go files
+./crank make workflow OrderFulfillment order_id:uuid --project=./myapp     # Temporal workflow (+ worker wiring; requires temporal)
+./crank make activity ChargeCard amount:float --tests --project=./myapp    # Temporal activity (+ worker wiring; requires temporal)
 ./crank make repository Ticket --project=./myapp
 ./crank make service Cart --project=./myapp
 
@@ -113,7 +115,8 @@ crank/
 │   │       ├── crypto/                    # AES-256-GCM encrypt/decrypt helpers
 │   │       ├── postgres/                  # Bun ORM + migrations
 │   │       ├── redis/                     # Redis client (placeholder)
-│   │       └── mongodb/                   # MongoDB client (placeholder)
+│   │       ├── mongodb/                   # MongoDB client (placeholder)
+│   │       └── temporal/                  # Temporal client + worker + example workflow/activity
 │   └── utils/
 │       ├── fileutil.go                    # EnsureDir, WriteFile, PathExists, etc.
 │       └── exec.go                        # FindBinary, RunExternal, ShellJoin
@@ -220,7 +223,7 @@ Passed to every template during rendering:
 ### Generator (`internal/bootstrap/generator.go`)
 
 - `Generate(reg, opts)` — creates a new project from scratch; `base` is always first; returns `Result.Dependencies` for the caller to run `go get`
-- `Add(reg, projectDir, featureName)` — adds a feature to an existing project; renders only the new feature's templates (existing files are never touched); updates `.crank.yaml` manifest; returns `Result.Dependencies` with the new feature's deps
+- `Add(reg, projectDir, featureName)` — adds a feature to an existing project; renders the new feature's templates; injects the feature's config sections into existing config files via marker-based injection (preserving user edits); updates `.crank.yaml` manifest; returns `Result.Dependencies` with the new feature's deps
 - `GoGet(projectDir, deps)` — runs `go get <deps...>` then `go mod tidy` in the project directory
 - `Tidy(projectDir)` — runs `go mod tidy` in the project directory
 
@@ -264,8 +267,8 @@ The command factory in `commands/tools.go` handles everything else: `--project` 
 
 The `crank make` family (in `internal/bootstrap/scaffold/`) generates layered
 application code inside an existing project, Rails/Laravel style. Kinds:
-`model`, `repository`, `service`, `handler`, `scaffold` (plus the standalone
-`migration` kind handled directly in `commands/make.go`).
+`model`, `repository`, `service`, `handler`, `scaffold`, `workflow`, `activity`
+(plus the standalone `migration` kind handled directly in `commands/make.go`).
 
 Key behaviors to preserve when modifying this subsystem:
 
@@ -296,6 +299,15 @@ Key behaviors to preserve when modifying this subsystem:
   projects. Edits are validated with `go/format` before writing, so a failed
   splice never corrupts the file — it prints a manual hint instead. Wiring is
   idempotent.
+- **Temporal generators.** `workflow` and `activity` require the `temporal`
+  feature (they error otherwise). They emit a function-based workflow/activity
+  under `internal/workflow/` or `internal/activity/` and auto-register it with
+  the worker via `wire_temporal.go`, which splices a `RegisterWorkflow`/
+  `RegisterActivity` line at the `// crank:workflow-register` /
+  `// crank:activity-register` markers in `internal/temporal/worker.go` (same
+  best-effort, format-validated, idempotent approach as handler wiring).
+  Workflow/activity logging uses the SDK's `workflow.GetLogger`/
+  `activity.GetLogger`, which the worker bridges to slog.
 - **Formatting.** Rendered Go files are run through `go/format` (`format.Source`)
   before being written, so templates don't need hand-aligned struct tags.
 
@@ -359,6 +371,27 @@ Config files live in a top-level `configs/` directory, following the
 - Viper searches `./configs` first, then `.` as fallback
 - Viper priority: env vars > .env > configs/config.yaml
 
+All feature configs (postgres, auth, crypto, redis, mongodb, temporal) are
+consolidated in the base `config.go` template using `{{if .Has "feature"}}`
+conditional sections. Feature-specific packages (e.g. `internal/redis`,
+`internal/temporal`) do **not** define their own Config structs — they import
+and use `config.<Feature>Config` from `internal/config`.
+
+When `crank add <feature>` is used, config sections are injected into the
+existing config files using **marker-based injection** (the same pattern used
+for handler wiring). This preserves user edits — only the new sections are
+added, existing content is untouched. Markers embedded in the generated files:
+
+- `// crank:config-fields` — Config struct fields are inserted before this marker
+- `// crank:config-structs` — New struct definitions are inserted before this marker
+- `// crank:config-defaults` — Viper defaults are inserted before this marker
+- `# crank:config-section` — YAML sections are inserted before this marker
+- `# crank:env-section` — Environment variable blocks are inserted before this marker
+
+The injection is idempotent (adding the same feature twice is a no-op) and
+format-validated (`go/format` for Go files). If format validation fails, the
+file is left untouched and an error is returned.
+
 ## What Lives Where
 
 | Concern | Location |
@@ -375,6 +408,7 @@ Config files live in a top-level `configs/` directory, following the
 | Global feature registry | `internal/bootstrap/registry.go` |
 | Global tool registry | `internal/bootstrap/tool_registry.go` |
 | Project generation logic | `internal/bootstrap/generator.go` |
+| Config injection (crank add) | `internal/bootstrap/config_inject.go` |
 | Template context | `internal/bootstrap/context.go` |
 | Manifest I/O (.crank.yaml) | `internal/bootstrap/manifest.go` |
 | Public manifest reader | `internal/bootstrap/project.go` |

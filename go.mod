@@ -1,6 +1,6 @@
 module github.com/anurag925/crank
 
-go 1.25
+go 1.26.4
 
 require (
 	github.com/spf13/cobra v1.8.0

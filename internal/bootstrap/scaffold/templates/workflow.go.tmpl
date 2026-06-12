@@ -1,0 +1,38 @@
+package workflow
+
+import (
+{{- if .HasTime}}
+	"time"
+{{- end}}
+	"go.temporal.io/sdk/workflow"
+)
+
+// {{.R.Pascal}}Input is the input payload for {{.R.Pascal}}Workflow.
+type {{.R.Pascal}}Input struct {
+{{- range .Fields}}
+	{{.GoName}} {{.GoType}} `json:"{{.Name}}"`
+{{- end}}
+}
+
+// {{.R.Pascal}}Output is the result returned by {{.R.Pascal}}Workflow.
+type {{.R.Pascal}}Output struct {
+	Message string `json:"message"`
+}
+
+// {{.R.Pascal}}Workflow is a generated Temporal workflow. Replace the body with
+// your orchestration logic — typically a sequence of activity calls, e.g.:
+//
+//	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{StartToCloseTimeout: 30 * time.Second})
+//	var out activity.SomeOutput
+//	if err := workflow.ExecuteActivity(ctx, activity.SomeActivity, in).Get(ctx, &out); err != nil {
+//	    return {{.R.Pascal}}Output{}, err
+//	}
+func {{.R.Pascal}}Workflow(ctx workflow.Context, in {{.R.Pascal}}Input) ({{.R.Pascal}}Output, error) {
+	logger := workflow.GetLogger(ctx)
+	logger.Info("{{.R.Pascal}}Workflow started"{{range .Fields}}, "{{.Name}}", in.{{.GoName}}{{end}})
+
+	out := {{.R.Pascal}}Output{Message: "{{.R.Snake}} processed"}
+
+	logger.Info("{{.R.Pascal}}Workflow completed", "message", out.Message)
+	return out, nil
+}

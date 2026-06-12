@@ -14,6 +14,7 @@ import (
 	// Register features so bootstrap.Generate can build a project.
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 )
 
 // newProject scaffolds a fresh crank project into a temp dir and returns its path.

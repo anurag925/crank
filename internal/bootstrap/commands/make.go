@@ -37,6 +37,8 @@ Kinds:
   handler     An HTTP CRUD handler + its model + repository/service, auto-wired into
               the Echo router (and a migration when postgres is enabled).
   scaffold    The full stack: model + repository/service + handler + migration + wiring.
+  workflow    A Temporal workflow, auto-registered with the worker (requires temporal).
+  activity    A Temporal activity, auto-registered with the worker (requires temporal).
   migration   A blank SQL migration pair in the migrations/ directory.
 
 Fields are optional "name:type" pairs that populate the model, validation tags
@@ -52,6 +54,8 @@ Examples:
   crank make handler Product --only                          # just the handler
   crank make scaffold Invoice number:string amount:float     # the whole stack
   crank make scaffold Invoice number:string --tests          # the whole stack + tests
+  crank make workflow OrderFulfillment order_id:uuid         # Temporal workflow + worker wiring
+  crank make activity ChargeCard amount:float --tests        # Temporal activity + worker wiring + test
   crank make repository Ticket --project ./myapp
   crank make migration add_index_to_orders`,
 		Args: cobra.MinimumNArgs(1),
@@ -70,7 +74,9 @@ Examples:
 				scaffold.KindRepository,
 				scaffold.KindService,
 				scaffold.KindHandler,
-				scaffold.KindScaffold:
+				scaffold.KindScaffold,
+				scaffold.KindWorkflow,
+				scaffold.KindActivity:
 				return runScaffold(scaffold.Options{
 					ProjectDir:    projectDir,
 					Kind:          kind,

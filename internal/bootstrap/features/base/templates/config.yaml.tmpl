@@ -26,7 +26,27 @@ crypto:
   # Generate a strong secret with: openssl rand -base64 32
   secret: "change-me-in-production"
 {{- end}}
+{{- if .Has "redis"}}
 
+redis:
+  addr: "localhost:6379"
+  password: ""
+  db: 0
+{{- end}}
+{{- if .Has "mongodb"}}
+
+mongodb:
+  uri: "mongodb://localhost:27017"
+  database: "{{.PackageName}}"
+{{- end}}
+{{- if .Has "temporal"}}
+
+temporal:
+  host_port: "127.0.0.1:7233"
+  namespace: "default"
+  task_queue: "{{.PackageName}}-task-queue"
+{{- end}}
+# crank:config-section
 logging:
   level: "info"
   format: "json"

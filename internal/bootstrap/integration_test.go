@@ -15,6 +15,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 )
 
 // allFeatures returns every feature name registered in the global registry.
@@ -116,6 +117,7 @@ func TestGlobalRegistry_HasAllFeatures(t *testing.T) {
 		"postgres": true,
 		"redis":    true,
 		"mongodb":  true,
+		"temporal": true,
 	}
 	for _, n := range names {
 		delete(want, n)
@@ -791,6 +793,30 @@ func TestRedis_Client(t *testing.T) {
 	assertContains(t, content, "func NewClient(", "redis client NewClient")
 	assertContains(t, content, "redis.NewClient", "redis client uses go-redis")
 	assertContains(t, content, "client.Ping", "redis client pings")
+	assertContains(t, content, "config.RedisConfig", "redis client uses shared config type")
+}
+
+func TestRedis_Config_HasRedisSection(t *testing.T) {
+	r := generateProject(t, "rediscfg", []string{"redis"})
+	content := readFile(t, r.ProjectDir, "configs/config.yaml")
+	assertContains(t, content, "redis:", "config.yaml redis section")
+	assertContains(t, content, "addr:", "config.yaml redis addr key")
+}
+
+func TestRedis_ConfigGo_HasRedisConfig(t *testing.T) {
+	r := generateProject(t, "rediscfggo", []string{"redis"})
+	content := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertContains(t, content, "Redis RedisConfig", "Config struct has Redis field")
+	assertContains(t, content, "RedisConfig struct", "RedisConfig struct defined")
+	assertContains(t, content, "Addr", "RedisConfig has Addr field")
+	assertContains(t, content, "Password", "RedisConfig has Password field")
+	assertContains(t, content, "DB", "RedisConfig has DB field")
+}
+
+func TestRedis_ConfigGo_NoRedisConfig(t *testing.T) {
+	r := generateProject(t, "norediscfggo", nil)
+	content := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertNotContains(t, content, "RedisConfig", "config.go without redis has no RedisConfig")
 }
 
 func TestRedis_BootstrapManifest(t *testing.T) {
@@ -943,12 +969,129 @@ func TestMongodb_Client(t *testing.T) {
 	assertContains(t, content, "func NewClient(", "mongo client NewClient")
 	assertContains(t, content, "mongo.Connect", "mongo client uses mongo driver")
 	assertContains(t, content, "client.Ping", "mongo client pings")
+	assertContains(t, content, "config.MongoDBConfig", "mongo client uses shared config type")
+}
+
+func TestMongodb_Config_HasMongodbSection(t *testing.T) {
+	r := generateProject(t, "mongocfg", []string{"mongodb"})
+	content := readFile(t, r.ProjectDir, "configs/config.yaml")
+	assertContains(t, content, "mongodb:", "config.yaml mongodb section")
+	assertContains(t, content, "uri:", "config.yaml mongodb uri key")
+}
+
+func TestMongodb_ConfigGo_HasMongodbConfig(t *testing.T) {
+	r := generateProject(t, "mongocfggo", []string{"mongodb"})
+	content := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertContains(t, content, "MongoDB MongoDBConfig", "Config struct has MongoDB field")
+	assertContains(t, content, "MongoDBConfig struct", "MongoDBConfig struct defined")
+}
+
+func TestMongodb_ConfigGo_NoMongodbConfig(t *testing.T) {
+	r := generateProject(t, "nomongocfggo", nil)
+	content := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertNotContains(t, content, "MongoDBConfig", "config.go without mongodb has no MongoDBConfig")
 }
 
 func TestMongodb_BootstrapManifest(t *testing.T) {
 	r := generateProject(t, "mongomanifest", []string{"mongodb"})
 	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "- mongodb", "manifest includes mongodb")
+}
+
+// ==========================================================================
+// TEMPORAL feature
+// ==========================================================================
+
+func TestTemporal_FilesExist(t *testing.T) {
+	r := generateProject(t, "temporaltest", []string{"temporal"})
+	for _, rel := range []string{
+		"internal/temporal/client.go",
+		"internal/temporal/logger.go",
+		"internal/temporal/worker.go",
+		"internal/workflow/greeting.go",
+		"internal/activity/greeting.go",
+		"cmd/worker/main.go",
+	} {
+		assertFileExists(t, r.ProjectDir, rel)
+	}
+}
+
+func TestTemporal_GoMod_Deps(t *testing.T) {
+	r := generateProject(t, "temporaldeps", []string{"temporal"})
+	assertDepsContains(t, r.Dependencies, "go.temporal.io/sdk", "temporal deps")
+}
+
+func TestTemporal_Worker_RegistersAndHasMarkers(t *testing.T) {
+	r := generateProject(t, "temporalworker", []string{"temporal"})
+	content := readFile(t, r.ProjectDir, "internal/temporal/worker.go")
+	assertContains(t, content, "// crank:workflow-register", "worker workflow marker")
+	assertContains(t, content, "// crank:activity-register", "worker activity marker")
+	assertContains(t, content, "w.RegisterWorkflow(workflow.GreetingWorkflow)", "worker registers example workflow")
+	assertContains(t, content, "w.RegisterActivity(activity.Greet)", "worker registers example activity")
+	assertContains(t, content, "config.TemporalConfig", "worker uses shared config type")
+}
+
+func TestTemporal_Config_HasTemporalSection(t *testing.T) {
+	r := generateProject(t, "temporalcfg", []string{"temporal"})
+	content := readFile(t, r.ProjectDir, "configs/config.yaml")
+	assertContains(t, content, "temporal:", "config.yaml temporal section")
+	assertContains(t, content, "host_port:", "config.yaml temporal host_port key")
+	assertContains(t, content, "namespace:", "config.yaml temporal namespace key")
+}
+
+func TestTemporal_ConfigGo_HasTemporalConfig(t *testing.T) {
+	r := generateProject(t, "temporalcfggo", []string{"temporal"})
+	content := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertContains(t, content, "Temporal TemporalConfig", "Config struct has Temporal field")
+	assertContains(t, content, "TemporalConfig struct", "TemporalConfig struct defined")
+	assertContains(t, content, "HostPort", "TemporalConfig has HostPort field")
+	assertContains(t, content, "TaskQueue", "TemporalConfig has TaskQueue field")
+}
+
+func TestTemporal_ConfigGo_NoTemporalConfig(t *testing.T) {
+	r := generateProject(t, "notemporalcfggo", nil)
+	content := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertNotContains(t, content, "TemporalConfig", "config.go without temporal has no TemporalConfig")
+}
+
+func TestTemporal_Logger_BridgesSlog(t *testing.T) {
+	r := generateProject(t, "temporallogger", []string{"temporal"})
+	content := readFile(t, r.ProjectDir, "internal/temporal/logger.go")
+	assertContains(t, content, "go.temporal.io/sdk/log", "logger imports temporal log")
+	assertContains(t, content, "func NewLogger(logger *slog.Logger) log.Logger", "logger adapter constructor")
+}
+
+func TestTemporal_Client_UsesDial(t *testing.T) {
+	r := generateProject(t, "temporalclient", []string{"temporal"})
+	content := readFile(t, r.ProjectDir, "internal/temporal/client.go")
+	assertContains(t, content, "client.Dial(client.Options{", "client dials temporal")
+	assertContains(t, content, "config.TemporalConfig", "client uses shared config type")
+	assertContains(t, content, "Logger:    NewLogger(logger)", "client wires slog logger")
+}
+
+func TestTemporal_WorkerMain_UsesConfigAndLogging(t *testing.T) {
+	r := generateProject(t, "temporalmain", []string{"temporal"})
+	content := readFile(t, r.ProjectDir, "cmd/worker/main.go")
+	assertContains(t, content, "/internal/config", "worker main imports config")
+	assertContains(t, content, "/internal/temporal", "worker main imports temporal pkg")
+	assertContains(t, content, "/internal/logging", "worker main imports logging")
+	assertContains(t, content, "cfg.Temporal", "worker uses shared temporal config")
+	assertContains(t, content, "worker.InterruptCh()", "worker main runs until interrupt")
+}
+
+func TestTemporal_BootstrapManifest(t *testing.T) {
+	r := generateProject(t, "temporalmanifest", []string{"temporal"})
+	content := readFile(t, r.ProjectDir, ".crank.yaml")
+	assertContains(t, content, "- temporal", "manifest includes temporal")
+}
+
+// Temporal config now lives in the shared config package. A project without temporal
+// has no TemporalConfig section and no worker entrypoint.
+func TestTemporal_NotPresent_NoWorker(t *testing.T) {
+	r := generateProject(t, "notemporal", []string{"base"})
+	assertFileNotExists(t, r.ProjectDir, "cmd/worker/main.go")
+	assertFileNotExists(t, r.ProjectDir, "internal/temporal/worker.go")
+	assertDepsNotContains(t, r.Dependencies, "go.temporal.io/sdk", "base-only deps")
 }
 
 // ==========================================================================
@@ -990,17 +1133,27 @@ func TestAll_Features(t *testing.T) {
 	// mongodb files
 	assertFileExists(t, dir, "internal/mongo/client.go")
 
+	// temporal files
+	assertFileExists(t, dir, "internal/temporal/worker.go")
+	assertFileExists(t, dir, "internal/workflow/greeting.go")
+	assertFileExists(t, dir, "internal/activity/greeting.go")
+	assertFileExists(t, dir, "cmd/worker/main.go")
+
 	// Verify deps are returned via Result
 	assertDepsContains(t, r.Dependencies, "golang-jwt", "all features deps")
 	assertDepsContains(t, r.Dependencies, "uptrace/bun", "all features deps")
 	assertDepsContains(t, r.Dependencies, "golang-migrate", "all features deps")
 	assertDepsContains(t, r.Dependencies, "go-playground/validator", "all features deps")
+	assertDepsContains(t, r.Dependencies, "go.temporal.io/sdk", "all features deps")
 
 	// Verify config has all sections
 	cfg := readFile(t, dir, "configs/config.yaml")
 	assertContains(t, cfg, "database:", "config database")
 	assertContains(t, cfg, "jwt:", "config jwt")
 	assertContains(t, cfg, "crypto:", "config crypto")
+	assertContains(t, cfg, "redis:", "config redis")
+	assertContains(t, cfg, "mongodb:", "config mongodb")
+	assertContains(t, cfg, "temporal:", "config temporal")
 
 	// Verify manifest has all features
 	manifest := readFile(t, dir, ".crank.yaml")
@@ -1072,4 +1225,74 @@ func TestAdd_PostgresToBaseProject(t *testing.T) {
 	// Manifest should include postgres
 	manifest := readFile(t, r2.ProjectDir, ".crank.yaml")
 	assertContains(t, manifest, "- postgres", "manifest after add postgres")
+
+	// Config should be re-rendered with postgres section
+	cfgGo := readFile(t, r2.ProjectDir, "internal/config/config.go")
+	assertContains(t, cfgGo, "DatabaseConfig", "config.go has DatabaseConfig after add postgres")
+	assertNotContains(t, cfgGo, "JWTConfig", "config.go has no JWTConfig before adding auth")
+}
+
+func TestAdd_RedisToBaseProject_UpdatesConfig(t *testing.T) {
+	tmp := t.TempDir()
+	r, err := bootstrap.Generate(bootstrap.GlobalRegistry, bootstrap.Options{
+		ProjectName: "addredis",
+		ModulePath:  "github.com/example/addredis",
+		TargetDir:   tmp,
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	// Base project should not have Redis config
+	cfgGo := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertNotContains(t, cfgGo, "RedisConfig", "base config has no RedisConfig")
+
+	// Add redis
+	r2, err := bootstrap.Add(bootstrap.GlobalRegistry, r.ProjectDir, "redis")
+	if err != nil {
+		t.Fatalf("Add redis: %v", err)
+	}
+
+	// Config should be re-rendered with Redis section
+	cfgGo2 := readFile(t, r2.ProjectDir, "internal/config/config.go")
+	assertContains(t, cfgGo2, "RedisConfig", "config.go has RedisConfig after add redis")
+	assertContains(t, cfgGo2, `Redis RedisConfig`, "config.go has Redis field")
+
+	// Config YAML should also have redis section
+	yaml := readFile(t, r2.ProjectDir, "configs/config.yaml")
+	assertContains(t, yaml, "redis:", "config.yaml has redis section")
+}
+
+func TestAdd_TemporalToBaseProject_UpdatesConfig(t *testing.T) {
+	tmp := t.TempDir()
+	r, err := bootstrap.Generate(bootstrap.GlobalRegistry, bootstrap.Options{
+		ProjectName: "addtemp",
+		ModulePath:  "github.com/example/addtemp",
+		TargetDir:   tmp,
+	})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+
+	// Base project should not have Temporal config
+	cfgGo := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertNotContains(t, cfgGo, "TemporalConfig", "base config has no TemporalConfig")
+
+	// Add temporal
+	r2, err := bootstrap.Add(bootstrap.GlobalRegistry, r.ProjectDir, "temporal")
+	if err != nil {
+		t.Fatalf("Add temporal: %v", err)
+	}
+
+	// Config should be re-rendered with Temporal section
+	cfgGo2 := readFile(t, r2.ProjectDir, "internal/config/config.go")
+	assertContains(t, cfgGo2, "TemporalConfig", "config.go has TemporalConfig after add temporal")
+	assertContains(t, cfgGo2, `Temporal TemporalConfig`, "config.go has Temporal field")
+
+	// Config YAML should also have temporal section
+	yaml := readFile(t, r2.ProjectDir, "configs/config.yaml")
+	assertContains(t, yaml, "temporal:", "config.yaml has temporal section")
+
+	// No standalone config.go should exist in temporal package
+	assertFileNotExists(t, r2.ProjectDir, "internal/temporal/config.go")
 }

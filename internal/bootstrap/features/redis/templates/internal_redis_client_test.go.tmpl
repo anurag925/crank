@@ -4,10 +4,12 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"{{.ModulePath}}/internal/config"
 )
 
 func TestNewClient_ConnectionRefused(t *testing.T) {
-	cfg := Config{
+	cfg := config.RedisConfig{
 		Addr:     "localhost:63999",
 		Password: "",
 		DB:       0,
@@ -19,7 +21,7 @@ func TestNewClient_ConnectionRefused(t *testing.T) {
 }
 
 func TestConfig_Fields(t *testing.T) {
-	cfg := Config{
+	cfg := config.RedisConfig{
 		Addr:     "localhost:6379",
 		Password: "secret",
 		DB:       1,

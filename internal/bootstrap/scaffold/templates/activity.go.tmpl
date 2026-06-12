@@ -1,0 +1,35 @@
+package activity
+
+import (
+	"context"
+{{- if .HasTime}}
+	"time"
+{{- end}}
+
+	"go.temporal.io/sdk/activity"
+)
+
+// {{.R.Pascal}}Input is the input payload for {{.R.Pascal}}Activity.
+type {{.R.Pascal}}Input struct {
+{{- range .Fields}}
+	{{.GoName}} {{.GoType}} `json:"{{.Name}}"`
+{{- end}}
+}
+
+// {{.R.Pascal}}Output is the result returned by {{.R.Pascal}}Activity.
+type {{.R.Pascal}}Output struct {
+	Message string `json:"message"`
+}
+
+// {{.R.Pascal}}Activity is a generated Temporal activity. Replace the body with
+// the real side-effecting work (DB calls, HTTP requests, ...). Logs are written
+// through the SDK activity logger, which the worker bridges to slog.
+func {{.R.Pascal}}Activity(ctx context.Context, in {{.R.Pascal}}Input) ({{.R.Pascal}}Output, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("{{.R.Pascal}}Activity invoked"{{range .Fields}}, "{{.Name}}", in.{{.GoName}}{{end}})
+
+	out := {{.R.Pascal}}Output{Message: "{{.R.Snake}} processed"}
+
+	logger.Info("{{.R.Pascal}}Activity completed", "message", out.Message)
+	return out, nil
+}

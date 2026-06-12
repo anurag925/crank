@@ -6,18 +6,13 @@ import (
 	"time"
 
 	"github.com/redis/go-redis/v9"
+
+	"{{.ModulePath}}/internal/config"
 )
 
-// Config holds the connection parameters for the Redis client.
-type Config struct {
-	Addr     string
-	Password string
-	DB       int
-}
-
-// NewClient constructs a connected *redis.Client. The caller is responsible for
-// closing the client when the application shuts down.
-func NewClient(cfg Config) (*redis.Client, error) {
+// NewClient constructs a connected *redis.Client using the application config.
+// The caller is responsible for closing the client when the application shuts down.
+func NewClient(cfg config.RedisConfig) (*redis.Client, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:         cfg.Addr,
 		Password:     cfg.Password,

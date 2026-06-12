@@ -1,0 +1,25 @@
+package temporal
+
+import (
+	"log/slog"
+
+	"go.temporal.io/sdk/log"
+)
+
+// slogLogger adapts a *slog.Logger to Temporal's log.Logger interface so that
+// SDK, workflow and activity logs all flow through the application's structured
+// logging pipeline.
+type slogLogger struct {
+	logger *slog.Logger
+}
+
+// NewLogger wraps a *slog.Logger so it can be passed to the Temporal SDK via
+// client.Options.Logger.
+func NewLogger(logger *slog.Logger) log.Logger {
+	return &slogLogger{logger: logger}
+}
+
+func (l *slogLogger) Debug(msg string, keyvals ...interface{}) { l.logger.Debug(msg, keyvals...) }
+func (l *slogLogger) Info(msg string, keyvals ...interface{})  { l.logger.Info(msg, keyvals...) }
+func (l *slogLogger) Warn(msg string, keyvals ...interface{})  { l.logger.Warn(msg, keyvals...) }
+func (l *slogLogger) Error(msg string, keyvals ...interface{}) { l.logger.Error(msg, keyvals...) }

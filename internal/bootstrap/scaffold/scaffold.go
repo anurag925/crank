@@ -30,11 +30,13 @@ const (
 	KindService    = "service"
 	KindHandler    = "handler"
 	KindScaffold   = "scaffold"
+	KindWorkflow   = "workflow"
+	KindActivity   = "activity"
 )
 
 // Kinds returns the supported generator kinds in display order.
 func Kinds() []string {
-	return []string{KindModel, KindRepository, KindService, KindHandler, KindScaffold}
+	return []string{KindModel, KindRepository, KindService, KindHandler, KindScaffold, KindWorkflow, KindActivity}
 }
 
 // Options controls a single generation run.
@@ -105,6 +107,12 @@ func Generate(opts Options) (*Result, error) {
 		return nil, err
 	}
 
+	if opts.Kind == KindWorkflow || opts.Kind == KindActivity {
+		if !info.Has("temporal") {
+			return nil, fmt.Errorf("the %s generator requires the temporal feature (add it with `crank add temporal`)", opts.Kind)
+		}
+	}
+
 	data := tmplData{
 		Module:   info.ModulePath,
 		Postgres: info.Has("postgres"),
@@ -119,7 +127,7 @@ func Generate(opts Options) (*Result, error) {
 		data.StorePkg, data.StoreType, data.StoreCtorArg = "service", "Service", ""
 	}
 
-	plan, wantMigration, wantWire, err := buildPlan(opts, data)
+	plan, wantMigration, wire, err := buildPlan(opts, data)
 	if err != nil {
 		return nil, err
 	}
@@ -156,8 +164,16 @@ func Generate(opts Options) (*Result, error) {
 		result.Skipped = append(result.Skipped, skipped...)
 	}
 
-	if wantWire {
-		wr, err := wireHandler(opts.ProjectDir, res)
+	if wire != wireNone {
+		var wr wireResult
+		switch wire {
+		case wireHandlerTarget:
+			wr, err = wireHandler(opts.ProjectDir, res)
+		case wireWorkflowTarget:
+			wr, err = wireWorkflow(opts.ProjectDir, res)
+		case wireActivityTarget:
+			wr, err = wireActivity(opts.ProjectDir, res)
+		}
 		if err != nil {
 			return nil, err
 		}
@@ -170,9 +186,19 @@ func Generate(opts Options) (*Result, error) {
 	return result, nil
 }
 
+// wire targets identify which aggregator a generated artifact must be
+// registered with (if any).
+const (
+	wireNone           = ""
+	wireHandlerTarget  = "handler"
+	wireWorkflowTarget = "workflow"
+	wireActivityTarget = "activity"
+)
+
 // buildPlan turns the requested kind into the concrete set of artifacts plus
-// flags for migration generation and handler wiring.
-func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration, wantWire bool, err error) {
+// flags for migration generation and the aggregator (if any) that generated
+// code must be wired into.
+func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool, wire string, err error) {
 	model := artifact{out: "internal/model/" + data.R.Snake + ".go", tmpl: "model.go.tmpl", testTmpl: "model_test.go.tmpl", goFile: true}
 	repo := artifact{out: "internal/repository/" + data.R.Snake + ".go", tmpl: "repository.go.tmpl", testTmpl: "repository_test.go.tmpl", goFile: true}
 	svc := artifact{out: "internal/service/" + data.R.Snake + ".go", tmpl: "service.go.tmpl", testTmpl: "service_test.go.tmpl", goFile: true}
@@ -217,17 +243,27 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration, wan
 			}
 		}
 		wantMigration = migration
-		wantWire = true
+		wire = wireHandlerTarget
+
+	case KindWorkflow:
+		workflow := artifact{out: "internal/workflow/" + data.R.Snake + ".go", tmpl: "workflow.go.tmpl", testTmpl: "workflow_test.go.tmpl", goFile: true, primary: true}
+		plan = []artifact{workflow}
+		wire = wireWorkflowTarget
+
+	case KindActivity:
+		act := artifact{out: "internal/activity/" + data.R.Snake + ".go", tmpl: "activity.go.tmpl", testTmpl: "activity_test.go.tmpl", goFile: true, primary: true}
+		plan = []artifact{act}
+		wire = wireActivityTarget
 
 	default:
-		return nil, false, false, fmt.Errorf("unknown kind %q (supported: %s)", opts.Kind, strings.Join(Kinds(), ", "))
+		return nil, false, wireNone, fmt.Errorf("unknown kind %q (supported: %s)", opts.Kind, strings.Join(Kinds(), ", "))
 	}
 
 	if opts.Tests {
 		plan = withTestArtifacts(plan)
 	}
 
-	return plan, wantMigration, wantWire, nil
+	return plan, wantMigration, wire, nil
 }
 
 // withTestArtifacts expands a plan so each artifact that declares a test

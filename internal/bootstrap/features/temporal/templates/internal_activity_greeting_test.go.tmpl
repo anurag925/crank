@@ -1,0 +1,21 @@
+package activity
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+	"go.temporal.io/sdk/testsuite"
+)
+
+func TestGreet(t *testing.T) {
+	var ts testsuite.WorkflowTestSuite
+	env := ts.NewTestActivityEnvironment()
+	env.RegisterActivity(Greet)
+
+	val, err := env.ExecuteActivity(Greet, GreetingInput{Name: "Ada"})
+	require.NoError(t, err)
+
+	var greeting string
+	require.NoError(t, val.Get(&greeting))
+	require.Equal(t, "Hello, Ada!", greeting)
+}

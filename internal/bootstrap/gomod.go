@@ -20,7 +20,6 @@ func GoGet(projectDir string, deps []string) error {
 	}
 
 	// Run `go get` with all deps in a single invocation.
-	// GOTOOLCHAIN=local prevents go get from upgrading the go directive in go.mod.
 	args := append([]string{"get"}, deps...)
 	argv := append([]string{goBin}, args...)
 	c := exec.Cmd{
@@ -29,7 +28,6 @@ func GoGet(projectDir string, deps []string) error {
 		Dir:    projectDir,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
-		Env:    append(os.Environ(), "GOTOOLCHAIN=local"),
 	}
 	fmt.Printf("→ go get %s\n", joinDeps(deps))
 	if err := c.Run(); err != nil {
@@ -52,7 +50,6 @@ func Tidy(projectDir string) error {
 		Dir:    projectDir,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
-		Env:    append(os.Environ(), "GOTOOLCHAIN=local"),
 	}
 	fmt.Println("→ go mod tidy")
 	if err := c.Run(); err != nil {
