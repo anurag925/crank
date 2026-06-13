@@ -2,6 +2,7 @@ package e2e
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -42,12 +43,18 @@ func TestMain(m *testing.M) {
 	}
 	crankBin = filepath.Join(binDir, "crank")
 
+	fmt.Fprintf(os.Stderr, "==> e2e: building crank binary at %s\n", crankBin)
 	build := exec.Command("go", "build", "-o", crankBin, "./cmd/crank")
 	build.Dir = root
-	if out, err := build.CombinedOutput(); err != nil {
+	// Stream the build output instead of capturing it — a slow or verbose
+	// build should not be silently hidden.
+	build.Stdout = os.Stdout
+	build.Stderr = os.Stderr
+	if err := build.Run(); err != nil {
 		os.RemoveAll(binDir)
-		panic("build crank binary failed: " + err.Error() + "\n" + string(out))
+		panic("build crank binary failed: " + err.Error())
 	}
+	fmt.Fprintf(os.Stderr, "==> e2e: crank binary ready; running tests\n")
 
 	code := m.Run()
 	os.RemoveAll(binDir)
@@ -76,20 +83,13 @@ func runCrank(t *testing.T, dir string, args ...string) string {
 
 func runCrankRaw(t *testing.T, dir string, args ...string) (string, error) {
 	t.Helper()
-	cmd := exec.Command(crankBin, args...)
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+	return runCmd(t, dir, crankBin, nil, args...)
 }
 
 // runGo runs a go subcommand inside dir and fails the test on error.
 func runGo(t *testing.T, dir string, args ...string) {
 	t.Helper()
-	cmd := exec.Command("go", args...)
-	cmd.Dir = dir
-	if out, err := cmd.CombinedOutput(); err != nil {
+	if out, err := runCmd(t, dir, "go", nil, args...); err != nil {
 		t.Fatalf("go %s failed in %s: %v\n%s", strings.Join(args, " "), dir, err, out)
 	}
 }
@@ -525,10 +525,13 @@ func generateProject(t *testing.T, name string, features []string) *bootstrap.Re
 // `go get`, yielding a project that is ready to compile.
 func scaffold(t *testing.T, name string, features []string) string {
 	t.Helper()
+	t.Logf("scaffolding %s with features %v", name, features)
+	start := time.Now()
 	res := generateProject(t, name, features)
 	if err := bootstrap.GoGet(res.ProjectDir, res.Dependencies); err != nil {
 		t.Fatalf("resolve dependencies for %s: %v", name, err)
 	}
+	t.Logf("scaffolded %s in %s", name, time.Since(start).Round(time.Millisecond))
 	return res.ProjectDir
 }
 
@@ -538,6 +541,7 @@ func scaffold(t *testing.T, name string, features []string) string {
 // network-free.
 func scaffoldNoDeps(t *testing.T, name string, features []string) string {
 	t.Helper()
+	t.Logf("scaffolding %s (no deps) with features %v", name, features)
 	return generateProject(t, name, features).ProjectDir
 }
 

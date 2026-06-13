@@ -18,7 +18,9 @@ package e2e
 // The helper script `./scripts/test.sh e2e` already does this.
 
 import (
+	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,27 +72,47 @@ func crankOnPath(t *testing.T) string {
 // tests).
 func runCrankWithEnv(t *testing.T, dir string, env []string, args ...string) string {
 	t.Helper()
-	cmd := exec.Command(crankBin, args...)
-	if dir != "" {
-		cmd.Dir = dir
-	}
-	cmd.Env = append(os.Environ(), env...)
-	out, err := cmd.CombinedOutput()
+	out, err := runCrankRawWithEnv(t, dir, env, args...)
 	if err != nil {
 		t.Fatalf("crank %s failed: %v\n%s", strings.Join(args, " "), err, out)
 	}
-	return string(out)
+	return out
 }
 
 func runCrankRawWithEnv(t *testing.T, dir string, env []string, args ...string) (string, error) {
 	t.Helper()
-	cmd := exec.Command(crankBin, args...)
+	return runCmd(t, dir, crankBin, env, args...)
+}
+
+// runCmd executes bin with args in dir (or the current working directory if
+// dir is ""), streaming the subprocess's stdout and stderr straight to the
+// test process's own stdout and stderr so e2e runs are not silent. The
+// combined output is also captured in a buffer and returned to the caller so
+// assertions like "the error must mention 'not empty'" still work.
+//
+// A single header line
+//
+//	> <bin> <arg1> <arg2> ...
+//
+// is written to stdout immediately before the subprocess starts, so the
+// viewer can correlate each block of output with the command that produced
+// it. If env is non-nil, those KEY=VALUE pairs are appended to the inherited
+// environment.
+func runCmd(t *testing.T, dir, bin string, env []string, args ...string) (string, error) {
+	t.Helper()
+	cmd := exec.Command(bin, args...)
 	if dir != "" {
 		cmd.Dir = dir
 	}
-	cmd.Env = append(os.Environ(), env...)
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+	if len(env) > 0 {
+		cmd.Env = append(os.Environ(), env...)
+	}
+	fmt.Fprintf(os.Stdout, "> %s %s\n", bin, strings.Join(args, " "))
+	var buf bytes.Buffer
+	cmd.Stdout = io.MultiWriter(os.Stdout, &buf)
+	cmd.Stderr = io.MultiWriter(os.Stderr, &buf)
+	err := cmd.Run()
+	return buf.String(), err
 }
 
 // ============================================================================

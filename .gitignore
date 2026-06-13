@@ -12,15 +12,3 @@
 .idea/
 .vscode/
 *.swp
-
-# Test artifacts
-/test-app/
-/test-base/
-/test-auth/
-/test-add/
-/test-redis/
-/test-mongo/
-/e2e/myapp/
-
-# test folders
-/test*
