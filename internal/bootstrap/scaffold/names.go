@@ -18,6 +18,7 @@ type Resource struct {
 	Kebab        string // order-item
 	KebabPlural  string // order-items (route segment)
 	Receiver     string // o (lowercase first letter of Pascal)
+	ContextParam string // c, or ctx when the receiver is c to avoid parameter shadowing
 }
 
 // NewResource builds a Resource from any reasonable input casing. The last word
@@ -48,6 +49,15 @@ func NewResource(input string) Resource {
 	}
 	if pascal != "" {
 		r.Receiver = strings.ToLower(pascal[:1])
+	}
+	// The conventional name for an echo.Context parameter is `c`, but that
+	// shadows the receiver on any resource whose Pascal form starts with `C`
+	// (e.g. Customer, Category, Comment). Fall back to `ctx` in that case
+	// so the generated handler methods don't fail to compile.
+	if r.Receiver == "c" {
+		r.ContextParam = "ctx"
+	} else {
+		r.ContextParam = "c"
 	}
 	return r
 }

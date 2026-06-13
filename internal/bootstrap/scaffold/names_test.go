@@ -14,7 +14,7 @@ func TestNewResource(t *testing.T) {
 				Camel: "order", CamelPlural: "orders",
 				Snake: "order", SnakePlural: "orders",
 				Kebab: "order", KebabPlural: "orders",
-				Receiver: "o",
+				Receiver: "o", ContextParam: "c",
 			},
 		},
 		{
@@ -24,7 +24,7 @@ func TestNewResource(t *testing.T) {
 				Camel: "order", CamelPlural: "orders",
 				Snake: "order", SnakePlural: "orders",
 				Kebab: "order", KebabPlural: "orders",
-				Receiver: "o",
+				Receiver: "o", ContextParam: "c",
 			},
 		},
 		{
@@ -34,7 +34,7 @@ func TestNewResource(t *testing.T) {
 				Camel: "orderItem", CamelPlural: "orderItems",
 				Snake: "order_item", SnakePlural: "order_items",
 				Kebab: "order-item", KebabPlural: "order-items",
-				Receiver: "o",
+				Receiver: "o", ContextParam: "c",
 			},
 		},
 		{
@@ -44,7 +44,7 @@ func TestNewResource(t *testing.T) {
 				Camel: "orderItem", CamelPlural: "orderItems",
 				Snake: "order_item", SnakePlural: "order_items",
 				Kebab: "order-item", KebabPlural: "order-items",
-				Receiver: "o",
+				Receiver: "o", ContextParam: "c",
 			},
 		},
 		{
@@ -54,7 +54,7 @@ func TestNewResource(t *testing.T) {
 				Camel: "category", CamelPlural: "categories",
 				Snake: "category", SnakePlural: "categories",
 				Kebab: "category", KebabPlural: "categories",
-				Receiver: "c",
+				Receiver: "c", ContextParam: "ctx", // receiver `c` forces ctx to avoid parameter shadow
 			},
 		},
 		{
@@ -64,7 +64,7 @@ func TestNewResource(t *testing.T) {
 				Camel: "box", CamelPlural: "boxes",
 				Snake: "box", SnakePlural: "boxes",
 				Kebab: "box", KebabPlural: "boxes",
-				Receiver: "b",
+				Receiver: "b", ContextParam: "c",
 			},
 		},
 	}

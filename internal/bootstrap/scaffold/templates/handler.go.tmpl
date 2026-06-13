@@ -42,12 +42,12 @@ func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Register(e *echo.Echo) {
 //	@Success      200  {array}   model.{{.R.Pascal}}
 //	@Failure      500  {object}  model.APIError
 //	@Router       /{{.R.KebabPlural}} [get]
-func ({{.R.Receiver}} *{{.R.Pascal}}Handler) List(c echo.Context) error {
-	items, err := {{.R.Receiver}}.store.List(c.Request().Context())
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) List({{.R.ContextParam}} echo.Context) error {
+	items, err := {{.R.Receiver}}.store.List({{.R.ContextParam}}.Request().Context())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+		return {{.R.ContextParam}}.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
 	}
-	return c.JSON(http.StatusOK, items)
+	return {{.R.ContextParam}}.JSON(http.StatusOK, items)
 }
 
 // Create godoc
@@ -62,15 +62,15 @@ func ({{.R.Receiver}} *{{.R.Pascal}}Handler) List(c echo.Context) error {
 //	@Failure      422   {object}  model.APIError
 //	@Failure      500   {object}  model.APIError
 //	@Router       /{{.R.KebabPlural}} [post]
-func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Create(c echo.Context) error {
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Create({{.R.ContextParam}} echo.Context) error {
 	var in model.{{.R.Pascal}}
-	if err := c.Bind(&in); err != nil {
+	if err := {{.R.ContextParam}}.Bind(&in); err != nil {
 		return err
 	}
-	if err := {{.R.Receiver}}.store.Create(c.Request().Context(), &in); err != nil {
-		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+	if err := {{.R.Receiver}}.store.Create({{.R.ContextParam}}.Request().Context(), &in); err != nil {
+		return {{.R.ContextParam}}.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
 	}
-	return c.JSON(http.StatusCreated, in)
+	return {{.R.ContextParam}}.JSON(http.StatusCreated, in)
 }
 
 // Get godoc
@@ -84,19 +84,19 @@ func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Create(c echo.Context) error {
 //	@Failure      400  {object}  model.APIError
 //	@Failure      404  {object}  model.APIError
 //	@Router       /{{.R.KebabPlural}}/{id} [get]
-func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Get(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Get({{.R.ContextParam}} echo.Context) error {
+	id, err := strconv.ParseInt({{.R.ContextParam}}.Param("id"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: "invalid id"})
+		return {{.R.ContextParam}}.JSON(http.StatusBadRequest, model.APIError{Error: "invalid id"})
 	}
-	m, err := {{.R.Receiver}}.store.Get(c.Request().Context(), id)
+	m, err := {{.R.Receiver}}.store.Get({{.R.ContextParam}}.Request().Context(), id)
 	if errors.Is(err, {{.StorePkg}}.Err{{.R.Pascal}}NotFound) {
-		return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+		return {{.R.ContextParam}}.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
 	}
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+		return {{.R.ContextParam}}.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
 	}
-	return c.JSON(http.StatusOK, m)
+	return {{.R.ContextParam}}.JSON(http.StatusOK, m)
 }
 
 // Update godoc
@@ -113,23 +113,23 @@ func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Get(c echo.Context) error {
 //	@Failure      404  {object}  model.APIError
 //	@Failure      422  {object}  model.APIError
 //	@Router       /{{.R.KebabPlural}}/{id} [put]
-func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Update(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Update({{.R.ContextParam}} echo.Context) error {
+	id, err := strconv.ParseInt({{.R.ContextParam}}.Param("id"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: "invalid id"})
+		return {{.R.ContextParam}}.JSON(http.StatusBadRequest, model.APIError{Error: "invalid id"})
 	}
 	var in model.{{.R.Pascal}}
-	if err := c.Bind(&in); err != nil {
+	if err := {{.R.ContextParam}}.Bind(&in); err != nil {
 		return err
 	}
 	in.ID = id
-	if err := {{.R.Receiver}}.store.Update(c.Request().Context(), &in); err != nil {
+	if err := {{.R.Receiver}}.store.Update({{.R.ContextParam}}.Request().Context(), &in); err != nil {
 		if errors.Is(err, {{.StorePkg}}.Err{{.R.Pascal}}NotFound) {
-			return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+			return {{.R.ContextParam}}.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
 		}
-		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+		return {{.R.ContextParam}}.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
 	}
-	return c.JSON(http.StatusOK, in)
+	return {{.R.ContextParam}}.JSON(http.StatusOK, in)
 }
 
 // Delete godoc
@@ -143,16 +143,16 @@ func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Update(c echo.Context) error {
 //	@Failure      400  {object}  model.APIError
 //	@Failure      404  {object}  model.APIError
 //	@Router       /{{.R.KebabPlural}}/{id} [delete]
-func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Delete(c echo.Context) error {
-	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+func ({{.R.Receiver}} *{{.R.Pascal}}Handler) Delete({{.R.ContextParam}} echo.Context) error {
+	id, err := strconv.ParseInt({{.R.ContextParam}}.Param("id"), 10, 64)
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: "invalid id"})
+		return {{.R.ContextParam}}.JSON(http.StatusBadRequest, model.APIError{Error: "invalid id"})
 	}
-	if err := {{.R.Receiver}}.store.Delete(c.Request().Context(), id); err != nil {
+	if err := {{.R.Receiver}}.store.Delete({{.R.ContextParam}}.Request().Context(), id); err != nil {
 		if errors.Is(err, {{.StorePkg}}.Err{{.R.Pascal}}NotFound) {
-			return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+			return {{.R.ContextParam}}.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
 		}
-		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+		return {{.R.ContextParam}}.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
 	}
-	return c.NoContent(http.StatusNoContent)
+	return {{.R.ContextParam}}.NoContent(http.StatusNoContent)
 }

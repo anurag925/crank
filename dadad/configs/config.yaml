@@ -1,0 +1,16 @@
+app:
+  name: "dadad"
+  host: "0.0.0.0"
+  port: 8080
+  env: "development"
+
+crypto:
+  # Generate a strong secret with: openssl rand -base64 32
+  secret: "change-me-in-production"
+
+# crank:config-section
+logging:
+  level: "info"
+  format: "json"
+  # Set to true to include compressed source locations (e.g. handler/user.go:42)
+  add_source: false

@@ -1,0 +1,6 @@
+project_name: dadad
+module_path: dadad
+features:
+  - base
+  - crypto
+crank_version: dev

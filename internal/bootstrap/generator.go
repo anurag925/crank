@@ -122,7 +122,10 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 	}
 
 	// Only render the new feature's templates, not all features.
-	ftr, _ := reg.resolve(featureName)
+	ftr, err := reg.resolve(featureName)
+	if err != nil {
+		return nil, err
+	}
 	written, err := generateFeature(projectDir, ftr, ctx)
 	if err != nil {
 		return nil, err

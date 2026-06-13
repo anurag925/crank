@@ -1,0 +1,47 @@
+package service
+
+import (
+	"sync"
+	"sync/atomic"
+
+	"dadad/internal/model"
+)
+
+// UserService is a minimal in-memory user service used when the postgres feature
+// is not selected. It is intentionally small so the generated application compiles
+// and runs out of the box.
+type UserService struct {
+	mu     sync.RWMutex
+	nextID int64
+	users  map[int64]model.User
+}
+
+// NewUserService constructs an empty in-memory UserService.
+func NewUserService() *UserService {
+	return &UserService{users: make(map[int64]model.User)}
+}
+
+func (s *UserService) List() []model.User {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	out := make([]model.User, 0, len(s.users))
+	for _, u := range s.users {
+		out = append(out, u)
+	}
+	return out
+}
+
+func (s *UserService) Get(id int64) (model.User, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	u, ok := s.users[id]
+	return u, ok
+}
+
+func (s *UserService) Create(in model.User) model.User {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	in.ID = atomic.AddInt64(&s.nextID, 1)
+	s.users[in.ID] = in
+	return in
+}

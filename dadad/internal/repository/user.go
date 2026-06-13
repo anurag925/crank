@@ -1,0 +1,58 @@
+package repository
+
+import (
+	"context"
+	"sync"
+	"sync/atomic"
+
+	"dadad/internal/model"
+)
+
+// UserRepository is the in-memory user store produced by the base feature. It is
+// replaced by the postgres feature's Bun-backed implementation when that feature
+// is selected. Either way, callers depend on this same interface.
+type UserRepository struct {
+	mu     sync.RWMutex
+	nextID int64
+	users  map[int64]model.User
+}
+
+// NewUserRepository constructs an in-memory UserRepository.
+func NewUserRepository() *UserRepository {
+	return &UserRepository{users: make(map[int64]model.User)}
+}
+
+func (r *UserRepository) List(ctx context.Context) ([]model.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]model.User, 0, len(r.users))
+	for _, u := range r.users {
+		out = append(out, u)
+	}
+	return out, nil
+}
+
+func (r *UserRepository) Get(ctx context.Context, id int64) (model.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	u, ok := r.users[id]
+	if !ok {
+		return model.User{}, ErrUserNotFound
+	}
+	return u, nil
+}
+
+func (r *UserRepository) Create(ctx context.Context, u *model.User) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	u.ID = atomic.AddInt64(&r.nextID, 1)
+	r.users[u.ID] = *u
+	return nil
+}
+
+// ErrUserNotFound is returned when a user lookup fails.
+var ErrUserNotFound = repositoryError("user not found")
+
+type repositoryError string
+
+func (e repositoryError) Error() string { return string(e) }

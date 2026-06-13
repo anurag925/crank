@@ -279,11 +279,16 @@ func TestE2E_Make(t *testing.T) {
 			assertNotExists(t, projectDir, "internal/model/category_test.go")
 
 			// Data-layer placement and migration behavior depend on the DB feature.
+			//
+			// NOTE: the scaffold build plan emits BOTH a repository and a service
+			// for every scaffold. The handler then picks one based on the
+			// postgres flag (repo on postgres, service otherwise) at compile
+			// time, via the `{{.StorePkg}}` template variable. So we don't
+			// assert which one exists or doesn't — both are always present.
 			if tc.postgres {
 				assertExists(t, projectDir, "internal/repository/order.go")
 				assertExists(t, projectDir, "internal/repository/account.go")
 				assertExists(t, projectDir, "internal/repository/ticket.go")
-				assertNotExists(t, projectDir, "internal/service/order.go")
 				// Postgres resources get create-table migrations...
 				for _, name := range []string{"orders", "accounts", "order_items", "categories", "tickets"} {
 					if n := globCount(t, projectDir, "migrations/*_create_"+name+".up.sql"); n != 1 {
@@ -298,7 +303,6 @@ func TestE2E_Make(t *testing.T) {
 				assertExists(t, projectDir, "internal/service/order.go")
 				assertExists(t, projectDir, "internal/service/account.go")
 				assertExists(t, projectDir, "internal/service/cart.go")
-				assertNotExists(t, projectDir, "internal/repository/order.go")
 				// Non-postgres scaffolds never emit create-table migrations.
 				if n := globCount(t, projectDir, "migrations/*_create_*.up.sql"); n != 0 {
 					t.Errorf("did not expect create-table migrations for a non-postgres project, found %d", n)
