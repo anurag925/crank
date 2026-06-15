@@ -1,0 +1,34 @@
+package middleware
+
+import (
+	"net/http"
+	"strings"
+
+	"github.com/labstack/echo/v4"
+
+	"{{.ModulePath}}/internal/ports"
+)
+
+// JWTAuth returns Echo middleware that requires a valid Bearer access
+// token. The token's "sub" claim is stored under the "user_id" key on the
+// request context for downstream handlers to read.
+func JWTAuth(tokens ports.TokenService) echo.MiddlewareFunc {
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			header := c.Request().Header.Get("Authorization")
+			if header == "" {
+				return echo.NewHTTPError(http.StatusUnauthorized, "missing authorization header")
+			}
+			parts := strings.SplitN(header, " ", 2)
+			if len(parts) != 2 || !strings.EqualFold(parts[0], "Bearer") {
+				return echo.NewHTTPError(http.StatusUnauthorized, "invalid authorization header")
+			}
+			sub, err := tokens.Subject(parts[1])
+			if err != nil {
+				return echo.NewHTTPError(http.StatusUnauthorized, "invalid token")
+			}
+			c.Set("user_id", sub)
+			return next(c)
+		}
+	}
+}

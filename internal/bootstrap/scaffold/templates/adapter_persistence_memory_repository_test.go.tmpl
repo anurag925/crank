@@ -1,0 +1,67 @@
+package memory
+
+import (
+	"context"
+	"testing"
+{{- if .HasTime}}
+	"time"
+{{- end}}
+
+	"{{.Module}}/internal/domain/{{.R.Snake}}"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestNew{{.R.Pascal}}Repository(t *testing.T) {
+	repo := New{{.R.Pascal}}Repository()
+	require.NotNil(t, repo)
+	assert.Empty(t, repo.items)
+}
+
+func Test{{.R.Pascal}}Repository_CRUD(t *testing.T) {
+	repo := New{{.R.Pascal}}Repository()
+	ctx := context.Background()
+
+	// Empty to start.
+	items, err := repo.List(ctx)
+	require.NoError(t, err)
+	assert.Empty(t, items)
+
+	// Save a fresh aggregate.
+	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID("123e4567-e89b-12d3-a456-426614174000")
+	require.NoError(t, err)
+	x, err := {{.R.Snake}}.New{{.R.Pascal}}(id{{range .Fields}}, {{.Sample}}{{end}})
+	require.NoError(t, err)
+	require.NoError(t, repo.Save(ctx, x))
+
+	// Get returns the stored aggregate.
+	got, err := repo.Get(ctx, id)
+	require.NoError(t, err)
+	assert.Equal(t, id, got.ID())
+
+	// List returns it.
+	items, err = repo.List(ctx)
+	require.NoError(t, err)
+	assert.Len(t, items, 1)
+
+	// Save again (overwrite) succeeds.
+	require.NoError(t, repo.Save(ctx, x))
+
+	// Delete removes it.
+	require.NoError(t, repo.Delete(ctx, id))
+	_, err = repo.Get(ctx, id)
+	assert.ErrorIs(t, err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound)
+}
+
+func Test{{.R.Pascal}}Repository_NotFound(t *testing.T) {
+	repo := New{{.R.Pascal}}Repository()
+	ctx := context.Background()
+
+	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID("123e4567-e89b-12d3-a456-426614174000")
+	require.NoError(t, err)
+
+	_, err = repo.Get(ctx, id)
+	assert.ErrorIs(t, err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound)
+	assert.ErrorIs(t, repo.Delete(ctx, id), {{.R.Snake}}.Err{{.R.Pascal}}NotFound)
+}

@@ -1,0 +1,14 @@
+package {{.R.Snake}}
+
+import "testing"
+
+// Queries are pure data carriers; this test simply asserts the struct
+// literal compiles and stores its fields.
+func Test{{.R.Pascal}}_Queries(t *testing.T) {
+	g := Get{{.R.Pascal}}Query{ID: "x"}
+	if g.ID != "x" {
+		t.Fatalf("g.ID = %q", g.ID)
+	}
+	l := List{{.R.PascalPlural}}Query{}
+	_ = l
+}

@@ -1,0 +1,87 @@
+package {{.R.Snake}}
+
+import (
+	"context"
+	"fmt"
+
+	"{{.Module}}/internal/domain/{{.R.Snake}}"
+	"{{.Module}}/internal/ports"
+)
+
+// CommandHandler is the application service that mutates {{.R.Snake}} aggregates
+// in response to Create/Update/Delete commands. It depends only on the
+// domain Repository port and the EventBus port.
+type CommandHandler struct {
+	repo   {{.R.Snake}}.Repository
+	events ports.EventBus
+}
+
+// NewCommandHandler wires a CommandHandler against the given repository and
+// event bus.
+func NewCommandHandler(repo {{.R.Snake}}.Repository, events ports.EventBus) *CommandHandler {
+	return &CommandHandler{repo: repo, events: events}
+}
+
+// HandleCreate creates a new {{.R.Snake}} aggregate, persists it, and
+// publishes the events it recorded during construction.
+func (h *CommandHandler) HandleCreate(ctx context.Context, cmd Create{{.R.Pascal}}Command) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
+	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID(cmd.ID)
+	if err != nil {
+		return nil, fmt.Errorf("create {{.R.Snake}}: %w", err)
+	}
+	x, err := {{.R.Snake}}.New{{.R.Pascal}}(id{{range .Fields}}, cmd.{{.GoName}}{{end}})
+	if err != nil {
+		return nil, fmt.Errorf("create {{.R.Snake}}: %w", err)
+	}
+	if err := h.repo.Save(ctx, x); err != nil {
+		return nil, fmt.Errorf("save {{.R.Snake}}: %w", err)
+	}
+	if h.events != nil {
+		_ = h.events.Publish(ctx, x.PullEvents()...)
+	}
+	return x, nil
+}
+
+// HandleUpdate loads an existing {{.R.Snake}} aggregate, mutates it through
+// the domain's Update method, persists the result, and publishes the
+// recorded event.
+func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd Update{{.R.Pascal}}Command) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
+	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID(cmd.ID)
+	if err != nil {
+		return nil, fmt.Errorf("update {{.R.Snake}}: %w", err)
+	}
+	x, err := h.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	x.Update({{range .Fields}}cmd.{{.GoName}}, {{end}})
+	if err := h.repo.Save(ctx, x); err != nil {
+		return nil, fmt.Errorf("save {{.R.Snake}}: %w", err)
+	}
+	if h.events != nil {
+		_ = h.events.Publish(ctx, x.PullEvents()...)
+	}
+	return x, nil
+}
+
+// HandleDelete removes a {{.R.Snake}} aggregate. A Deleted event is published
+// for any downstream consumers; the event is constructed directly here
+// because the aggregate itself is discarded by Delete.
+func (h *CommandHandler) HandleDelete(ctx context.Context, cmd Delete{{.R.Pascal}}Command) error {
+	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID(cmd.ID)
+	if err != nil {
+		return fmt.Errorf("delete {{.R.Snake}}: %w", err)
+	}
+	x, err := h.repo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	x.MarkDeleted()
+	if err := h.repo.Delete(ctx, id); err != nil {
+		return fmt.Errorf("delete {{.R.Snake}}: %w", err)
+	}
+	if h.events != nil {
+		_ = h.events.Publish(ctx, x.PullEvents()...)
+	}
+	return nil
+}

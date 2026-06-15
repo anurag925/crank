@@ -176,3 +176,41 @@ func isVowel(r rune) bool {
 	}
 	return false
 }
+
+// DDDPath returns the project-relative path of the domain layer directory for
+// a resource, e.g. "internal/domain/order". It is purely a string helper so
+// templates and generator code can stay in sync.
+func (r Resource) DDDDomainPath() string { return "internal/domain/" + r.Snake }
+
+// DDDAppPath returns the project-relative path of the application layer
+// directory, e.g. "internal/application/order".
+func (r Resource) DDDAppPath() string { return "internal/application/" + r.Snake }
+
+// DDDPostgresAdapterPath returns the project-relative path of the postgres
+// adapter file, e.g. "internal/adapters/persistence/postgres/order_repository.go".
+func (r Resource) DDDPostgresAdapterPath() string {
+	return "internal/adapters/persistence/postgres/" + r.Snake + "_repository.go"
+}
+
+// DDDMemoryAdapterPath returns the project-relative path of the in-memory
+// adapter file.
+func (r Resource) DDDMemoryAdapterPath() string {
+	return "internal/adapters/persistence/memory/" + r.Snake + "_repository.go"
+}
+
+// DDDHTTPHandlerPath returns the project-relative path of the HTTP adapter.
+func (r Resource) DDDHTTPHandlerPath() string {
+	return "internal/adapters/http/web/" + r.Snake + "_handler.go"
+}
+
+// DDDWorkflowPath returns the project-relative path of the temporal workflow
+// file.
+func (r Resource) DDDWorkflowPath() string {
+	return "internal/adapters/temporal/workflow/" + r.Snake + ".go"
+}
+
+// DDDActivityPath returns the project-relative path of the temporal activity
+// file.
+func (r Resource) DDDActivityPath() string {
+	return "internal/adapters/temporal/activity/" + r.Snake + ".go"
+}

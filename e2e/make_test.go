@@ -31,8 +31,8 @@ import (
 func TestE2E_Make_Model_Tests(t *testing.T) {
 	dir := scaffoldBase(t, "make_model_tests")
 	runCrank(t, "", "make", "model", "Widget", "name:string", "--tests", "--project", dir)
-	assertExists(t, dir, "internal/model/widget.go")
-	assertExists(t, dir, "internal/model/widget_test.go")
+	assertExists(t, dir, "internal/domain/widget/widget.go")
+	assertExists(t, dir, "internal/domain/widget/widget_test.go")
 	compileProject(t, dir)
 }
 
@@ -43,10 +43,10 @@ func TestE2E_Make_Model_Tests(t *testing.T) {
 func TestE2E_Make_Repository_Tests(t *testing.T) {
 	dir := scaffold(t, "make_repo_tests", []string{"base", "postgres"})
 	runCrank(t, "", "make", "repository", "Ticket", "subject:string", "--tests", "--project", dir)
-	assertExists(t, dir, "internal/repository/ticket.go")
-	assertExists(t, dir, "internal/repository/ticket_test.go")
+	assertExists(t, dir, "internal/adapters/persistence/postgres/ticket_repository.go")
+	assertExists(t, dir, "internal/adapters/persistence/postgres/ticket_repository_test.go")
 	compileProject(t, dir)
-	runGo(t, dir, "test", "./internal/repository/...")
+	runGo(t, dir, "test", "./internal/adapters/persistence/postgres/...")
 }
 
 // TestE2E_Make_Service_Tests covers the service kind on a base-only
@@ -55,10 +55,10 @@ func TestE2E_Make_Repository_Tests(t *testing.T) {
 func TestE2E_Make_Service_Tests(t *testing.T) {
 	dir := scaffoldBase(t, "make_svc_tests")
 	runCrank(t, "", "make", "service", "Cart", "label:string", "--tests", "--project", dir)
-	assertExists(t, dir, "internal/service/cart.go")
-	assertExists(t, dir, "internal/service/cart_test.go")
+	assertExists(t, dir, "internal/application/cart/commands.go")
+	assertExists(t, dir, "internal/application/cart/commands_test.go")
 	compileProject(t, dir)
-	runGo(t, dir, "test", "./internal/service/...")
+	runGo(t, dir, "test", "./internal/application/cart/...")
 }
 
 // TestE2E_Make_HandlerOnly_WithTests exercises the corner case of
@@ -75,11 +75,11 @@ func TestE2E_Make_HandlerOnly_WithTests(t *testing.T) {
 	dir := scaffoldBase(t, "make_handler_only_tests")
 	runCrank(t, "", "make", "handler", "Tag", "label:string",
 		"--only", "--tests", "--project", dir)
-	assertExists(t, dir, "internal/handler/tag.go")
-	assertExists(t, dir, "internal/handler/tag_test.go")
-	assertNotExists(t, dir, "internal/model/tag.go")
-	assertNotExists(t, dir, "internal/repository/tag.go")
-	assertNotExists(t, dir, "internal/service/tag.go")
+	assertExists(t, dir, "internal/adapters/http/web/tag_handler.go")
+	assertExists(t, dir, "internal/adapters/http/web/tag_handler_test.go")
+	assertNotExists(t, dir, "internal/domain/tag/tag.go")
+	assertNotExists(t, dir, "internal/adapters/persistence/postgres/tag_repository.go")
+	assertNotExists(t, dir, "internal/application/tag/commands.go")
 	// We intentionally do NOT call compileProject here because of the
 	// known bug described above.
 }
@@ -90,8 +90,8 @@ func TestE2E_Make_RepositoryOnly_NoModel(t *testing.T) {
 	dir := scaffold(t, "make_repo_only", []string{"base", "postgres"})
 	runCrank(t, "", "make", "repository", "Voucher", "code:string",
 		"--only", "--project", dir)
-	assertExists(t, dir, "internal/repository/voucher.go")
-	assertNotExists(t, dir, "internal/model/voucher.go")
+	assertExists(t, dir, "internal/adapters/persistence/postgres/voucher_repository.go")
+	assertNotExists(t, dir, "internal/domain/voucher/voucher.go")
 }
 
 // TestE2E_Make_ServiceOnly_NoModel verifies --only on the service kind.
@@ -99,8 +99,8 @@ func TestE2E_Make_ServiceOnly_NoModel(t *testing.T) {
 	dir := scaffoldBase(t, "make_svc_only")
 	runCrank(t, "", "make", "service", "Box", "label:string",
 		"--only", "--project", dir)
-	assertExists(t, dir, "internal/service/box.go")
-	assertNotExists(t, dir, "internal/model/box.go")
+	assertExists(t, dir, "internal/application/box/commands.go")
+	assertNotExists(t, dir, "internal/domain/box/box.go")
 }
 
 // ---------------------------------------------------------------------------
@@ -117,9 +117,9 @@ func TestE2E_Make_SkipMigration_AllFieldTypes(t *testing.T) {
 		"active:bool", "joined_at:time", "token:uuid", "contact:email",
 		"--skip-migration", "--project", dir,
 	)
-	assertExists(t, dir, "internal/model/product.go")
-	assertExists(t, dir, "internal/repository/product.go")
-	assertExists(t, dir, "internal/handler/product.go")
+	assertExists(t, dir, "internal/domain/product/product.go")
+	assertExists(t, dir, "internal/adapters/persistence/postgres/product_repository.go")
+	assertExists(t, dir, "internal/adapters/http/web/product_handler.go")
 	assertGlobCount(t, dir, "migrations/*_create_products.up.sql", 0)
 	compileProject(t, dir)
 }
@@ -130,7 +130,7 @@ func TestE2E_Make_SkipMigration_HandlerKind(t *testing.T) {
 	runCrank(t, "", "make", "handler", "OrderItem", "label:string",
 		"--skip-migration", "--project", dir,
 	)
-	assertExists(t, dir, "internal/handler/order_item.go")
+	assertExists(t, dir, "internal/adapters/http/web/order_item_handler.go")
 	assertGlobCount(t, dir, "migrations/*_create_order_items.up.sql", 0)
 }
 
@@ -145,8 +145,8 @@ func TestE2E_Make_SkipMigration_HandlerKind(t *testing.T) {
 func TestE2E_Make_Scaffold_ZeroFields(t *testing.T) {
 	dir := scaffold(t, "make_zero_fields", []string{"base", "postgres"})
 	runCrank(t, "", "make", "scaffold", "Bare", "--project", dir)
-	assertExists(t, dir, "internal/model/bare.go")
-	assertExists(t, dir, "internal/handler/bare.go")
+	assertExists(t, dir, "internal/domain/bare/bare.go")
+	assertExists(t, dir, "internal/adapters/http/web/bare_handler.go")
 	compileProject(t, dir)
 }
 
@@ -156,8 +156,8 @@ func TestE2E_Make_Scaffold_ZeroFields(t *testing.T) {
 func TestE2E_Make_Workflow_NoFields(t *testing.T) {
 	dir := scaffold(t, "make_workflow_no_fields", []string{"temporal"})
 	runCrank(t, "", "make", "workflow", "SimpleFlow", "--project", dir)
-	assertExists(t, dir, "internal/workflow/simple_flow.go")
-	worker := readFile(t, dir, "pkg/temporal/worker.go")
+	assertExists(t, dir, "internal/adapters/temporal/workflow/simple_flow.go")
+	worker := readFile(t, dir, "internal/adapters/temporal/worker.go")
 	if !strings.Contains(worker, "workflow.SimpleFlowWorkflow") {
 		t.Errorf("worker.go missing registration for SimpleFlowWorkflow:\n%s", worker)
 	}
@@ -168,8 +168,8 @@ func TestE2E_Make_Workflow_NoFields(t *testing.T) {
 func TestE2E_Make_Activity_NoFields(t *testing.T) {
 	dir := scaffold(t, "make_activity_no_fields", []string{"temporal"})
 	runCrank(t, "", "make", "activity", "DoNothing", "--project", dir)
-	assertExists(t, dir, "internal/activity/do_nothing.go")
-	worker := readFile(t, dir, "pkg/temporal/worker.go")
+	assertExists(t, dir, "internal/adapters/temporal/activity/do_nothing.go")
+	worker := readFile(t, dir, "internal/adapters/temporal/worker.go")
 	if !strings.Contains(worker, "activity.DoNothingActivity") {
 		t.Errorf("worker.go missing registration for DoNothingActivity:\n%s", worker)
 	}
@@ -180,7 +180,7 @@ func TestE2E_Make_Activity_NoFields(t *testing.T) {
 func TestE2E_Make_Model_ZeroFields(t *testing.T) {
 	dir := scaffoldBase(t, "make_model_no_fields")
 	runCrank(t, "", "make", "model", "Stub", "--project", dir)
-	assertExists(t, dir, "internal/model/stub.go")
+	assertExists(t, dir, "internal/domain/stub/stub.go")
 	compileProject(t, dir)
 }
 
@@ -195,7 +195,7 @@ func TestE2E_Make_Model_ZeroFields(t *testing.T) {
 func TestE2E_Make_Handler_ForceOverwrite(t *testing.T) {
 	dir := scaffold(t, "make_handler_force", []string{"base", "postgres"})
 	runCrank(t, "", "make", "handler", "Review", "--project", dir)
-	handlerPath := filepath.Join(dir, "internal/handler/review.go")
+	handlerPath := filepath.Join(dir, "internal/adapters/http/web/review_handler.go")
 	orig, err := readFileErr(handlerPath)
 	if err != nil {
 		t.Fatalf("read review.go: %v", err)
@@ -303,9 +303,9 @@ func TestE2E_Make_AllFieldTypes_Validates(t *testing.T) {
 		"active:bool", "joined_at:time", "token:uuid", "contact:email",
 		"--project", dir,
 	)
-	assertExists(t, dir, "internal/model/customer.go")
-	assertExists(t, dir, "internal/repository/customer.go")
-	assertExists(t, dir, "internal/handler/customer.go")
+	assertExists(t, dir, "internal/domain/customer/customer.go")
+	assertExists(t, dir, "internal/adapters/persistence/postgres/customer_repository.go")
+	assertExists(t, dir, "internal/adapters/http/web/customer_handler.go")
 	compileProject(t, dir)
 }
 
@@ -314,12 +314,13 @@ func TestE2E_Make_AllFieldTypes_Validates(t *testing.T) {
 func TestE2E_Make_FieldWithoutType_DefaultsToString(t *testing.T) {
 	dir := scaffoldBase(t, "make_field_no_type")
 	runCrank(t, "", "make", "model", "Book", "title", "author", "--project", dir)
-	body := readFile(t, dir, "internal/model/book.go")
+	body := readFile(t, dir, "internal/domain/book/book.go")
+	// DDD aggregates keep their state unexported; accessors live alongside.
 	// The fields should be Go strings, not naked names. We accept any
 	// gofmt-style alignment (gofmt may collapse the column to 1 or 2
 	// spaces depending on longest field name) — we just verify the
 	// expected name is followed by `string` somewhere on the same line.
-	for _, want := range []string{"Title", "Author"} {
+	for _, want := range []string{"title", "author"} {
 		hasLine := false
 		for _, line := range strings.Split(body, "\n") {
 			if strings.HasPrefix(strings.TrimSpace(line), want+" ") && strings.Contains(line, "string") {
@@ -371,8 +372,8 @@ func TestE2E_Make_EmptyFieldName_Errors(t *testing.T) {
 func TestE2E_Make_KebabCaseName_Inflected(t *testing.T) {
 	dir := scaffoldBase(t, "make_kebab")
 	runCrank(t, "", "make", "model", "my-cool-widget", "--project", dir)
-	assertExists(t, dir, "internal/model/my_cool_widget.go")
-	body := readFile(t, dir, "internal/model/my_cool_widget.go")
+	assertExists(t, dir, "internal/domain/my_cool_widget/my_cool_widget.go")
+	body := readFile(t, dir, "internal/domain/my_cool_widget/my_cool_widget.go")
 	if !strings.Contains(body, "type MyCoolWidget struct") {
 		t.Errorf("expected MyCoolWidget struct, got:\n%s", body)
 	}
@@ -383,8 +384,8 @@ func TestE2E_Make_KebabCaseName_Inflected(t *testing.T) {
 func TestE2E_Make_SnakeCaseName_Inflected(t *testing.T) {
 	dir := scaffoldBase(t, "make_snake")
 	runCrank(t, "", "make", "model", "shipping_address", "--project", dir)
-	assertExists(t, dir, "internal/model/shipping_address.go")
-	body := readFile(t, dir, "internal/model/shipping_address.go")
+	assertExists(t, dir, "internal/domain/shipping_address/shipping_address.go")
+	body := readFile(t, dir, "internal/domain/shipping_address/shipping_address.go")
 	if !strings.Contains(body, "type ShippingAddress struct") {
 		t.Errorf("expected ShippingAddress struct, got:\n%s", body)
 	}
@@ -395,22 +396,22 @@ func TestE2E_Make_SnakeCaseName_Inflected(t *testing.T) {
 func TestE2E_Make_LowercaseSingleWord(t *testing.T) {
 	dir := scaffoldBase(t, "make_lc_single")
 	runCrank(t, "", "make", "model", "thing", "--project", dir)
-	assertExists(t, dir, "internal/model/thing.go")
-	body := readFile(t, dir, "internal/model/thing.go")
+	assertExists(t, dir, "internal/domain/thing/thing.go")
+	body := readFile(t, dir, "internal/domain/thing/thing.go")
 	if !strings.Contains(body, "type Thing struct") {
 		t.Errorf("expected Thing struct, got:\n%s", body)
 	}
 }
 
 // TestE2E_Make_PluralInput_Singularized: "boxes" → "box". (We don't use
-// "users" because the base feature ships with internal/model/user.go, so
+// "users" because the base feature ships with internal/domain/user/user.go, so
 // the model would already exist and the make would fail with
 // "already exists".)
 func TestE2E_Make_PluralInput_Singularized(t *testing.T) {
 	dir := scaffoldBase(t, "make_plural")
 	runCrank(t, "", "make", "model", "boxes", "--project", dir)
-	assertExists(t, dir, "internal/model/box.go")
-	body := readFile(t, dir, "internal/model/box.go")
+	assertExists(t, dir, "internal/domain/box/box.go")
+	body := readFile(t, dir, "internal/domain/box/box.go")
 	if !strings.Contains(body, "type Box struct") {
 		t.Errorf("expected Box struct, got:\n%s", body)
 	}
@@ -424,11 +425,11 @@ func TestE2E_Make_Handler_AfterModel(t *testing.T) {
 	runCrank(t, "", "make", "model", "Receipt", "amount:float", "--project", dir)
 	// Snapshot mtime of the model file so we can detect whether it was
 	// re-written by the subsequent handler call.
-	_ = filepath.Join(dir, "internal/model/receipt.go")
+	_ = filepath.Join(dir, "internal/domain/receipt/receipt.go")
 	runCrank(t, "", "make", "handler", "Receipt", "--project", dir)
-	assertExists(t, dir, "internal/handler/receipt.go")
-	assertExists(t, dir, "internal/model/receipt.go")
-	assertExists(t, dir, "internal/repository/receipt.go")
+	assertExists(t, dir, "internal/adapters/http/web/receipt_handler.go")
+	assertExists(t, dir, "internal/domain/receipt/receipt.go")
+	assertExists(t, dir, "internal/adapters/persistence/postgres/receipt_repository.go")
 	compileProject(t, dir)
 }
 
@@ -442,7 +443,7 @@ func TestE2E_Make_ProjectFlag_FromOtherDir(t *testing.T) {
 	dir := scaffoldBase(t, "make_project_flag")
 	other := t.TempDir()
 	runCrank(t, other, "make", "model", "FarAway", "name:string", "--project", dir)
-	assertExists(t, dir, "internal/model/far_away.go")
+	assertExists(t, dir, "internal/domain/far_away/far_away.go")
 }
 
 // TestE2E_Make_ProjectFlag_DefaultCwd verifies the no-flag path (current
@@ -450,7 +451,7 @@ func TestE2E_Make_ProjectFlag_FromOtherDir(t *testing.T) {
 func TestE2E_Make_ProjectFlag_DefaultCwd(t *testing.T) {
 	dir := scaffoldBase(t, "make_default_cwd")
 	runCrank(t, dir, "make", "model", "Local", "name:string")
-	assertExists(t, dir, "internal/model/local.go")
+	assertExists(t, dir, "internal/domain/local/local.go")
 }
 
 // TestE2E_Make_NoArgs_Help verifies the help path: `crank make` with no
@@ -504,8 +505,8 @@ func TestE2E_Make_Handler_WiringNoDuplicateOnForce(t *testing.T) {
 	runCrank(t, "", "make", "handler", "Audit", "--project", dir)
 	runCrank(t, "", "make", "handler", "Audit", "--force", "--project", dir)
 	runCrank(t, "", "make", "handler", "Audit", "--force", "--project", dir)
-	hub := readFile(t, dir, "internal/handler/handler.go")
-	count := strings.Count(hub, "h.audits.Register(e)")
+	hub := readFile(t, dir, "internal/adapters/http/web/routes.go")
+	count := strings.Count(hub, "cfg.AuditHandler.Register(")
 	if count != 1 {
 		t.Errorf("expected exactly 1 audits registration, got %d:\n%s", count, hub)
 	}
@@ -518,9 +519,9 @@ func TestE2E_Make_Handler_WiringNoDuplicateOnForce(t *testing.T) {
 func TestE2E_Make_Handler_WiringOnPostgres(t *testing.T) {
 	dir := scaffold(t, "make_handler_wire_pg", []string{"base", "postgres"})
 	runCrank(t, "", "make", "handler", "Ledger", "amount:float", "--project", dir)
-	hub := readFile(t, dir, "internal/handler/handler.go")
-	if !strings.Contains(hub, "h.ledgers.Register(e)") {
-		t.Errorf("handler.go missing ledgers registration:\n%s", hub)
+	hub := readFile(t, dir, "internal/adapters/http/web/routes.go")
+	if !strings.Contains(hub, "cfg.LedgerHandler.Register(") {
+		t.Errorf("routes.go missing ledgers registration:\n%s", hub)
 	}
 	compileProject(t, dir)
 }

@@ -13,21 +13,37 @@ import (
 	"github.com/labstack/echo/v4"
 	echomw "github.com/labstack/echo/v4/middleware"
 	echoSwagger "github.com/swaggo/echo-swagger"
+{{- if .Has "temporal"}}
+	"go.temporal.io/sdk/worker"
+{{- end}}
 
 	_ "{{.ModulePath}}/docs"
+{{- if .Has "postgres"}}
+	"{{.ModulePath}}/internal/adapters/persistence/postgres"
+{{- end}}
+	"{{.ModulePath}}/internal/adapters/eventbus"
+	"{{.ModulePath}}/internal/adapters/http/web"
+	"{{.ModulePath}}/internal/adapters/http/web/middleware"
+{{- if not (.Has "postgres")}}
+	"{{.ModulePath}}/internal/adapters/persistence/memory"
+{{- end}}
+	userapp "{{.ModulePath}}/internal/application/user"
 	"{{.ModulePath}}/internal/config"
-	"{{.ModulePath}}/internal/handler"
-	"{{.ModulePath}}/pkg/logging"
-	"{{.ModulePath}}/internal/middleware"
+	"{{.ModulePath}}/internal/domain/user"
 	"{{.ModulePath}}/internal/model"
 	"{{.ModulePath}}/internal/validator"
-{{- if .Has "postgres"}}
-
-	"{{.ModulePath}}/internal/database"
-{{- end}}
+	"{{.ModulePath}}/pkg/logging"
 {{- if .Has "auth"}}
-
-	"{{.ModulePath}}/internal/service"
+	"{{.ModulePath}}/internal/adapters/crypto"
+{{- end}}
+{{- if .Has "redis"}}
+	redisclient "{{.ModulePath}}/internal/adapters/cache/redis"
+{{- end}}
+{{- if .Has "mongodb"}}
+	"{{.ModulePath}}/internal/adapters/persistence/mongodb"
+{{- end}}
+{{- if .Has "temporal"}}
+	"{{.ModulePath}}/internal/adapters/temporal"
 {{- end}}
 )
 
@@ -49,7 +65,6 @@ import (
 func main() {
 	cfg := config.Load()
 
-	// Configure structured logging with redaction and compressed source paths.
 	level := parseLevel(cfg.Logging.Level)
 	logger := logging.New(level, cfg.Logging.AddSource)
 	slog.SetDefault(logger)
@@ -60,85 +75,95 @@ func main() {
 		"log_level", cfg.Logging.Level,
 	)
 {{if .Has "postgres"}}
-	db, err := database.NewPostgres(cfg.Database)
+	db, err := postgres.NewDB(cfg.Database)
 	if err != nil {
 		logger.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
 	defer func() { _ = db.Close() }()
 {{end}}
-{{if .Has "auth"}}
-	jwtService := service.NewJWTService(cfg.JWT)
+{{if .Has "redis"}}
+	rdb, err := redisclient.NewClient(cfg.Redis)
+	if err != nil {
+		logger.Error("failed to connect to redis", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = rdb.Close() }()
+{{end}}
+{{if .Has "mongodb"}}
+	mdb, err := mongodb.NewClient(context.Background(), cfg.MongoDB)
+	if err != nil {
+		logger.Error("failed to connect to mongodb", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = mdb.Client().Disconnect(context.Background()) }()
+{{end}}
+{{if .Has "temporal"}}
+	tc, err := temporal.NewClient(cfg.Temporal, logger)
+	if err != nil {
+		logger.Error("failed to connect to temporal", "error", err)
+		os.Exit(1)
+	}
+	defer tc.Close()
+	go func() {
+		w := temporal.NewWorker(tc, cfg.Temporal)
+		if err := w.Run(worker.InterruptCh()); err != nil {
+			logger.Error("temporal worker stopped with error", "error", err)
+		}
+	}()
 {{end}}
 
-	e := echo.New()
+	// ---- Composition root: explicit DDD wiring ----
+	bus := eventbus.NewInMemory()
+{{if .Has "postgres"}}
+	userRepo := postgres.NewUserRepository(db)
+{{else}}
+	userRepo := memory.NewUserRepository()
+{{end}}
+{{if .Has "auth"}}
+	hasher := crypto.NewBCryptHasher()
+	tokens := crypto.NewJWTTokenService(cfg.JWT)
+	_ = hasher
+{{end}}
+	userCmd := userapp.NewCommandHandler(userRepo, bus)
+	userQry := userapp.NewQueryHandler(userRepo)
+	userHandler := web.NewUserHandler(userCmd, userQry)
+
+	e := web.NewServer(logger)
 	e.HideBanner = true
 	e.HidePort = true
 	e.Use(echomw.Recover())
 	e.Use(middleware.RequestLogger())
 
-	// Swagger UI — serves the generated OpenAPI docs at /swagger/*
 	e.GET("/swagger/*", echoSwagger.EchoWrapHandler())
+	e.GET("/health", web.Health)
 
-	// Custom HTTP error handler that returns structured JSON for all errors,
-	// including validation failures from the custom binder.
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		if c.Response().Committed {
 			return
 		}
-
 		reqLog := logging.FromContext(c.Request().Context())
 
-		// Validation errors from the custom binder.
 		if ve, ok := err.(*validator.ValidationError); ok {
-			reqLog.Warn("validation failed",
-				"errors", ve.Errors,
-			)
-			if sendErr := c.JSON(ve.HTTPStatus, model.APIError{
-				Error:   ve.Message,
-				Details: ve.Errors,
-			}); sendErr != nil {
-				reqLog.Error("failed to send validation error response", "error", sendErr)
-			}
+			reqLog.Warn("validation failed", "errors", ve.Errors)
+			_ = c.JSON(ve.HTTPStatus, model.APIError{Error: ve.Message, Details: ve.Errors})
 			return
 		}
-
-		// Echo HTTP errors (e.g. from echo.NewHTTPError).
 		if he, ok := err.(*echo.HTTPError); ok {
-			msg, ok := he.Message.(string)
-			if ok {
-				if sendErr := c.JSON(he.Code, model.APIError{Error: msg}); sendErr != nil {
-					reqLog.Error("failed to send error response", "error", sendErr)
-				}
+			if msg, ok := he.Message.(string); ok {
+				_ = c.JSON(he.Code, model.APIError{Error: msg})
 				return
 			}
-			if sendErr := c.JSON(he.Code, echo.Map{"error": he.Message}); sendErr != nil {
-				reqLog.Error("failed to send error response", "error", sendErr)
-			}
+			_ = c.JSON(he.Code, echo.Map{"error": he.Message})
 			return
 		}
-
-		// Fallback for unexpected errors.
 		reqLog.Error("unhandled error", "error", err)
-		if sendErr := c.JSON(http.StatusInternalServerError, model.APIError{
-			Error: "internal server error",
-		}); sendErr != nil {
-			reqLog.Error("failed to send error response", "error", sendErr)
-		}
+		_ = c.JSON(http.StatusInternalServerError, model.APIError{Error: "internal server error"})
 	}
 
-	deps := handler.Deps{
-{{- if .Has "postgres"}}
-		DB: db,
-{{- end}}
-{{- if .Has "auth"}}
-		JWT: jwtService,
-{{- end}}
-	}
-	h := handler.New(deps)
-	h.Register(e)
+	web.Mount(e, web.MountConfig{UserHandler: userHandler})
 {{if .Has "auth"}}
-	authHandler := handler.NewAuthHandler(jwtService)
+	authHandler := web.NewAuthHandler(userCmd, userQry, tokens)
 	authHandler.Register(e)
 {{end}}
 
@@ -164,7 +189,6 @@ func main() {
 	}
 }
 
-// parseLevel converts a config string to a slog.Level. Defaults to Info.
 func parseLevel(s string) slog.Level {
 	switch s {
 	case "debug":
@@ -177,3 +201,5 @@ func parseLevel(s string) slog.Level {
 		return slog.LevelInfo
 	}
 }
+
+var _ = user.ErrUserNotFound

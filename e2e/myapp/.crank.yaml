@@ -1,0 +1,5 @@
+project_name: myapp
+module_path: myapp
+crank_version: dev
+features:
+  - base

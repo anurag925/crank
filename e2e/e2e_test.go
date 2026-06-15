@@ -236,47 +236,47 @@ func TestE2E_Make(t *testing.T) {
 
 			// Every resource has a model (note the multi-word snake_case file name).
 			for _, rel := range []string{
-				"internal/model/order.go",
-				"internal/model/account.go",
-				"internal/model/order_item.go",
-				"internal/model/category.go",
-				"internal/model/ticket.go",
-				"internal/model/cart.go",
+				"internal/domain/order/order.go",
+				"internal/domain/account/account.go",
+				"internal/domain/order_item/order_item.go",
+				"internal/domain/category/category.go",
+				"internal/domain/ticket/ticket.go",
+				"internal/domain/cart/cart.go",
 			} {
 				assertExists(t, projectDir, rel)
 			}
 
 			// Handlers exist and are wired into the central aggregator.
 			for _, rel := range []string{
-				"internal/handler/order.go",
-				"internal/handler/account.go",
-				"internal/handler/order_item.go",
+				"internal/adapters/http/web/order_handler.go",
+				"internal/adapters/http/web/account_handler.go",
+				"internal/adapters/http/web/order_item_handler.go",
 			} {
 				assertExists(t, projectDir, rel)
 			}
-			hub := readFile(t, projectDir, "internal/handler/handler.go")
+			hub := readFile(t, projectDir, "internal/adapters/http/web/routes.go")
 			for _, want := range []string{
-				"h.orders.Register(e)",
-				"h.accounts.Register(e)",
-				"h.orderItems.Register(e)",
+				"cfg.OrderHandler.Register(",
+				"cfg.AccountHandler.Register(",
+				"cfg.OrderItemHandler.Register(",
 			} {
 				if !strings.Contains(hub, want) {
-					t.Errorf("handler.go missing registration %q", want)
+					t.Errorf("routes.go missing registration %q", want)
 				}
 			}
 
 			// --tests produced a companion test for every layer of the two
 			// scaffolds (and only those — the bare generators omit them).
 			for _, rel := range []string{
-				"internal/model/order_test.go",
-				"internal/handler/order_test.go",
-				"internal/model/account_test.go",
-				"internal/handler/account_test.go",
+				"internal/domain/order/order_test.go",
+				"internal/adapters/http/web/order_handler_test.go",
+				"internal/domain/account/account_test.go",
+				"internal/adapters/http/web/account_handler_test.go",
 			} {
 				assertExists(t, projectDir, rel)
 			}
-			assertNotExists(t, projectDir, "internal/handler/order_item_test.go")
-			assertNotExists(t, projectDir, "internal/model/category_test.go")
+			assertNotExists(t, projectDir, "internal/adapters/http/web/order_item_handler_test.go")
+			assertNotExists(t, projectDir, "internal/domain/category/category_test.go")
 
 			// Data-layer placement and migration behavior depend on the DB feature.
 			//
@@ -286,9 +286,9 @@ func TestE2E_Make(t *testing.T) {
 			// time, via the `{{.StorePkg}}` template variable. So we don't
 			// assert which one exists or doesn't — both are always present.
 			if tc.postgres {
-				assertExists(t, projectDir, "internal/repository/order.go")
-				assertExists(t, projectDir, "internal/repository/account.go")
-				assertExists(t, projectDir, "internal/repository/ticket.go")
+				assertExists(t, projectDir, "internal/adapters/persistence/postgres/order_repository.go")
+				assertExists(t, projectDir, "internal/adapters/persistence/postgres/account_repository.go")
+				assertExists(t, projectDir, "internal/adapters/persistence/postgres/ticket_repository.go")
 				// Postgres resources get create-table migrations...
 				for _, name := range []string{"orders", "accounts", "order_items", "categories", "tickets"} {
 					if n := globCount(t, projectDir, "migrations/*_create_"+name+".up.sql"); n != 1 {
@@ -300,9 +300,9 @@ func TestE2E_Make(t *testing.T) {
 					t.Errorf("did not expect a carts migration, found %d", n)
 				}
 			} else {
-				assertExists(t, projectDir, "internal/service/order.go")
-				assertExists(t, projectDir, "internal/service/account.go")
-				assertExists(t, projectDir, "internal/service/cart.go")
+				assertExists(t, projectDir, "internal/adapters/persistence/memory/order_repository.go")
+				assertExists(t, projectDir, "internal/adapters/persistence/memory/account_repository.go")
+				assertExists(t, projectDir, "internal/adapters/persistence/memory/cart_repository.go")
 				// Non-postgres scaffolds never emit create-table migrations.
 				if n := globCount(t, projectDir, "migrations/*_create_*.up.sql"); n != 0 {
 					t.Errorf("did not expect create-table migrations for a non-postgres project, found %d", n)
@@ -334,13 +334,13 @@ func TestE2E_MakeFlags(t *testing.T) {
 
 	// --only generates just the handler, skipping its model/repository deps.
 	runCrank(t, "", "make", "handler", "Coupon", "--only", "--project", dir)
-	assertExists(t, dir, "internal/handler/coupon.go")
-	assertNotExists(t, dir, "internal/model/coupon.go")
-	assertNotExists(t, dir, "internal/repository/coupon.go")
+	assertExists(t, dir, "internal/adapters/http/web/coupon_handler.go")
+	assertNotExists(t, dir, "internal/domain/coupon/coupon.go")
+	assertNotExists(t, dir, "internal/adapters/persistence/postgres/coupon_repository.go")
 
 	// --skip-migration suppresses the create-table migration even with postgres.
 	runCrank(t, "", "make", "handler", "Promo", "code:string", "--skip-migration", "--project", dir)
-	assertExists(t, dir, "internal/repository/promo.go")
+	assertExists(t, dir, "internal/adapters/persistence/postgres/promo_repository.go")
 	if n := globCount(t, dir, "migrations/*_create_promos.up.sql"); n != 0 {
 		t.Errorf("--skip-migration should not create a migration, found %d", n)
 	}
@@ -357,16 +357,16 @@ func TestE2E_MakeFlags(t *testing.T) {
 	// Handler wiring is idempotent across regenerations.
 	runCrank(t, "", "make", "handler", "Review", "--project", dir)
 	runCrank(t, "", "make", "handler", "Review", "--force", "--project", dir)
-	hub := readFile(t, dir, "internal/handler/handler.go")
-	if n := strings.Count(hub, "h.reviews.Register(e)"); n != 1 {
+	hub := readFile(t, dir, "internal/adapters/http/web/routes.go")
+	if n := strings.Count(hub, "cfg.ReviewHandler.Register("); n != 1 {
 		t.Errorf("expected exactly one review registration, got %d:\n%s", n, hub)
 	}
 
 	// Plural and multi-word inputs are normalized to a singular snake_case file.
 	runCrank(t, "", "make", "model", "invoices", "--project", dir)
-	assertExists(t, dir, "internal/model/invoice.go")
+	assertExists(t, dir, "internal/domain/invoice/invoice.go")
 	runCrank(t, "", "make", "model", "OrderLine", "--project", dir)
-	assertExists(t, dir, "internal/model/order_line.go")
+	assertExists(t, dir, "internal/domain/order_line/order_line.go")
 
 	// Error surfaces: unknown kind, missing name, and unknown field type.
 	if out, err := runCrankRaw(t, "", "make", "frobnicate", "Thing", "--project", dir); err == nil {
@@ -391,13 +391,13 @@ func TestE2E_MakeTemporal(t *testing.T) {
 	runCrank(t, "", "make", "workflow", "OrderFulfillment", "order_id:uuid", "--tests", "--project", projectDir)
 	runCrank(t, "", "make", "activity", "ChargeCard", "amount:float", "--tests", "--project", projectDir)
 
-	assertExists(t, projectDir, "internal/workflow/order_fulfillment.go")
-	assertExists(t, projectDir, "internal/workflow/order_fulfillment_test.go")
-	assertExists(t, projectDir, "internal/activity/charge_card.go")
-	assertExists(t, projectDir, "internal/activity/charge_card_test.go")
+	assertExists(t, projectDir, "internal/adapters/temporal/workflow/order_fulfillment.go")
+	assertExists(t, projectDir, "internal/adapters/temporal/workflow/order_fulfillment_test.go")
+	assertExists(t, projectDir, "internal/adapters/temporal/activity/charge_card.go")
+	assertExists(t, projectDir, "internal/adapters/temporal/activity/charge_card_test.go")
 
 	// Both are wired into the worker aggregator (alongside the shipped examples).
-	worker := readFile(t, projectDir, "pkg/temporal/worker.go")
+	worker := readFile(t, projectDir, "internal/adapters/temporal/worker.go")
 	for _, want := range []string{
 		"w.RegisterWorkflow(workflow.GreetingWorkflow)",
 		"w.RegisterWorkflow(workflow.OrderFulfillmentWorkflow)",
@@ -446,8 +446,8 @@ func TestE2E_Add(t *testing.T) {
 	}
 
 	// Verify new feature files were created.
-	assertExists(t, projectDir, "internal/database/postgres.go")
-	assertExists(t, projectDir, "internal/middleware/auth.go")
+	assertExists(t, projectDir, "internal/adapters/persistence/postgres/db.go")
+	assertExists(t, projectDir, "internal/adapters/http/web/middleware/auth.go")
 	assertExists(t, projectDir, "migrations/000001_init.up.sql")
 
 	// Verify config sections were injected via markers.

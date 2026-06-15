@@ -71,10 +71,6 @@ type JWTConfig struct {
 {{if .Has "crypto"}}
 // CryptoConfig holds the encryption secret used by the crypto package.
 // The secret is read from the CRYPTO_SECRET environment variable.
-// Generate a strong secret with: openssl rand -base64 32
-//
-// IMPORTANT: Never commit the real secret. Use .env for local development
-// and your platform's secret manager in production.
 type CryptoConfig struct {
 	Secret string `mapstructure:"secret"`
 }

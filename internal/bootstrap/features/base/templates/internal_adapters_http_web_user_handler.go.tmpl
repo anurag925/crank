@@ -1,0 +1,172 @@
+package web
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+
+	appuser "{{.ModulePath}}/internal/application/user"
+	"{{.ModulePath}}/internal/domain/user"
+	"{{.ModulePath}}/internal/model"
+)
+
+// userDTO is the input/output DTO for user HTTP endpoints. The HTTP layer
+// owns validation tags; the domain aggregate stays tag-free.
+type userDTO struct {
+	ID    string `json:"id"    validate:"required"`
+	Name  string `json:"name"  validate:"required,min=2,max=100"`
+	Email string `json:"email" validate:"required,email"`
+}
+
+// toCreateCommand converts the DTO to an application Create command.
+func (d userDTO) toCreateCommand() appuser.CreateUserCommand {
+	return appuser.CreateUserCommand{ID: d.ID, Name: d.Name, Email: d.Email}
+}
+
+// toUpdateCommand converts the DTO to an application Update command.
+func (d userDTO) toUpdateCommand() appuser.UpdateUserCommand {
+	return appuser.UpdateUserCommand{ID: d.ID, Name: d.Name, Email: d.Email}
+}
+
+func toUserDTO(u *user.User) userDTO {
+	return userDTO{ID: u.ID().String(), Name: u.Name(), Email: u.Email()}
+}
+
+// UserHandler exposes HTTP endpoints for users. It depends only on the
+// application-layer command/query handlers; the domain package is reachable
+// only through their typed return values.
+type UserHandler struct {
+	cmd *appuser.CommandHandler
+	qry *appuser.QueryHandler
+}
+
+// NewUserHandler builds a UserHandler wired to the given application services.
+func NewUserHandler(cmd *appuser.CommandHandler, qry *appuser.QueryHandler) *UserHandler {
+	return &UserHandler{cmd: cmd, qry: qry}
+}
+
+// Register attaches user routes to the supplied Echo group.
+func (h *UserHandler) Register(g *echo.Group) {
+	g.POST("", h.Create)
+	g.GET("/:id", h.Get)
+	g.GET("", h.List)
+	g.PUT("/:id", h.Update)
+	g.DELETE("/:id", h.Delete)
+}
+
+// Create godoc
+//
+//	@Summary      Create a user
+//	@Description  Creates a new user.
+//	@Tags         users
+//	@Accept       json
+//	@Produce      json
+//	@Param        user  body      userDTO  true  "User payload"
+//	@Success      201   {object}  userDTO
+//	@Failure      422   {object}  model.APIError
+//	@Router       /users [post]
+func (h *UserHandler) Create(c echo.Context) error {
+	var in userDTO
+	if err := c.Bind(&in); err != nil {
+		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+	}
+	out, err := h.cmd.HandleCreate(c.Request().Context(), in.toCreateCommand())
+	if errors.Is(err, user.ErrUserNotFound) {
+		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusUnprocessableEntity, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusCreated, toUserDTO(out))
+}
+
+// Get godoc
+//
+//	@Summary      Get a user
+//	@Description  Returns a single user by ID.
+//	@Tags         users
+//	@Produce      json
+//	@Param        id   path      string  true  "User ID"
+//	@Success      200  {object}  userDTO
+//	@Failure      404  {object}  model.APIError
+//	@Router       /users/{id} [get]
+func (h *UserHandler) Get(c echo.Context) error {
+	out, err := h.qry.HandleGet(c.Request().Context(), appuser.GetUserQuery{ID: c.Param("id")})
+	if errors.Is(err, user.ErrUserNotFound) {
+		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusOK, toUserDTO(out))
+}
+
+// List godoc
+//
+//	@Summary      List users
+//	@Description  Returns all users.
+//	@Tags         users
+//	@Produce      json
+//	@Success      200  {array}   userDTO
+//	@Router       /users [get]
+func (h *UserHandler) List(c echo.Context) error {
+	items, err := h.qry.HandleList(c.Request().Context(), appuser.ListUsersQuery{})
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+	}
+	out := make([]userDTO, 0, len(items))
+	for _, u := range items {
+		out = append(out, toUserDTO(u))
+	}
+	return c.JSON(http.StatusOK, out)
+}
+
+// Update godoc
+//
+//	@Summary      Update a user
+//	@Description  Updates an existing user by ID.
+//	@Tags         users
+//	@Accept       json
+//	@Produce      json
+//	@Param        id   path      string  true  "User ID"
+//	@Param        user body      userDTO true  "User payload"
+//	@Success      200  {object}  userDTO
+//	@Failure      404  {object}  model.APIError
+//	@Router       /users/{id} [put]
+func (h *UserHandler) Update(c echo.Context) error {
+	var in userDTO
+	if err := c.Bind(&in); err != nil {
+		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+	}
+	in.ID = c.Param("id")
+	out, err := h.cmd.HandleUpdate(c.Request().Context(), in.toUpdateCommand())
+	if errors.Is(err, user.ErrUserNotFound) {
+		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusUnprocessableEntity, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusOK, toUserDTO(out))
+}
+
+// Delete godoc
+//
+//	@Summary      Delete a user
+//	@Description  Deletes a user by ID.
+//	@Tags         users
+//	@Produce      json
+//	@Param        id   path      string  true  "User ID"
+//	@Success      204
+//	@Failure      404  {object}  model.APIError
+//	@Router       /users/{id} [delete]
+func (h *UserHandler) Delete(c echo.Context) error {
+	err := h.cmd.HandleDelete(c.Request().Context(), appuser.DeleteUserCommand{ID: c.Param("id")})
+	if errors.Is(err, user.ErrUserNotFound) {
+		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
+	}
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
+}

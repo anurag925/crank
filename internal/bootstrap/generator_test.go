@@ -176,7 +176,7 @@ func TestAdd_AuthToBase(t *testing.T) {
 	}
 
 	// auth files should NOT exist yet
-	if _, err := os.Stat(filepath.Join(result.ProjectDir, "internal/middleware/auth.go")); err == nil {
+	if _, err := os.Stat(filepath.Join(result.ProjectDir, "internal/adapters/http/web/middleware/auth.go")); err == nil {
 		t.Error("auth middleware should not exist before Add")
 	}
 
@@ -186,7 +186,11 @@ func TestAdd_AuthToBase(t *testing.T) {
 	}
 
 	// auth files should now exist
-	for _, f := range []string{"internal/middleware/auth.go", "internal/service/auth.go", "internal/handler/auth.go"} {
+	for _, f := range []string{
+		"internal/adapters/http/web/middleware/auth.go",
+		"internal/adapters/crypto/bcrypt_hasher.go",
+		"internal/adapters/http/web/auth_handler.go",
+	} {
 		if _, err := os.Stat(filepath.Join(result2.ProjectDir, f)); os.IsNotExist(err) {
 			t.Errorf("expected %s after Add auth", f)
 		}
@@ -215,7 +219,11 @@ func TestAdd_PostgresToBase(t *testing.T) {
 	}
 
 	// postgres files should exist
-	for _, f := range []string{"internal/database/postgres.go", "internal/database/migrate.go", "migrations/000001_init.up.sql"} {
+	for _, f := range []string{
+		"internal/adapters/persistence/postgres/db.go",
+		"internal/adapters/persistence/postgres/migrate.go",
+		"migrations/000001_init.up.sql",
+	} {
 		if _, err := os.Stat(filepath.Join(result2.ProjectDir, f)); os.IsNotExist(err) {
 			t.Errorf("expected %s after Add postgres", f)
 		}

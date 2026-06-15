@@ -1,9 +1,11 @@
 // Package scaffold implements crank's in-project code generators (the `crank
 // make` family). Given a resource name and optional field specs it renders
-// layered Go code — models, repositories, services and HTTP handlers — into an
-// existing crank-generated project, mirroring the conventions of the base and
-// postgres features. Generated handlers are automatically wired into the
-// project's Echo router so the resulting endpoints work out of the box.
+// Domain-Driven Go code — domain aggregates + value objects + events +
+// repository ports, application command/query handlers, persistence adapters
+// (postgres + in-memory) and an HTTP handler — into an existing crank-generated
+// project. Generated handlers are automatically wired into the project's
+// `internal/adapters/http/web/routes.go` so the resulting endpoints work out
+// of the box.
 package scaffold
 
 import (
@@ -60,17 +62,21 @@ type Result struct {
 	WireHint string
 }
 
-// tmplData is the value passed to every template during rendering.
+// tmplData is the value passed to every template during rendering. It carries
+// the per-run context (module path, enabled features, the resource) plus a
+// handful of derived flags templates consult to decide which sections to emit.
 type tmplData struct {
-	Module       string
-	Postgres     bool
-	Auth         bool
-	R            Resource
-	Fields       []Field
-	HasTime      bool
-	StorePkg     string // "repository" | "service"
-	StoreType    string // "Repository" | "Service"
-	StoreCtorArg string // "deps.DB" | ""
+	Module   string
+	Postgres bool
+	Auth     bool
+	Temporal bool
+	R        Resource
+	Fields   []Field
+	HasTime  bool
+	HasUUID  bool
+	// IDField is the first uuid-typed field, if any. Templates use it to wire
+	// the aggregate's primary identifier. It is nil when no field is uuid.
+	IDField *Field
 }
 
 // artifact is a single file to render and write.
@@ -83,10 +89,10 @@ type artifact struct {
 }
 
 // Generate runs a code generator according to opts. It reads the project's
-// manifest to decide between the postgres (Bun repository + migration) and
-// in-memory (service) variants, renders the relevant templates, writes the
-// files and — for handler/scaffold kinds — wires the new handler into the Echo
-// router.
+// manifest to decide between the postgres (Bun-backed adapter + migration)
+// and in-memory (always shipped) variants, renders the relevant templates,
+// writes the files and — for handler/scaffold kinds — wires the new handler
+// into the Echo router through `internal/adapters/http/web/routes.go`.
 func Generate(opts Options) (*Result, error) {
 	if opts.Name == "" {
 		return nil, fmt.Errorf("a resource name is required\n\nUsage: crank make %s <Name> [field:type ...]\n\nExample: crank make %s Order", opts.Kind, opts.Kind)
@@ -101,6 +107,17 @@ func Generate(opts Options) (*Result, error) {
 	if err != nil {
 		return nil, err
 	}
+	// When the user invokes `crank make handler|repository|service Foo`
+	// against a resource whose domain aggregate already exists, we
+	// reuse the existing field list so the generated handler/service/
+	// persistence signatures line up with the domain. Without this, the
+	// generated code calls e.g. `receipt.NewReceipt(id)` while the
+	// domain expects `NewReceipt(id, amount)`, breaking the build.
+	if len(fields) == 0 && opts.Kind != KindModel {
+		if inferred, ferr := InferFieldsFromDomain(opts.ProjectDir, res); ferr == nil && len(inferred) > 0 {
+			fields = inferred
+		}
+	}
 
 	info, err := bootstrap.LoadProjectInfo(opts.ProjectDir)
 	if err != nil {
@@ -113,18 +130,17 @@ func Generate(opts Options) (*Result, error) {
 		}
 	}
 
+	idField := uuidFieldOrNil(fields)
 	data := tmplData{
 		Module:   info.ModulePath,
 		Postgres: info.Has("postgres"),
 		Auth:     info.Has("auth"),
+		Temporal: info.Has("temporal"),
 		R:        res,
 		Fields:   fields,
 		HasTime:  hasTimeField(fields),
-	}
-	if data.Postgres {
-		data.StorePkg, data.StoreType, data.StoreCtorArg = "repository", "Repository", "deps.DB"
-	} else {
-		data.StorePkg, data.StoreType, data.StoreCtorArg = "service", "Service", ""
+		HasUUID:  idField != nil,
+		IDField:  idField,
 	}
 
 	plan, wantMigration, wire, err := buildPlan(opts, data)
@@ -198,57 +214,108 @@ const (
 // buildPlan turns the requested kind into the concrete set of artifacts plus
 // flags for migration generation and the aggregator (if any) that generated
 // code must be wired into.
+//
+// The mapping mirrors the spec:
+//
+//	KindModel      → domain files only (aggregate, value objects, events, port, errors)
+//	KindRepository → persistence adapters only (port is always re-emitted)
+//	KindService    → application command/query files only
+//	KindHandler    → HTTP adapter only (+ wire into routes.go)
+//	KindScaffold   → everything above
+//	KindWorkflow   → temporal workflow under internal/adapters/temporal/workflow/
+//	KindActivity   → temporal activity under internal/adapters/temporal/activity/
 func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool, wire string, err error) {
-	model := artifact{out: "internal/model/" + data.R.Snake + ".go", tmpl: "model.go.tmpl", testTmpl: "model_test.go.tmpl", goFile: true}
-	repo := artifact{out: "internal/repository/" + data.R.Snake + ".go", tmpl: "repository.go.tmpl", testTmpl: "repository_test.go.tmpl", goFile: true}
-	svc := artifact{out: "internal/service/" + data.R.Snake + ".go", tmpl: "service.go.tmpl", testTmpl: "service_test.go.tmpl", goFile: true}
-	handler := artifact{out: "internal/handler/" + data.R.Snake + ".go", tmpl: "handler.go.tmpl", testTmpl: "handler_test.go.tmpl", goFile: true}
+	r := data.R
+
+	// Domain files. Always emitted; the test companion is also always available
+	// when --tests is set. The templates are parameterised by Resource, so
+	// the same file produces the right output for any resource name.
+	aggregate := artifact{out: r.DDDDomainPath() + "/" + r.Snake + ".go", tmpl: "domain_aggregate.go.tmpl", testTmpl: "domain_aggregate_test.go.tmpl", goFile: true}
+	idVO := artifact{out: r.DDDDomainPath() + "/" + r.Snake + "_id.go", tmpl: "domain_id.go.tmpl", testTmpl: "domain_id_test.go.tmpl", goFile: true}
+	events := artifact{out: r.DDDDomainPath() + "/events.go", tmpl: "domain_events.go.tmpl", testTmpl: "domain_events_test.go.tmpl", goFile: true}
+	derrors := artifact{out: r.DDDDomainPath() + "/errors.go", tmpl: "domain_errors.go.tmpl", goFile: true}
+	repoPort := artifact{out: r.DDDDomainPath() + "/repository.go", tmpl: "domain_repository.go.tmpl", goFile: true}
+
+	// Application files.
+	commands := artifact{out: r.DDDAppPath() + "/commands.go", tmpl: "application_commands.go.tmpl", testTmpl: "application_commands_test.go.tmpl", goFile: true}
+	cmdHandler := artifact{out: r.DDDAppPath() + "/command_handler.go", tmpl: "application_command_handler.go.tmpl", testTmpl: "application_command_handler_test.go.tmpl", goFile: true}
+	queries := artifact{out: r.DDDAppPath() + "/queries.go", tmpl: "application_queries.go.tmpl", testTmpl: "application_queries_test.go.tmpl", goFile: true}
+	qryHandler := artifact{out: r.DDDAppPath() + "/query_handler.go", tmpl: "application_query_handler.go.tmpl", testTmpl: "application_query_handler_test.go.tmpl", goFile: true}
+
+	// Persistence adapters.
+	pgAdapter := artifact{out: r.DDDPostgresAdapterPath(), tmpl: "adapter_persistence_postgres_repository.go.tmpl", testTmpl: "adapter_persistence_postgres_repository_test.go.tmpl", goFile: true}
+	memAdapter := artifact{out: r.DDDMemoryAdapterPath(), tmpl: "adapter_persistence_memory_repository.go.tmpl", testTmpl: "adapter_persistence_memory_repository_test.go.tmpl", goFile: true}
+
+	// HTTP adapter.
+	httpAdapter := artifact{out: r.DDDHTTPHandlerPath(), tmpl: "adapter_http_handler.go.tmpl", testTmpl: "adapter_http_handler_test.go.tmpl", goFile: true}
 
 	migration := data.Postgres && !opts.SkipMigration
 
 	switch opts.Kind {
 	case KindModel:
-		model.primary = true
-		plan = []artifact{model}
+		aggregate.primary = true
+		plan = []artifact{aggregate, idVO, events, derrors, repoPort}
 		wantMigration = migration
 
 	case KindRepository:
-		repo.primary = true
-		plan = []artifact{repo}
+		// Postgres adapter is primary when postgres is enabled, otherwise the
+		// in-memory adapter is the primary artifact.
+		if data.Postgres {
+			pgAdapter.primary = true
+			plan = []artifact{pgAdapter, memAdapter, repoPort}
+		} else {
+			memAdapter.primary = true
+			plan = []artifact{memAdapter, repoPort}
+		}
 		if !opts.Only {
-			plan = append(plan, model)
+			plan = append(plan, aggregate, idVO, events, derrors)
 		}
 		wantMigration = migration
 
 	case KindService:
-		svc.primary = true
-		plan = []artifact{svc}
+		commands.primary = true
+		plan = []artifact{commands, cmdHandler, queries, qryHandler, memAdapter}
 		if !opts.Only {
-			plan = append(plan, model)
+			plan = append(plan, aggregate, idVO, events, derrors, repoPort)
 		}
-		// In-memory services do not need a migration.
+		// Application layer has no migration of its own.
 		wantMigration = false
 
-	case KindHandler, KindScaffold:
-		// scaffold always pulls in the full stack.
-		only := opts.Only && opts.Kind == KindHandler
-		handler.primary = true
-		plan = []artifact{handler}
+	case KindHandler:
+		// HTTP adapter is always primary; the spec says --only produces just it.
+		only := opts.Only
+		httpAdapter.primary = true
+		plan = []artifact{httpAdapter}
 		if !only {
-			plan = append(plan, model)
-			plan = append(plan, repo)
-			plan = append(plan, svc)
+			plan = append(plan, aggregate, idVO, events, derrors, repoPort,
+				commands, cmdHandler, queries, qryHandler,
+				memAdapter)
+			if data.Postgres {
+				plan = append(plan, pgAdapter)
+			}
+		}
+		wantMigration = migration
+		wire = wireHandlerTarget
+
+	case KindScaffold:
+		httpAdapter.primary = true
+		plan = []artifact{httpAdapter,
+			aggregate, idVO, events, derrors, repoPort,
+			commands, cmdHandler, queries, qryHandler,
+			memAdapter}
+		if data.Postgres {
+			plan = append(plan, pgAdapter)
 		}
 		wantMigration = migration
 		wire = wireHandlerTarget
 
 	case KindWorkflow:
-		workflow := artifact{out: "internal/workflow/" + data.R.Snake + ".go", tmpl: "workflow.go.tmpl", testTmpl: "workflow_test.go.tmpl", goFile: true, primary: true}
-		plan = []artifact{workflow}
+		wf := artifact{out: r.DDDWorkflowPath(), tmpl: "workflow.go.tmpl", testTmpl: "workflow_test.go.tmpl", goFile: true, primary: true}
+		plan = []artifact{wf}
 		wire = wireWorkflowTarget
 
 	case KindActivity:
-		act := artifact{out: "internal/activity/" + data.R.Snake + ".go", tmpl: "activity.go.tmpl", testTmpl: "activity_test.go.tmpl", goFile: true, primary: true}
+		act := artifact{out: r.DDDActivityPath(), tmpl: "activity.go.tmpl", testTmpl: "activity_test.go.tmpl", goFile: true, primary: true}
 		plan = []artifact{act}
 		wire = wireActivityTarget
 
@@ -320,9 +387,35 @@ func renderTemplate(name string, data tmplData) (string, error) {
 	return sb.String(), nil
 }
 
+// TmplDataFor builds a tmplData value for a single scaffold run. It is
+// exposed so that external callers (e.g. the smoke test under cmd/_smoke)
+// can drive the same template-rendering pipeline that Generate uses.
+func TmplDataFor(module string, postgres, auth bool, r Resource, fields []Field) tmplData {
+	idField := uuidFieldOrNil(fields)
+	return tmplData{
+		Module:   module,
+		Postgres: postgres,
+		Auth:     auth,
+		R:        r,
+		Fields:   fields,
+		HasTime:  hasTimeField(fields),
+		HasUUID:  idField != nil,
+		IDField:  idField,
+	}
+}
+
+// RenderTemplateForTest renders a named scaffold template against the given
+// tmplData without any post-processing. It is intended for diagnostic use.
+func RenderTemplateForTest(name string, data tmplData) (string, error) {
+	return renderTemplate(name, data)
+}
+
 // generateMigration writes a timestamped create-table migration pair for the
 // resource. It is a no-op (returns the files as skipped) when a create
 // migration for the same table already exists.
+//
+// Columns mirror the postgres row DTO emitted by the adapter template:
+// text for primitive strings, UUID for the typed identifier.
 func generateMigration(projectDir string, data tmplData) (created, skipped []string, err error) {
 	dir := filepath.Join(projectDir, "migrations")
 	name := "create_" + data.R.SnakePlural

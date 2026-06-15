@@ -76,7 +76,7 @@ func TestE2E_Cross_AddThenMakeScaffold_Postgres(t *testing.T) {
 	dir := scaffoldBase(t, "cross_add_make_pg")
 	runCrank(t, "", "add", "postgres", "--project", dir)
 	runCrank(t, "", "make", "scaffold", "Note", "body:text", "--project", dir)
-	assertExists(t, dir, "internal/repository/note.go") // postgres → repo
+	assertExists(t, dir, "internal/adapters/persistence/postgres/note_repository.go") // postgres → repo
 	// Skip compileProject: see TestE2E_Cross_AddThenMakeScaffold_NoPostgres.
 }
 
@@ -88,22 +88,22 @@ func TestE2E_Cross_AddThenMakeScaffold_NoPostgres(t *testing.T) {
 	dir := scaffoldBase(t, "cross_add_make_nopg")
 	runCrank(t, "", "add", "crypto", "--project", dir) // unrelated feature
 	runCrank(t, "", "make", "scaffold", "Note", "body:text", "--project", dir)
-	assertExists(t, dir, "internal/service/note.go") // no postgres → service
+	assertExists(t, dir, "internal/adapters/persistence/memory/note_repository.go") // no postgres → service
 	compileProject(t, dir)
 }
 
 // TestE2E_Cross_MakeAfterAdd_Auth verifies that adding auth THEN making
 // a handler doesn't break the JWT middleware wiring. The auth feature
-// patches handler/handler.go in a way that's easy to break with a
+// patches the routes aggregator in a way that's easy to break with a
 // subsequent handler addition.
 func TestE2E_Cross_MakeAfterAdd_Auth(t *testing.T) {
 	dir := scaffoldBase(t, "cross_make_after_auth")
 	runCrank(t, "", "add", "auth", "--project", dir)
 	runCrank(t, "", "make", "handler", "Profile", "bio:text", "--project", dir)
-	assertExists(t, dir, "internal/handler/profile.go")
-	hub := readFile(t, dir, "internal/handler/handler.go")
-	if !strings.Contains(hub, "h.profiles.Register(e)") {
-		t.Errorf("handler.go missing profiles registration after auth+make:\n%s", hub)
+	assertExists(t, dir, "internal/adapters/http/web/profile_handler.go")
+	hub := readFile(t, dir, "internal/adapters/http/web/routes.go")
+	if !strings.Contains(hub, "cfg.ProfileHandler.Register(") {
+		t.Errorf("routes.go missing profiles registration after auth+make:\n%s", hub)
 	}
 	compileProject(t, dir)
 }
@@ -116,7 +116,7 @@ func TestE2E_Cross_MakeWorkflowAfterAdd_Temporal(t *testing.T) {
 	dir := scaffoldBase(t, "cross_make_after_temporal")
 	runCrank(t, "", "add", "temporal", "--project", dir)
 	runCrank(t, "", "make", "workflow", "OrderFlow", "order_id:uuid", "--project", dir)
-	worker := readFile(t, dir, "pkg/temporal/worker.go")
+	worker := readFile(t, dir, "internal/adapters/temporal/worker.go")
 	if !strings.Contains(worker, "workflow.OrderFlowWorkflow") {
 		t.Errorf("worker.go missing OrderFlowWorkflow after add+make:\n%s", worker)
 	}
@@ -129,7 +129,7 @@ func TestE2E_Cross_MakeActivityAfterAdd_Temporal(t *testing.T) {
 	dir := scaffoldBase(t, "cross_make_after_temporal_act")
 	runCrank(t, "", "add", "temporal", "--project", dir)
 	runCrank(t, "", "make", "activity", "NotifyCustomer", "email:email", "--project", dir)
-	worker := readFile(t, dir, "pkg/temporal/worker.go")
+	worker := readFile(t, dir, "internal/adapters/temporal/worker.go")
 	if !strings.Contains(worker, "activity.NotifyCustomerActivity") {
 		t.Errorf("worker.go missing NotifyCustomerActivity after add+make:\n%s", worker)
 	}
@@ -155,16 +155,17 @@ func TestE2E_Cross_AddSameFeatureViaMakeAndAdd(t *testing.T) {
 }
 
 // TestE2E_Cross_MixedFieldTypes_AllValidatorsPresent verifies that
-// every validator tag in the generated model corresponds to a registered
+// every validator tag in the generated DTO corresponds to a registered
 // validator in the validator package. (E.g. "uuid" maps to
-// validator/v10's built-in "uuid" tag.)
+// validator/v10's built-in "uuid" tag.) The DDD refactor moved
+// validation tags off the domain aggregate and onto the HTTP DTO.
 func TestE2E_Cross_MixedFieldTypes_AllValidatorsPresent(t *testing.T) {
 	dir := scaffoldBase(t, "cross_validators")
-	runCrank(t, "", "make", "model", "Mixed", "name:string", "email:email", "token:uuid", "--project", dir)
-	model := readFile(t, dir, "internal/model/mixed.go")
+	runCrank(t, "", "make", "handler", "Mixed", "name:string", "email:email", "token:uuid", "--project", dir)
+	dto := readFile(t, dir, "internal/adapters/http/web/mixed_handler.go")
 	for _, want := range []string{`validate:"required"`, `validate:"required,email"`, `validate:"required,uuid"`} {
-		if !strings.Contains(model, want) {
-			t.Errorf("model.go missing %q:\n%s", want, model)
+		if !strings.Contains(dto, want) {
+			t.Errorf("DTO missing %q:\n%s", want, dto)
 		}
 	}
 }

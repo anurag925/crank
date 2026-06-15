@@ -5,6 +5,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -56,6 +57,25 @@ func assertParses(t *testing.T, dir, rel string) {
 	}
 }
 
+// dddHandlerLayers is the set of files the KindHandler / KindScaffold
+// generators produce. They live under the project's DDD-shaped directory
+// tree (domain, application, adapters/persistence, adapters/http/web).
+func dddHandlerLayers() []string {
+	return []string{
+		"internal/domain/order/order.go",
+		"internal/domain/order/events.go",
+		"internal/domain/order/errors.go",
+		"internal/domain/order/repository.go",
+		"internal/application/order/commands.go",
+		"internal/application/order/command_handler.go",
+		"internal/application/order/queries.go",
+		"internal/application/order/query_handler.go",
+		"internal/adapters/persistence/memory/order_repository.go",
+		"internal/adapters/persistence/postgres/order_repository.go",
+		"internal/adapters/http/web/order_handler.go",
+	}
+}
+
 func TestGenerateHandlerPostgres(t *testing.T) {
 	dir := newProject(t, []string{"postgres"})
 
@@ -69,37 +89,49 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 		t.Fatalf("Generate handler: %v", err)
 	}
 
-	for _, rel := range []string{
-		"internal/model/order.go",
-		"internal/repository/order.go",
-		"internal/service/order.go",
-		"internal/handler/order.go",
-	} {
+	for _, rel := range dddHandlerLayers() {
 		if !exists(dir, rel) {
 			t.Errorf("expected %s to be generated", rel)
+			continue
 		}
 		assertParses(t, dir, rel)
 	}
 
-	// Model carries Bun tags and the supplied fields.
-	model := read(t, dir, "internal/model/order.go")
-	for _, want := range []string{"bun.BaseModel", `bun:"table:orders`, `bun:"customer,notnull"`, `bun:"total,notnull"`} {
-		if !strings.Contains(model, want) {
-			t.Errorf("model missing %q:\n%s", want, model)
+	// Domain aggregate is plain Go — no JSON/DB/validation tags.
+	aggregate := read(t, dir, "internal/domain/order/order.go")
+	for _, banned := range []string{`json:"`, `bun:"`, `validate:"`} {
+		if strings.Contains(aggregate, banned) {
+			t.Errorf("domain aggregate must not carry %q tags:\n%s", banned, aggregate)
 		}
 	}
+	if !strings.Contains(aggregate, "func NewOrder(") {
+		t.Errorf("aggregate missing NewOrder constructor")
+	}
 
-	// Repository is Bun-backed with full CRUD.
-	repo := read(t, dir, "internal/repository/order.go")
-	for _, want := range []string{"func NewOrderRepository(db *bun.DB)", "func (o *OrderRepository) Update", "func (o *OrderRepository) Delete"} {
+	// Postgres adapter has its own row DTO and maps sql.ErrNoRows to the
+	// domain sentinel.
+	repo := read(t, dir, "internal/adapters/persistence/postgres/order_repository.go")
+	for _, want := range []string{
+		"type orderRow struct",
+		"func NewOrderRepository(db *bun.DB)",
+		"func (r *OrderRepository) Save(",
+		"func (r *OrderRepository) Delete(",
+		"ErrOrderNotFound",
+	} {
 		if !strings.Contains(repo, want) {
-			t.Errorf("repository missing %q", want)
+			t.Errorf("postgres repository missing %q", want)
 		}
 	}
 
-	// Handler exposes the REST routes.
-	handler := read(t, dir, "internal/handler/order.go")
-	for _, want := range []string{`e.Group("/orders")`, "repository.NewOrderRepository(deps.DB)", "repository.ErrOrderNotFound"} {
+	// HTTP handler depends only on the application layer and exposes a
+	// Register method.
+	handler := read(t, dir, "internal/adapters/http/web/order_handler.go")
+	for _, want := range []string{
+		"func NewOrderHandler(",
+		"func (h *OrderHandler) Register(g *echo.Group)",
+		"order.ErrOrderNotFound",
+		"application/order",
+	} {
 		if !strings.Contains(handler, want) {
 			t.Errorf("handler missing %q", want)
 		}
@@ -118,17 +150,17 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 		t.Errorf("migration missing customer column:\n%s", up)
 	}
 
-	// The handler was wired into the central aggregator.
+	// The handler was wired into the central routes aggregator.
 	if !res.Wired {
 		t.Errorf("expected handler to be wired, hint=%q", res.WireHint)
 	}
-	hub := read(t, dir, "internal/handler/handler.go")
-	for _, want := range []string{"orders *OrderHandler", "orders: NewOrderHandler(deps)", "h.orders.Register(e)"} {
+	hub := read(t, dir, "internal/adapters/http/web/routes.go")
+	for _, want := range []string{"*OrderHandler", `e.Group("/orders")`, "cfg.OrderHandler.Register("} {
 		if !strings.Contains(hub, want) {
-			t.Errorf("handler.go not wired with %q:\n%s", want, hub)
+			t.Errorf("routes.go not wired with %q:\n%s", want, hub)
 		}
 	}
-	assertParses(t, dir, "internal/handler/handler.go")
+	assertParses(t, dir, "internal/adapters/http/web/routes.go")
 }
 
 func TestGenerateHandlerInMemory(t *testing.T) {
@@ -143,12 +175,20 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 		t.Fatalf("Generate handler: %v", err)
 	}
 
-	// Both repository and service are generated regardless of postgres.
-	if !exists(dir, "internal/service/ticket.go") {
-		t.Error("expected service/ticket.go")
+	// All DDD layers are generated, but the persistence adapter is the
+	// in-memory one (no postgres adapter is produced without the feature).
+	for _, rel := range []string{
+		"internal/domain/ticket/ticket.go",
+		"internal/application/ticket/command_handler.go",
+		"internal/adapters/persistence/memory/ticket_repository.go",
+		"internal/adapters/http/web/ticket_handler.go",
+	} {
+		if !exists(dir, rel) {
+			t.Errorf("expected %s", rel)
+		}
 	}
-	if !exists(dir, "internal/repository/ticket.go") {
-		t.Error("expected repository/ticket.go")
+	if exists(dir, "internal/adapters/persistence/postgres/ticket_repository.go") {
+		t.Error("did not expect a postgres adapter without the postgres feature")
 	}
 	// No migration without postgres.
 	ups, _ := filepath.Glob(filepath.Join(dir, "migrations", "*_create_tickets.up.sql"))
@@ -156,12 +196,8 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 		t.Errorf("did not expect a migration for a non-postgres project, found %d", len(ups))
 	}
 
-	handler := read(t, dir, "internal/handler/ticket.go")
-	if !strings.Contains(handler, "service.NewTicketService()") {
-		t.Errorf("handler should use the service constructor:\n%s", handler)
-	}
-	assertParses(t, dir, "internal/handler/ticket.go")
-	assertParses(t, dir, "internal/service/ticket.go")
+	// In-memory repository is produced regardless of postgres.
+	assertParses(t, dir, "internal/adapters/persistence/memory/ticket_repository.go")
 
 	if !res.Wired {
 		t.Errorf("expected wiring, hint=%q", res.WireHint)
@@ -180,11 +216,14 @@ func TestGenerateModelOnly(t *testing.T) {
 		t.Fatalf("Generate model: %v", err)
 	}
 
-	if !exists(dir, "internal/model/tag.go") {
-		t.Error("expected model/tag.go")
+	// Model kind emits the domain layer (aggregate, events, errors, port)
+	// and nothing else.
+	if !exists(dir, "internal/domain/tag/tag.go") {
+		t.Error("expected domain/tag/tag.go")
 	}
-	if exists(dir, "internal/repository/tag.go") || exists(dir, "internal/handler/tag.go") {
-		t.Error("model generation should not produce repository or handler")
+	if exists(dir, "internal/adapters/persistence/memory/tag_repository.go") ||
+		exists(dir, "internal/adapters/http/web/tag_handler.go") {
+		t.Error("model generation should not produce adapters")
 	}
 }
 
@@ -201,11 +240,12 @@ func TestHandlerOnlySkipsDependencies(t *testing.T) {
 		t.Fatalf("Generate handler --only: %v", err)
 	}
 
-	if !exists(dir, "internal/handler/coupon.go") {
-		t.Error("expected handler/coupon.go")
+	if !exists(dir, "internal/adapters/http/web/coupon_handler.go") {
+		t.Error("expected adapter/http/web/coupon_handler.go")
 	}
-	if exists(dir, "internal/model/coupon.go") || exists(dir, "internal/repository/coupon.go") || exists(dir, "internal/service/coupon.go") {
-		t.Error("--only should not generate model, repository or service")
+	if exists(dir, "internal/domain/coupon/coupon.go") ||
+		exists(dir, "internal/adapters/persistence/memory/coupon_repository.go") {
+		t.Error("--only should not generate domain or persistence")
 	}
 }
 
@@ -240,8 +280,8 @@ func TestWiringIsIdempotent(t *testing.T) {
 		t.Fatalf("regenerate: %v", err)
 	}
 
-	hub := read(t, dir, "internal/handler/handler.go")
-	if n := strings.Count(hub, "h.reviews.Register(e)"); n != 1 {
+	hub := read(t, dir, "internal/adapters/http/web/routes.go")
+	if n := strings.Count(hub, "cfg.ReviewHandler.Register("); n != 1 {
 		t.Errorf("expected exactly one review registration, got %d:\n%s", n, hub)
 	}
 }
@@ -254,7 +294,6 @@ func TestGenerateWithTests(t *testing.T) {
 		{"postgres", []string{"postgres"}},
 		{"in_memory", nil},
 	} {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			dir := newProject(t, tc.features)
 
@@ -271,10 +310,17 @@ func TestGenerateWithTests(t *testing.T) {
 
 			// Every generated layer gets a syntactically valid test file.
 			want := []string{
-				"internal/model/order_test.go",
-				"internal/repository/order_test.go",
-				"internal/service/order_test.go",
-				"internal/handler/order_test.go",
+				"internal/domain/order/order_test.go",
+				"internal/domain/order/events_test.go",
+				"internal/application/order/commands_test.go",
+				"internal/application/order/command_handler_test.go",
+				"internal/application/order/queries_test.go",
+				"internal/application/order/query_handler_test.go",
+				"internal/adapters/persistence/memory/order_repository_test.go",
+				"internal/adapters/http/web/order_handler_test.go",
+			}
+			if tc.features != nil {
+				want = append(want, "internal/adapters/persistence/postgres/order_repository_test.go")
 			}
 			for _, rel := range want {
 				if !exists(dir, rel) {
@@ -287,10 +333,9 @@ func TestGenerateWithTests(t *testing.T) {
 				}
 			}
 
-			// The time field must be imported and used by the sample helper in the
-			// in-memory handler test (postgres handler tests are route-only).
+			// The time field must be exercised by the in-memory handler test.
 			if tc.features == nil {
-				handlerTest := read(t, dir, "internal/handler/order_test.go")
+				handlerTest := read(t, dir, "internal/adapters/http/web/order_handler_test.go")
 				if !strings.Contains(handlerTest, "time.Now()") {
 					t.Errorf("expected time.Now() sample in handler test:\n%s", handlerTest)
 				}
@@ -309,16 +354,11 @@ func TestGenerateWithoutTestsOmitsTestFiles(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("Generate model: %v", err)
 	}
-	if exists(dir, "internal/model/tag_test.go") {
+	if exists(dir, "internal/domain/tag/tag_test.go") {
 		t.Error("did not expect a test file without --tests")
 	}
 }
 
 func containsAny(list []string, target string) bool {
-	for _, v := range list {
-		if v == target {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, target)
 }

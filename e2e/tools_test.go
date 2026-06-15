@@ -87,7 +87,7 @@ func TestE2E_Tool_ExtraArgsForwarded(t *testing.T) {
 	// Pass a positional argument after `test` and before `--project`.
 	// go test interprets the positional arg as a package selector;
 	// the resulting error proves the arg was forwarded.
-	out, err := runCrankRaw(t, "", "test", "./internal/handler/...", "--project", dir)
+	out, err := runCrankRaw(t, "", "test", "./internal/adapters/http/web/...", "--project", dir)
 	_ = out
 	_ = err
 	// We accept any outcome (success or failure) — the goal is just to

@@ -1,0 +1,30 @@
+package {{.R.Snake}}
+{{if .HasTime}}
+
+import "time"
+{{end}}
+// Create{{.R.Pascal}}Command is the application-layer request to create a new
+// {{.R.Snake}}. The CommandHandler converts the stringly-typed ID into a
+// typed {{.R.Pascal}}ID before constructing the aggregate.
+type Create{{.R.Pascal}}Command struct {
+	ID string
+{{- range .Fields}}
+	{{.GoName}} {{.GoType}}
+{{- end}}
+}
+
+// Update{{.R.Pascal}}Command is the application-layer request to mutate an
+// existing {{.R.Snake}}. The CommandHandler loads the aggregate by ID, calls
+// Update, and persists the result.
+type Update{{.R.Pascal}}Command struct {
+	ID string
+{{- range .Fields}}
+	{{.GoName}} {{.GoType}}
+{{- end}}
+}
+
+// Delete{{.R.Pascal}}Command is the application-layer request to remove a
+// {{.R.Snake}}.
+type Delete{{.R.Pascal}}Command struct {
+	ID string
+}

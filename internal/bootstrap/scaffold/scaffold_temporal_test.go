@@ -20,10 +20,10 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Generate workflow: %v", err)
 	}
-	if !exists(dir, "internal/workflow/order_fulfillment.go") {
-		t.Error("expected internal/workflow/order_fulfillment.go")
+	if !exists(dir, "internal/adapters/temporal/workflow/order_fulfillment.go") {
+		t.Error("expected internal/adapters/temporal/workflow/order_fulfillment.go")
 	}
-	assertParses(t, dir, "internal/workflow/order_fulfillment.go")
+	assertParses(t, dir, "internal/adapters/temporal/workflow/order_fulfillment.go")
 	if !wres.Wired {
 		t.Errorf("expected workflow to be wired, hint=%q", wres.WireHint)
 	}
@@ -40,8 +40,8 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 		t.Fatalf("Generate activity: %v", err)
 	}
 	for _, rel := range []string{
-		"internal/activity/charge_card.go",
-		"internal/activity/charge_card_test.go",
+		"internal/adapters/temporal/activity/charge_card.go",
+		"internal/adapters/temporal/activity/charge_card_test.go",
 	} {
 		if !exists(dir, rel) {
 			t.Errorf("expected %s", rel)
@@ -54,7 +54,7 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 	}
 
 	// The worker now registers both, and still parses.
-	worker := read(t, dir, "pkg/temporal/worker.go")
+	worker := read(t, dir, "internal/adapters/temporal/worker.go")
 	for _, want := range []string{
 		"w.RegisterWorkflow(workflow.OrderFulfillmentWorkflow)",
 		"w.RegisterActivity(activity.ChargeCardActivity)",
@@ -63,7 +63,7 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 			t.Errorf("worker.go missing %q:\n%s", want, worker)
 		}
 	}
-	assertParses(t, dir, "pkg/temporal/worker.go")
+	assertParses(t, dir, "internal/adapters/temporal/worker.go")
 }
 
 func TestWorkflowGeneratorRequiresTemporalFeature(t *testing.T) {
@@ -98,7 +98,7 @@ func TestTemporalWiringIsIdempotent(t *testing.T) {
 		t.Fatalf("regenerate: %v", err)
 	}
 
-	worker := read(t, dir, "pkg/temporal/worker.go")
+	worker := read(t, dir, "internal/adapters/temporal/worker.go")
 	if n := strings.Count(worker, "w.RegisterActivity(activity.NotifyActivity)"); n != 1 {
 		t.Errorf("expected exactly one Notify registration, got %d:\n%s", n, worker)
 	}

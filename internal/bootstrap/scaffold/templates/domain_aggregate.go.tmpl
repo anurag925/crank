@@ -1,0 +1,126 @@
+package {{.R.Snake}}
+
+import (
+	"time"
+
+	"{{.Module}}/internal/domain/shared"
+)
+
+// {{.R.Pascal}} is the aggregate root for {{.R.SnakePlural}}. It is plain Go:
+// no JSON, DB or validation tags. The HTTP and persistence adapters own their
+// own DTOs for those concerns. CreatedAt/UpdatedAt are exported so persistence
+// adapters can rehydrate the aggregate from a row; constructors and the Update
+// method remain the only sanctioned way to mutate them in the application
+// layer.
+type {{.R.Pascal}} struct {
+	id        {{.R.Pascal}}ID
+{{- range .Fields}}
+	{{.Camel}} {{.GoType}}
+{{- end}}
+	createdAt time.Time
+	updatedAt time.Time
+	events    []shared.DomainEvent
+}
+
+// New{{.R.Pascal}} constructs a new {{.R.Pascal}} aggregate, validates its
+// invariants, and records a {{.R.Pascal}}Created event. Callers must persist
+// the aggregate (via Repository.Save) and then call PullEvents to dispatch
+// the recorded event through the application's event bus.
+func New{{.R.Pascal}}(id {{.R.Pascal}}ID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end}}) (*{{.R.Pascal}}, error) {
+	if id.IsZero() {
+		return nil, ErrInvalid{{.R.Pascal}}ID
+	}
+{{- range .Fields}}
+{{- if eq .GoType "string"}}
+	if {{.Camel}} == "" {
+		return nil, ErrInvalid{{$.R.Pascal}}
+	}
+{{- end}}
+{{- end}}
+	now := time.Now().UTC()
+	o := &{{.R.Pascal}}{
+		id:        id,
+{{- range .Fields}}
+		{{.Camel}}: {{.Camel}},
+{{- end}}
+		createdAt: now,
+		updatedAt: now,
+	}
+	o.recordEvent({{.R.Pascal}}Created{
+		{{.R.Pascal}}ID: id,
+		occurredAt:     now,
+	})
+	return o, nil
+}
+
+// ID returns the aggregate's typed identifier.
+func (o *{{.R.Pascal}}) ID() {{.R.Pascal}}ID { return o.id }
+
+// CreatedAt returns the time the aggregate was first persisted.
+func (o *{{.R.Pascal}}) CreatedAt() time.Time { return o.createdAt }
+
+// UpdatedAt returns the time the aggregate was last mutated.
+func (o *{{.R.Pascal}}) UpdatedAt() time.Time { return o.updatedAt }
+{{range .Fields}}
+// {{.GoName}} returns the {{.Name}} field of the aggregate.
+func (o *{{$.R.Pascal}}) {{.GoName}}() {{.GoType}} { return o.{{.Camel}} }
+{{end}}
+// Update replaces the aggregate's mutable fields and records a
+// {{.R.Pascal}}Updated event. Callers must Save the aggregate afterwards and
+// then publish the pulled events.
+func (o *{{.R.Pascal}}) Update({{range .Fields}}{{.Camel}} {{.GoType}}, {{end}}) {
+	now := time.Now().UTC()
+{{- range .Fields}}
+	o.{{.Camel}} = {{.Camel}}
+{{- end}}
+	o.updatedAt = now
+	o.recordEvent({{.R.Pascal}}Updated{
+		{{.R.Pascal}}ID: o.id,
+		occurredAt:     now,
+	})
+}
+
+// SetTimestamps overwrites the lifecycle timestamps. Used by the persistence
+// layer to rehydrate an aggregate from a row whose created_at and updated_at
+// columns were set at write time.
+func (o *{{.R.Pascal}}) SetTimestamps(created, updated time.Time) {
+	o.createdAt = created
+	o.updatedAt = updated
+}
+
+// Rehydrate reconstructs an aggregate from a persistence row, bypassing the
+// validation done by New{{.R.Pascal}}. It is intended for use by the postgres
+// and in-memory adapters only. Callers must guarantee that id is non-empty.
+func Rehydrate(id {{.R.Pascal}}ID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end}}, created, updated time.Time) *{{.R.Pascal}} {
+	return &{{.R.Pascal}}{
+		id:        id,
+{{- range .Fields}}
+		{{.Camel}}: {{.Camel}},
+{{- end}}
+		createdAt: created,
+		updatedAt: updated,
+	}
+}
+
+// MarkDeleted records a {{.R.Pascal}}Deleted event on the aggregate. The
+// application service is responsible for calling Repository.Delete afterwards
+// and then publishing the pulled events.
+func (o *{{.R.Pascal}}) MarkDeleted() {
+	o.recordEvent({{.R.Pascal}}Deleted{
+		{{.R.Pascal}}ID: o.id,
+		occurredAt:     time.Now().UTC(),
+	})
+}
+
+// PullEvents returns the events recorded on the aggregate since the last
+// call and clears the internal buffer.
+func (o *{{.R.Pascal}}) PullEvents() []shared.DomainEvent {
+	out := o.events
+	o.events = nil
+	return out
+}
+
+// recordEvent appends a domain event to the aggregate's internal buffer.
+func (o *{{.R.Pascal}}) recordEvent(e shared.DomainEvent) {
+	o.events = append(o.events, e)
+}

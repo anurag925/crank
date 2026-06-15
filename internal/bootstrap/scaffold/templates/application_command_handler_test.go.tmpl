@@ -1,0 +1,86 @@
+package {{.R.Snake}}
+
+import (
+	"context"
+	"testing"
+{{- if .HasTime}}
+	"time"
+{{- end}}
+
+	"{{.Module}}/internal/adapters/persistence/memory"
+	"{{.Module}}/internal/domain/{{.R.Snake}}"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestNewCommandHandler(t *testing.T) {
+	repo := memory.New{{.R.Pascal}}Repository()
+	h := NewCommandHandler(repo, nil)
+	require.NotNil(t, h)
+}
+
+func Test{{.R.Pascal}}CommandHandler_HandleCreate(t *testing.T) {
+	repo := memory.New{{.R.Pascal}}Repository()
+	h := NewCommandHandler(repo, nil)
+	ctx := context.Background()
+
+	out, err := h.HandleCreate(ctx, buildCreateCmd("123e4567-e89b-12d3-a456-426614174000"))
+	require.NoError(t, err)
+	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", out.ID().String())
+
+	got, err := repo.Get(ctx, out.ID())
+	require.NoError(t, err)
+	assert.Equal(t, out.ID(), got.ID())
+}
+
+func Test{{.R.Pascal}}CommandHandler_HandleUpdate(t *testing.T) {
+	repo := memory.New{{.R.Pascal}}Repository()
+	h := NewCommandHandler(repo, nil)
+	ctx := context.Background()
+
+	created, err := h.HandleCreate(ctx, buildCreateCmd("123e4567-e89b-12d3-a456-426614174000"))
+	require.NoError(t, err)
+
+	updated, err := h.HandleUpdate(ctx, buildUpdateCmd(created.ID().String()))
+	require.NoError(t, err)
+	assert.Equal(t, created.ID(), updated.ID())
+}
+
+func Test{{.R.Pascal}}CommandHandler_HandleDelete(t *testing.T) {
+	repo := memory.New{{.R.Pascal}}Repository()
+	h := NewCommandHandler(repo, nil)
+	ctx := context.Background()
+
+	created, err := h.HandleCreate(ctx, buildCreateCmd("123e4567-e89b-12d3-a456-426614174000"))
+	require.NoError(t, err)
+
+	require.NoError(t, h.HandleDelete(ctx, Delete{{.R.Pascal}}Command{ID: created.ID().String()}))
+	_, err = repo.Get(ctx, created.ID())
+	assert.ErrorIs(t, err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound)
+}
+
+func Test{{.R.Pascal}}CommandHandler_HandleCreate_InvalidID(t *testing.T) {
+	repo := memory.New{{.R.Pascal}}Repository()
+	h := NewCommandHandler(repo, nil)
+	_, err := h.HandleCreate(context.Background(), buildCreateCmd(""))
+	assert.Error(t, err)
+}
+
+func buildCreateCmd(id string) Create{{.R.Pascal}}Command {
+	return Create{{.R.Pascal}}Command{
+		ID: id,
+{{- range .Fields}}
+		{{.GoName}}: {{.Sample}},
+{{- end}}
+	}
+}
+
+func buildUpdateCmd(id string) Update{{.R.Pascal}}Command {
+	return Update{{.R.Pascal}}Command{
+		ID: id,
+{{- range .Fields}}
+		{{.GoName}}: {{.Sample}},
+{{- end}}
+	}
+}

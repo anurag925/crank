@@ -32,8 +32,8 @@ func TestE2E_Add_Crypto(t *testing.T) {
 	if !strings.Contains(manifest, "- crypto") {
 		t.Errorf("manifest missing crypto:\n%s", manifest)
 	}
-	assertExists(t, dir, "pkg/crypto/crypto.go")
-	assertExists(t, dir, "pkg/crypto/crypto_test.go")
+	assertExists(t, dir, "internal/adapters/crypto/aesgcm_cipher.go")
+	assertExists(t, dir, "internal/ports/cipher.go")
 
 	assertContainsAll(t, dir, "internal/config/config.go",
 		"Crypto CryptoConfig",
@@ -62,8 +62,8 @@ func TestE2E_Add_Redis(t *testing.T) {
 	if !strings.Contains(manifest, "- redis") {
 		t.Errorf("manifest missing redis:\n%s", manifest)
 	}
-	assertExists(t, dir, "pkg/redis/client.go")
-	assertExists(t, dir, "pkg/redis/client_test.go")
+	assertExists(t, dir, "internal/adapters/cache/redis/client.go")
+	assertExists(t, dir, "internal/ports/cache.go")
 
 	assertContainsAll(t, dir, "internal/config/config.go",
 		"Redis RedisConfig",
@@ -90,7 +90,7 @@ func TestE2E_Add_Mongodb(t *testing.T) {
 	if !strings.Contains(manifest, "- mongodb") {
 		t.Errorf("manifest missing mongodb:\n%s", manifest)
 	}
-	assertExists(t, dir, "pkg/mongo/client.go")
+	assertExists(t, dir, "internal/adapters/persistence/mongodb/client.go")
 
 	assertContainsAll(t, dir, "internal/config/config.go",
 		"MongoDB MongoDBConfig",
@@ -118,12 +118,11 @@ func TestE2E_Add_Temporal(t *testing.T) {
 	if !strings.Contains(manifest, "- temporal") {
 		t.Errorf("manifest missing temporal:\n%s", manifest)
 	}
-	assertExists(t, dir, "pkg/temporal/client.go")
-	assertExists(t, dir, "pkg/temporal/worker.go")
-	assertExists(t, dir, "pkg/temporal/logger.go")
+	assertExists(t, dir, "internal/adapters/temporal/worker.go")
+	assertExists(t, dir, "internal/adapters/temporal/logger.go")
 	assertExists(t, dir, "cmd/worker/main.go")
-	assertExists(t, dir, "internal/workflow/greeting.go")
-	assertExists(t, dir, "internal/activity/greeting.go")
+	assertExists(t, dir, "internal/adapters/temporal/workflow/greeting.go")
+	assertExists(t, dir, "internal/adapters/temporal/activity/greeting.go")
 
 	assertContainsAll(t, dir, "internal/config/config.go",
 		"Temporal TemporalConfig",
@@ -257,10 +256,10 @@ func TestE2E_Add_Idempotent(t *testing.T) {
 // piece of the Add + config-inject + manifest + go-get pipeline together.
 //
 // KNOWN ISSUE: when postgres is added to a base-only project, the base
-// feature's `internal/repository/user_test.go` (which calls
-// `NewUserRepository()` with no args) is left unchanged, but the
-// postgres feature's `internal/repository/user.go` now defines
-// `NewUserRepository(db *bun.DB)`. This produces a compile failure.
+// feature's `internal/adapters/persistence/memory/user_repository_test.go`
+// (which calls `NewUserRepository()` with no args) is left unchanged, but
+// the postgres feature's `internal/adapters/persistence/postgres/user_repository.go`
+// now defines `NewUserRepository(db *bun.DB)`. This produces a compile failure.
 //
 // We document this as a known bug: the subtest for "postgres" (and every
 // subsequent feature in the same project) is expected to fail `go vet`

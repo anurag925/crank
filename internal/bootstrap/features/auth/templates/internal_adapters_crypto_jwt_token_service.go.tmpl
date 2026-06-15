@@ -1,0 +1,117 @@
+package crypto
+
+import (
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
+
+	"{{.ModulePath}}/internal/config"
+	"{{.ModulePath}}/internal/ports"
+)
+
+// JWTTokenService is a ports.TokenService implementation backed by
+// golang-jwt. It issues and validates HS256-signed access and refresh
+// tokens.
+type JWTTokenService struct {
+	secret    string
+	expiry    time.Duration
+	refresh   time.Duration
+}
+
+// NewJWTTokenService builds a token service from the application config.
+func NewJWTTokenService(cfg config.JWTConfig) *JWTTokenService {
+	return &JWTTokenService{
+		secret:  cfg.Secret,
+		expiry:  cfg.Expiration,
+		refresh: cfg.RefreshExpiration,
+	}
+}
+
+type jwtClaims struct {
+	jwt.RegisteredClaims
+	Type string `json:"typ"`
+}
+
+// Issue produces a fresh access+refresh token pair for the given subject.
+func (s *JWTTokenService) Issue(subject string) (*ports.TokenPair, error) {
+	now := time.Now()
+	access, accessExp, err := s.signToken(subject, "access", now, s.expiry)
+	if err != nil {
+		return nil, err
+	}
+	refresh, _, err := s.signToken(subject, "refresh", now, s.refresh)
+	if err != nil {
+		return nil, err
+	}
+	return &ports.TokenPair{
+		AccessToken:  access,
+		RefreshToken: refresh,
+		ExpiresAt:    accessExp.Unix(),
+	}, nil
+}
+
+// Refresh exchanges a valid refresh token for a new pair.
+func (s *JWTTokenService) Refresh(refreshToken string) (*ports.TokenPair, error) {
+	claims, err := s.parse(refreshToken)
+	if err != nil {
+		return nil, err
+	}
+	if claims.Type != "refresh" {
+		return nil, errors.New("token is not a refresh token")
+	}
+	return s.Issue(claims.Subject)
+}
+
+// Subject returns the subject claim encoded in a valid access token.
+func (s *JWTTokenService) Subject(accessToken string) (string, error) {
+	claims, err := s.parse(accessToken)
+	if err != nil {
+		return "", err
+	}
+	if claims.Type != "access" {
+		return "", errors.New("token is not an access token")
+	}
+	return claims.Subject, nil
+}
+
+func (s *JWTTokenService) signToken(subject, typ string, now time.Time, ttl time.Duration) (string, time.Time, error) {
+	exp := now.Add(ttl)
+	claims := jwtClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:   subject,
+			IssuedAt:  jwt.NewNumericDate(now),
+			ExpiresAt: jwt.NewNumericDate(exp),
+			ID:        uuid.NewString(),
+		},
+		Type: typ,
+	}
+	tok := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signed, err := tok.SignedString([]byte(s.secret))
+	if err != nil {
+		return "", time.Time{}, fmt.Errorf("sign token: %w", err)
+	}
+	return signed, exp, nil
+}
+
+func (s *JWTTokenService) parse(token string) (*jwtClaims, error) {
+	parsed, err := jwt.ParseWithClaims(token, &jwtClaims{}, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrTokenSignatureInvalid
+		}
+		return []byte(s.secret), nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	claims, ok := parsed.Claims.(*jwtClaims)
+	if !ok || !parsed.Valid {
+		return nil, errors.New("invalid token")
+	}
+	return claims, nil
+}
+
+// Compile-time assertion that JWTTokenService satisfies the TokenService port.
+var _ ports.TokenService = (*JWTTokenService)(nil)

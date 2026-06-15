@@ -1,0 +1,96 @@
+# myapp
+
+Production-ready Go backend scaffolded by [crank](#). The project follows a
+Domain-Driven layout: a pure-Go domain layer, application command/query
+handlers, and adapter implementations for HTTP and persistence.
+
+## Stack
+
+- HTTP: [Echo v4](https://echo.labstack.com)
+- Config: [Viper](https://github.com/spf13/viper) (`configs/config.yaml` + env vars)
+- Docs: [Swagger](https://swagger.io) via [swaggo/swag](https://github.com/swaggo/swag) (`/swagger/*`)
+- Logging: `log/slog`
+
+## Quick start
+
+```bash
+# 1. fetch dependencies
+crank tidy
+
+# 2. copy environment template and adjust as needed
+cp .env.example .env
+
+# 3. run the server
+crank run
+```
+
+The server listens on `http://localhost:8080` by default. Health probe: `GET /health`.
+API docs (Swagger UI): `http://localhost:8080/swagger/index.html` (run `crank swag` first).
+
+## Configuration
+
+`configs/config.yaml` ships with safe defaults that are safe to commit. Local secrets belong in
+`.env` (git-ignored). Environment variables override file values; keys are derived from
+the dotted path with underscores (e.g. `database.password` -> `DATABASE_PASSWORD`).
+
+## Layout
+
+```
+.
+├── cmd/server              # application entry point (composition root)
+├── configs                 # config files
+│   └── config.yaml         # non-secret defaults
+├── internal
+│   ├── adapters            # infrastructure: HTTP, persistence, event bus
+│   │   ├── eventbus        # in-process event bus
+│   │   ├── http/web        # Echo handlers + middleware
+│   │   └── persistence     # postgres + memory repositories
+│   ├── application         # use cases: command + query handlers
+│   │   └── user
+│   ├── config              # Viper-backed configuration
+│   ├── domain              # pure Go aggregates, value objects, ports
+│   │   ├── shared          # cross-aggregate interfaces (events)
+│   │   └── user
+│   ├── model               # cross-layer transport DTOs (APIError)
+│   ├── ports               # cross-cutting interfaces (EventBus, …)
+│   └── validator           # request validation
+├── pkg/logging             # structured slog helpers
+├── .env.example            # environment template
+├── Makefile
+├── Dockerfile
+└── .air.toml               # live-reload config
+```
+
+## Tasks
+
+Common development tasks are provided by the [`crank`](https://github.com/anurag925/crank)
+CLI, so they are not duplicated in the `Makefile`. `crank` auto-installs missing
+tools (`swag`/`air`/`migrate`) and accepts `--project` to target this directory
+from anywhere:
+
+| Command | Purpose |
+| ------- | ------- |
+| `crank build` | Compile a static binary into `bin/myapp` |
+| `crank run` | Run the application |
+| `crank dev` | Run with live reload (air) |
+| `crank test` | Run all tests |
+| `crank tidy` | Sync module dependencies |
+| `crank gofmt` | Run `gofmt` |
+| `crank vet` | Run `go vet` |
+| `crank swag` | Generate Swagger/OpenAPI docs into `docs/` |
+| `crank make handler <Name>` | Scaffold a new resource (domain, app, http) |
+
+Run `crank tools` to list everything available.
+
+## Makefile
+
+The `Makefile` intentionally holds only targets that `crank` does not provide
+natively (e.g. `make clean`). It's the place for your own project-specific
+targets. Any target you add can be run with either `make <target>` or
+`crank <target>` — `crank` transparently delegates unknown commands to `make`:
+
+```bash
+make clean              # remove build artifacts
+crank clean               # same thing, delegated to make
+crank <your-make-target>  # any custom target you add to the Makefile
+```

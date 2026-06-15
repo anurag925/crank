@@ -19,17 +19,15 @@ func init() {
 
 func (feature) Name() string { return "crypto" }
 func (feature) Description() string {
-	return "AES-256-GCM encryption helpers (Encrypt/Decrypt) backed by a config-driven secret"
+	return "AES-256-GCM authenticated encryption (Encrypt/Decrypt) backed by a config-driven secret"
 }
 func (feature) Templates() embed.FS { return tmpls }
 
-func (feature) Dependencies() []string {
-	return nil // uses only stdlib
-}
+func (feature) Dependencies() []string { return nil }
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
-		{TemplatePath: "templates/pkg_crypto_crypto.go.tmpl", OutputPath: "pkg/crypto/crypto.go"},
-		{TemplatePath: "templates/pkg_crypto_crypto_test.go.tmpl", OutputPath: "pkg/crypto/crypto_test.go"},
+		{TemplatePath: "templates/internal_ports_cipher.go.tmpl", OutputPath: "internal/ports/cipher.go"},
+		{TemplatePath: "templates/internal_adapters_crypto_aesgcm_cipher.go.tmpl", OutputPath: "internal/adapters/crypto/aesgcm_cipher.go"},
 	}
 }

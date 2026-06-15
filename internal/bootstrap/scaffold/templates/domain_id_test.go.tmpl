@@ -1,0 +1,25 @@
+package {{.R.Snake}}
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestNew{{.R.Pascal}}ID(t *testing.T) {
+	id, err := New{{.R.Pascal}}ID("123e4567-e89b-12d3-a456-426614174000")
+	require.NoError(t, err)
+	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", id.String())
+	assert.False(t, id.IsZero())
+}
+
+func TestNew{{.R.Pascal}}ID_RejectsEmpty(t *testing.T) {
+	_, err := New{{.R.Pascal}}ID("")
+	assert.ErrorIs(t, err, ErrInvalid{{.R.Pascal}}ID)
+}
+
+func Test{{.R.Pascal}}ID_IsZero(t *testing.T) {
+	var zero {{.R.Pascal}}ID
+	assert.True(t, zero.IsZero())
+}

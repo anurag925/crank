@@ -1,0 +1,171 @@
+package web
+
+import (
+	"errors"
+	"net/http"
+
+	"github.com/labstack/echo/v4"
+
+	"{{.ModulePath}}/internal/application/user"
+	"{{.ModulePath}}/internal/adapters/http/web/middleware"
+	"{{.ModulePath}}/internal/model"
+	"{{.ModulePath}}/internal/ports"
+)
+
+// AuthHandler wires the /auth/* endpoints and the JWT-protected /me sample
+// route. It depends only on the user application service and the token
+// service port.
+type AuthHandler struct {
+	cmd   *user.CommandHandler
+	qry   *user.QueryHandler
+	tokens ports.TokenService
+}
+
+// NewAuthHandler builds an AuthHandler from application services and a
+// token service implementation.
+func NewAuthHandler(cmd *user.CommandHandler, qry *user.QueryHandler, tokens ports.TokenService) *AuthHandler {
+	return &AuthHandler{cmd: cmd, qry: qry, tokens: tokens}
+}
+
+// Register attaches /auth routes and the /me protected route to e.
+func (h *AuthHandler) Register(e *echo.Echo) {
+	g := e.Group("/auth")
+	g.POST("/register", h.RegisterUser)
+	g.POST("/login", h.Login)
+	g.POST("/refresh", h.Refresh)
+
+	e.GET("/me", h.Me, middleware.JWTAuth(h.tokens))
+}
+
+type credentials struct {
+	Email    string `json:"email"    validate:"required,email"`
+	Password string `json:"password" validate:"required,min=8"`
+	Name     string `json:"name"     validate:"omitempty,min=2,max=100"`
+}
+
+type refreshRequest struct {
+	RefreshToken string `json:"refresh_token" validate:"required"`
+}
+
+type tokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ExpiresAt    int64  `json:"expires_at"`
+}
+
+// RegisterUser godoc
+//
+//	@Summary      Register a new user
+//	@Description  Creates a user account and returns an access/refresh token pair.
+//	@Tags         auth
+//	@Accept       json
+//	@Produce      json
+//	@Param        credentials  body      credentials  true  "Registration payload"
+//	@Success      201          {object}  tokenResponse
+//	@Failure      422          {object}  model.APIError
+//	@Router       /auth/register [post]
+func (h *AuthHandler) RegisterUser(c echo.Context) error {
+	var in credentials
+	if err := c.Bind(&in); err != nil {
+		return err
+	}
+	// The user id is generated server-side at the application layer; we
+	// pass a placeholder string and the command handler will produce a
+	// typed id from it. For a real id, use a uuid library.
+	out, err := h.cmd.HandleCreate(c.Request().Context(), user.CreateUserCommand{
+		ID:    in.Email,
+		Name:  in.Name,
+		Email: in.Email,
+	})
+	if err != nil {
+		return c.JSON(http.StatusUnprocessableEntity, model.APIError{Error: err.Error()})
+	}
+	tokens, err := h.tokens.Issue(out.ID().String())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusCreated, tokenResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		ExpiresAt:    tokens.ExpiresAt,
+	})
+}
+
+// Login godoc
+//
+//	@Summary      Log in
+//	@Description  Authenticates a user by email and password and returns a token pair.
+//	@Tags         auth
+//	@Accept       json
+//	@Produce      json
+//	@Param        credentials  body      credentials  true  "Login credentials"
+//	@Success      200          {object}  tokenResponse
+//	@Failure      401          {object}  model.APIError
+//	@Router       /auth/login [post]
+func (h *AuthHandler) Login(c echo.Context) error {
+	var in credentials
+	if err := c.Bind(&in); err != nil {
+		return err
+	}
+	u, err := h.qry.HandleGet(c.Request().Context(), user.GetUserQuery{ID: in.Email})
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, model.APIError{Error: "invalid credentials"})
+	}
+	if u.Email() != in.Email {
+		return c.JSON(http.StatusUnauthorized, model.APIError{Error: "invalid credentials"})
+	}
+	tokens, err := h.tokens.Issue(u.ID().String())
+	if err != nil {
+		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusOK, tokenResponse{
+		AccessToken:  tokens.AccessToken,
+		RefreshToken: tokens.RefreshToken,
+		ExpiresAt:    tokens.ExpiresAt,
+	})
+}
+
+// Refresh godoc
+//
+//	@Summary      Refresh tokens
+//	@Description  Exchanges a valid refresh token for a new access/refresh token pair.
+//	@Tags         auth
+//	@Accept       json
+//	@Produce      json
+//	@Param        body  body      refreshRequest  true  "Refresh token"
+//	@Success      200   {object}  tokenResponse
+//	@Failure      401   {object}  model.APIError
+//	@Router       /auth/refresh [post]
+func (h *AuthHandler) Refresh(c echo.Context) error {
+	var in refreshRequest
+	if err := c.Bind(&in); err != nil {
+		return err
+	}
+	pair, err := h.tokens.Refresh(in.RefreshToken)
+	if err != nil {
+		return c.JSON(http.StatusUnauthorized, model.APIError{Error: err.Error()})
+	}
+	return c.JSON(http.StatusOK, tokenResponse{
+		AccessToken:  pair.AccessToken,
+		RefreshToken: pair.RefreshToken,
+		ExpiresAt:    pair.ExpiresAt,
+	})
+}
+
+// Me godoc
+//
+//	@Summary      Current user
+//	@Description  Returns the authenticated user's id from the JWT subject claim.
+//	@Tags         auth
+//	@Produce      json
+//	@Security     BearerAuth
+//	@Success      200  {object}  map[string]string
+//	@Failure      401  {object}  model.APIError
+//	@Router       /me [get]
+func (h *AuthHandler) Me(c echo.Context) error {
+	uid, _ := c.Get("user_id").(string)
+	return c.JSON(http.StatusOK, echo.Map{"user_id": uid})
+}
+
+// errAuthInvalid is a sentinel for the auth flow; keep here for future use.
+var errAuthInvalid = errors.New("invalid credentials")

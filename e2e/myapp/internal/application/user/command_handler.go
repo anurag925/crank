@@ -1,0 +1,85 @@
+package user
+
+import (
+	"context"
+	"fmt"
+
+	"myapp/internal/domain/user"
+	"myapp/internal/ports"
+)
+
+// CommandHandler is the application service that mutates user aggregates in
+// response to Create/Update/Delete commands. It depends only on the domain
+// Repository port and the EventBus port.
+type CommandHandler struct {
+	repo   user.Repository
+	events ports.EventBus
+}
+
+// NewCommandHandler wires a CommandHandler against the given repository and
+// event bus.
+func NewCommandHandler(repo user.Repository, events ports.EventBus) *CommandHandler {
+	return &CommandHandler{repo: repo, events: events}
+}
+
+// HandleCreate creates a new user aggregate, persists it, and publishes the
+// events it recorded during construction.
+func (h *CommandHandler) HandleCreate(ctx context.Context, cmd CreateUserCommand) (*user.User, error) {
+	id, err := user.NewUserID(cmd.ID)
+	if err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
+	}
+	u, err := user.NewUser(id, cmd.Name, cmd.Email)
+	if err != nil {
+		return nil, fmt.Errorf("create user: %w", err)
+	}
+	if err := h.repo.Save(ctx, u); err != nil {
+		return nil, fmt.Errorf("save user: %w", err)
+	}
+	if h.events != nil {
+		_ = h.events.Publish(ctx, u.PullEvents()...)
+	}
+	return u, nil
+}
+
+// HandleUpdate loads an existing user aggregate, mutates it through the
+// domain's Update method, persists the result, and publishes the recorded
+// event.
+func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd UpdateUserCommand) (*user.User, error) {
+	id, err := user.NewUserID(cmd.ID)
+	if err != nil {
+		return nil, fmt.Errorf("update user: %w", err)
+	}
+	u, err := h.repo.Get(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	u.Update(cmd.Name, cmd.Email)
+	if err := h.repo.Save(ctx, u); err != nil {
+		return nil, fmt.Errorf("save user: %w", err)
+	}
+	if h.events != nil {
+		_ = h.events.Publish(ctx, u.PullEvents()...)
+	}
+	return u, nil
+}
+
+// HandleDelete removes a user aggregate.
+func (h *CommandHandler) HandleDelete(ctx context.Context, cmd DeleteUserCommand) error {
+	id, err := user.NewUserID(cmd.ID)
+	if err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	u, err := h.repo.Get(ctx, id)
+	if err != nil {
+		return err
+	}
+	u.MarkDeleted()
+	if err := h.repo.Delete(ctx, id); err != nil {
+		return fmt.Errorf("delete user: %w", err)
+	}
+	if h.events != nil {
+		_ = h.events.Publish(ctx, u.PullEvents()...)
+	}
+	return nil
+}

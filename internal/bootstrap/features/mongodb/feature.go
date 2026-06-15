@@ -19,7 +19,7 @@ func init() {
 
 func (feature) Name() string { return "mongodb" }
 func (feature) Description() string {
-	return "MongoDB client (document storage, aggregation) — placeholder"
+	return "MongoDB client (document storage, aggregation) — wired into the composition root"
 }
 func (feature) Templates() embed.FS { return tmpls }
 
@@ -31,7 +31,6 @@ func (feature) Dependencies() []string {
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
-		{TemplatePath: "templates/pkg_mongo_client.go.tmpl", OutputPath: "pkg/mongo/client.go"},
-		{TemplatePath: "templates/pkg_mongo_client_test.go.tmpl", OutputPath: "pkg/mongo/client_test.go"},
+		{TemplatePath: "templates/internal_adapters_persistence_mongodb_client.go.tmpl", OutputPath: "internal/adapters/persistence/mongodb/client.go"},
 	}
 }

@@ -112,7 +112,7 @@ func TestE2E_Generated_MakeFromProject(t *testing.T) {
 	crankPath := filepath.Dir(crankBin)
 	env := []string{"PATH=" + crankPath + string(os.PathListSeparator) + os.Getenv("PATH")}
 	runCrankWithEnv(t, dir, env, "make", "model", "Foo", "name:string")
-	assertExists(t, dir, "internal/model/foo.go")
+	assertExists(t, dir, "internal/domain/foo/foo.go")
 }
 
 // TestE2E_Generated_AddFromProject verifies the user can run

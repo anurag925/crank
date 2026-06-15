@@ -19,7 +19,7 @@ func init() {
 
 func (feature) Name() string { return "postgres" }
 func (feature) Description() string {
-	return "PostgreSQL connection via Bun ORM and golang-migrate migrations"
+	return "PostgreSQL persistence: Bun-backed user repository, db factory, golang-migrate migrations"
 }
 func (feature) Templates() embed.FS { return tmpls }
 
@@ -29,16 +29,17 @@ func (feature) Dependencies() []string {
 		"github.com/uptrace/bun/dialect/pgdialect",
 		"github.com/uptrace/bun/driver/pgdriver",
 		"github.com/golang-migrate/migrate/v4",
+		"github.com/google/uuid",
 	}
 }
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
-		{TemplatePath: "templates/internal_database_postgres.go.tmpl", OutputPath: "internal/database/postgres.go"},
-		{TemplatePath: "templates/internal_database_migrate.go.tmpl", OutputPath: "internal/database/migrate.go"},
-		{TemplatePath: "templates/internal_database_test.go.tmpl", OutputPath: "internal/database/database_test.go"},
-		{TemplatePath: "templates/internal_model_user.go.tmpl", OutputPath: "internal/model/user.go"},
-		{TemplatePath: "templates/internal_repository_user.go.tmpl", OutputPath: "internal/repository/user.go"},
+		// Postgres persistence adapters
+		{TemplatePath: "templates/internal_adapters_persistence_postgres_db.go.tmpl", OutputPath: "internal/adapters/persistence/postgres/db.go"},
+		{TemplatePath: "templates/internal_adapters_persistence_postgres_migrate.go.tmpl", OutputPath: "internal/adapters/persistence/postgres/migrate.go"},
+		{TemplatePath: "templates/internal_adapters_persistence_postgres_user_repository.go.tmpl", OutputPath: "internal/adapters/persistence/postgres/user_repository.go"},
+		// Migrations
 		{TemplatePath: "templates/migrations_000001_init.up.sql.tmpl", OutputPath: "migrations/000001_init.up.sql"},
 		{TemplatePath: "templates/migrations_000001_init.down.sql.tmpl", OutputPath: "migrations/000001_init.down.sql"},
 	}

@@ -1,0 +1,108 @@
+package user
+
+import (
+	"time"
+
+	"myapp/internal/domain/shared"
+)
+
+// User is the aggregate root for application users. The base feature provides
+// the minimum surface: identity, name, email, lifecycle timestamps, and
+// domain events. The auth feature extends it with a Password value object
+// and authentication behavior. No JSON, DB, or validation tags live on the
+// aggregate — HTTP and persistence adapters own their own DTOs.
+type User struct {
+	id        UserID
+	name      string
+	email     string
+	password  string // bcrypt hash; populated only by the auth feature
+	createdAt time.Time
+	updatedAt time.Time
+	events    []shared.DomainEvent
+}
+
+// NewUser constructs a new User aggregate, validates its invariants, and
+// records a UserCreated event. Callers must persist the aggregate via
+// Repository.Save and then publish the events pulled from PullEvents.
+func NewUser(id UserID, name, email string) (*User, error) {
+	if id.IsZero() {
+		return nil, ErrInvalidUserID
+	}
+	if name == "" {
+		return nil, ErrInvalidUser
+	}
+	if email == "" {
+		return nil, ErrInvalidUser
+	}
+	now := time.Now().UTC()
+	u := &User{
+		id:        id,
+		name:      name,
+		email:     email,
+		createdAt: now,
+		updatedAt: now,
+	}
+	u.recordEvent(UserCreated{UserID: id, occurredAt: now})
+	return u, nil
+}
+
+// ID returns the aggregate's typed identifier.
+func (u *User) ID() UserID { return u.id }
+
+// Name returns the user's display name.
+func (u *User) Name() string { return u.name }
+
+// Email returns the user's email address.
+func (u *User) Email() string { return u.email }
+
+// CreatedAt returns the time the aggregate was first persisted.
+func (u *User) CreatedAt() time.Time { return u.createdAt }
+
+// UpdatedAt returns the time the aggregate was last mutated.
+func (u *User) UpdatedAt() time.Time { return u.updatedAt }
+
+// PasswordHash returns the stored bcrypt hash, or "" if the auth feature
+// is not enabled. Persistence adapters use this to round-trip the hash.
+func (u *User) PasswordHash() string { return u.password }
+
+// SetPasswordHash stores a bcrypt hash on the aggregate. Called by the
+// persistence layer when rehydrating, and by the application layer when
+// registering a new user.
+func (u *User) SetPasswordHash(h string) { u.password = h }
+
+// SetTimestamps overwrites the lifecycle timestamps. Used by the
+// persistence layer to rehydrate an aggregate from a row whose created_at
+// and updated_at columns were set at write time.
+func (u *User) SetTimestamps(created, updated time.Time) {
+	u.createdAt = created
+	u.updatedAt = updated
+}
+
+// Update replaces the aggregate's mutable fields and records a UserUpdated event.
+func (u *User) Update(name, email string) {
+	now := time.Now().UTC()
+	u.name = name
+	u.email = email
+	u.updatedAt = now
+	u.recordEvent(UserUpdated{UserID: u.id, occurredAt: now})
+}
+
+// MarkDeleted records a UserDeleted event. The application service is
+// responsible for calling Repository.Delete afterwards and publishing the
+// pulled events.
+func (u *User) MarkDeleted() {
+	u.recordEvent(UserDeleted{UserID: u.id, occurredAt: time.Now().UTC()})
+}
+
+// PullEvents returns the events recorded on the aggregate since the last
+// call and clears the internal buffer.
+func (u *User) PullEvents() []shared.DomainEvent {
+	out := u.events
+	u.events = nil
+	return out
+}
+
+// recordEvent appends a domain event to the aggregate's internal buffer.
+func (u *User) recordEvent(e shared.DomainEvent) {
+	u.events = append(u.events, e)
+}

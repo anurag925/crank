@@ -1,0 +1,25 @@
+package {{.R.Snake}}
+
+import (
+	"testing"
+{{- if .HasTime}}
+	"time"
+{{- end}}
+)
+
+// Commands are pure data carriers; this test simply asserts the struct
+// literal compiles and stores its fields.
+func Test{{.R.Pascal}}_Commands(t *testing.T) {
+	create := Create{{.R.Pascal}}Command{ID: "x"{{range .Fields}}, {{.GoName}}: {{.Sample}}{{end}}}
+	if create.ID != "x" {
+		t.Fatalf("create.ID = %q", create.ID)
+	}
+	update := Update{{.R.Pascal}}Command{ID: "x"{{range .Fields}}, {{.GoName}}: {{.Sample}}{{end}}}
+	if update.ID != "x" {
+		t.Fatalf("update.ID = %q", update.ID)
+	}
+	del := Delete{{.R.Pascal}}Command{ID: "x"}
+	if del.ID != "x" {
+		t.Fatalf("del.ID = %q", del.ID)
+	}
+}

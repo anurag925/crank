@@ -1,0 +1,65 @@
+package memory
+
+import (
+	"context"
+	"sync"
+
+	"{{.Module}}/internal/domain/{{.R.Snake}}"
+)
+
+// {{.R.Pascal}}Repository is the in-memory implementation of
+// domain/{{.R.Snake}}.Repository. It is safe for concurrent use and is
+// intended for tests, local development, and projects that do not enable the
+// postgres feature.
+type {{.R.Pascal}}Repository struct {
+	mu    sync.RWMutex
+	items map[string]*{{.R.Snake}}.{{.R.Pascal}}
+}
+
+// New{{.R.Pascal}}Repository constructs an empty in-memory {{.R.Pascal}}Repository.
+func New{{.R.Pascal}}Repository() *{{.R.Pascal}}Repository {
+	return &{{.R.Pascal}}Repository{items: make(map[string]*{{.R.Snake}}.{{.R.Pascal}})}
+}
+
+// Save stores (or overwrites) a {{.R.Snake}} aggregate.
+func (r *{{.R.Pascal}}Repository) Save(_ context.Context, x *{{.R.Snake}}.{{.R.Pascal}}) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.items[x.ID().String()] = x
+	return nil
+}
+
+// Get returns a {{.R.Snake}} aggregate by id, mapping a missing key to
+// domain/{{.R.Snake}}.Err{{.R.Pascal}}NotFound.
+func (r *{{.R.Pascal}}Repository) Get(_ context.Context, id {{.R.Snake}}.{{.R.Pascal}}ID) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	x, ok := r.items[id.String()]
+	if !ok {
+		return nil, {{.R.Snake}}.Err{{.R.Pascal}}NotFound
+	}
+	return x, nil
+}
+
+// List returns every stored {{.R.Snake}} aggregate, in insertion order.
+func (r *{{.R.Pascal}}Repository) List(_ context.Context) ([]*{{.R.Snake}}.{{.R.Pascal}}, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]*{{.R.Snake}}.{{.R.Pascal}}, 0, len(r.items))
+	for _, x := range r.items {
+		out = append(out, x)
+	}
+	return out, nil
+}
+
+// Delete removes a {{.R.Snake}} aggregate by id, mapping a missing key to
+// domain/{{.R.Snake}}.Err{{.R.Pascal}}NotFound.
+func (r *{{.R.Pascal}}Repository) Delete(_ context.Context, id {{.R.Snake}}.{{.R.Pascal}}ID) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.items[id.String()]; !ok {
+		return {{.R.Snake}}.Err{{.R.Pascal}}NotFound
+	}
+	delete(r.items, id.String())
+	return nil
+}

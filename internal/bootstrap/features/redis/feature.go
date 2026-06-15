@@ -19,7 +19,7 @@ func init() {
 
 func (feature) Name() string { return "redis" }
 func (feature) Description() string {
-	return "Redis client (session storage, caching, rate limiting) — placeholder"
+	return "Redis Cache port + go-redis client (session storage, caching, rate limiting)"
 }
 func (feature) Templates() embed.FS { return tmpls }
 
@@ -31,7 +31,7 @@ func (feature) Dependencies() []string {
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
-		{TemplatePath: "templates/pkg_redis_client.go.tmpl", OutputPath: "pkg/redis/client.go"},
-		{TemplatePath: "templates/pkg_redis_client_test.go.tmpl", OutputPath: "pkg/redis/client_test.go"},
+		{TemplatePath: "templates/internal_ports_cache.go.tmpl", OutputPath: "internal/ports/cache.go"},
+		{TemplatePath: "templates/internal_adapters_cache_redis_client.go.tmpl", OutputPath: "internal/adapters/cache/redis/client.go"},
 	}
 }

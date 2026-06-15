@@ -1,0 +1,21 @@
+package user
+
+import "context"
+
+// Repository is the persistence port for users. Adapters in
+// internal/adapters/persistence/{postgres,memory} implement it; application
+// services depend only on this interface.
+type Repository interface {
+	// Save inserts or updates a user aggregate.
+	Save(ctx context.Context, u *User) error
+	// Get returns a user aggregate by id. Returns ErrUserNotFound when no
+	// aggregate with that id is stored.
+	Get(ctx context.Context, id UserID) (*User, error)
+	// GetByEmail returns a user aggregate by email address, or ErrUserNotFound.
+	GetByEmail(ctx context.Context, email string) (*User, error)
+	// List returns every user aggregate, in unspecified order.
+	List(ctx context.Context) ([]*User, error)
+	// Delete removes a user aggregate by id. Returns ErrUserNotFound when
+	// no aggregate with that id is stored.
+	Delete(ctx context.Context, id UserID) error
+}

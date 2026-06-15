@@ -23,8 +23,8 @@ type {{.R.Pascal}}Output struct {
 // your orchestration logic — typically a sequence of activity calls, e.g.:
 //
 //	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{StartToCloseTimeout: 30 * time.Second})
-//	var out activity.SomeOutput
-//	if err := workflow.ExecuteActivity(ctx, activity.SomeActivity, in).Get(ctx, &out); err != nil {
+//	var out activity.{{.R.Pascal}}Output
+//	if err := workflow.ExecuteActivity(ctx, activity.{{.R.Pascal}}Activity, in).Get(ctx, &out); err != nil {
 //	    return {{.R.Pascal}}Output{}, err
 //	}
 func {{.R.Pascal}}Workflow(ctx workflow.Context, in {{.R.Pascal}}Input) ({{.R.Pascal}}Output, error) {

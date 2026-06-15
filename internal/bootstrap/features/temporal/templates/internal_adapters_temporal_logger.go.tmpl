@@ -1,0 +1,27 @@
+package temporal
+
+import (
+	"log/slog"
+)
+
+// slogAdapter bridges an slog.Logger to the temporal.io/sdk/log.Logger
+// interface. It maps level names to slog levels.
+type slogAdapter struct {
+	logger *slog.Logger
+}
+
+func (a slogAdapter) Debug(msg string, keyvals ...any) {
+	a.logger.Debug(msg, keyvals...)
+}
+
+func (a slogAdapter) Info(msg string, keyvals ...any) {
+	a.logger.Info(msg, keyvals...)
+}
+
+func (a slogAdapter) Warn(msg string, keyvals ...any) {
+	a.logger.Warn(msg, keyvals...)
+}
+
+func (a slogAdapter) Error(msg string, keyvals ...any) {
+	a.logger.Error(msg, keyvals...)
+}

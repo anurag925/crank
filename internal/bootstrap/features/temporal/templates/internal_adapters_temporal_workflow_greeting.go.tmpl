@@ -1,0 +1,38 @@
+package workflow
+
+import (
+	"time"
+
+	"go.temporal.io/sdk/workflow"
+)
+
+// GreetingInput is the input payload for GreetingWorkflow.
+type GreetingInput struct {
+	Name string `json:"name"`
+}
+
+// GreetingOutput is the result returned by GreetingWorkflow.
+type GreetingOutput struct {
+	Message string `json:"message"`
+}
+
+// GreetingWorkflow is a sample Temporal workflow. Replace the body with
+// your orchestration logic — typically a sequence of activity calls, e.g.:
+//
+//	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{StartToCloseTimeout: 30 * time.Second})
+//	var out activity.GreetingOutput
+//	if err := workflow.ExecuteActivity(ctx, activity.Greet, in).Get(ctx, &out); err != nil {
+//	    return GreetingOutput{}, err
+//	}
+func GreetingWorkflow(ctx workflow.Context, in GreetingInput) (GreetingOutput, error) {
+	logger := workflow.GetLogger(ctx)
+	logger.Info("GreetingWorkflow started", "name", in.Name)
+
+	out := GreetingOutput{Message: "Hello, " + in.Name + "!"}
+
+	logger.Info("GreetingWorkflow completed", "message", out.Message)
+	return out, nil
+}
+
+// _ keeps the time package referenced for users adding activity options.
+var _ = time.Second

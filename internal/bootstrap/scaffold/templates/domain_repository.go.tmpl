@@ -1,0 +1,19 @@
+package {{.R.Snake}}
+
+import "context"
+
+// Repository is the persistence port for {{.R.SnakePlural}}. Adapters in
+// internal/adapters/persistence/{postgres,memory} implement it; application
+// services depend only on this interface.
+type Repository interface {
+	// Save inserts or updates a {{.R.Snake}} aggregate.
+	Save(ctx context.Context, x *{{.R.Pascal}}) error
+	// Get returns a {{.R.Snake}} aggregate by id. Returns Err{{.R.Pascal}}NotFound
+	// when no aggregate with that id is stored.
+	Get(ctx context.Context, id {{.R.Pascal}}ID) (*{{.R.Pascal}}, error)
+	// List returns every {{.R.Snake}} aggregate, in unspecified order.
+	List(ctx context.Context) ([]*{{.R.Pascal}}, error)
+	// Delete removes a {{.R.Snake}} aggregate by id. Returns
+	// Err{{.R.Pascal}}NotFound when no aggregate with that id is stored.
+	Delete(ctx context.Context, id {{.R.Pascal}}ID) error
+}

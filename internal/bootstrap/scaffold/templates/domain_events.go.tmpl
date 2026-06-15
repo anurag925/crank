@@ -1,0 +1,39 @@
+package {{.R.Snake}}
+
+import "time"
+
+// {{.R.Pascal}}Created is emitted when a new {{.R.Snake}} aggregate is first persisted.
+type {{.R.Pascal}}Created struct {
+	{{.R.Pascal}}ID {{.R.Pascal}}ID
+	occurredAt     time.Time
+}
+
+// EventName returns the dotted event identifier.
+func ({{.R.Pascal}}Created) EventName() string { return "{{.R.Snake}}.created" }
+
+// OccurredAt returns the wall-clock time the event was recorded.
+func (e {{.R.Pascal}}Created) OccurredAt() time.Time { return e.occurredAt }
+
+// {{.R.Pascal}}Updated is emitted when an existing {{.R.Snake}} aggregate's state changes.
+type {{.R.Pascal}}Updated struct {
+	{{.R.Pascal}}ID {{.R.Pascal}}ID
+	occurredAt     time.Time
+}
+
+// EventName returns the dotted event identifier.
+func ({{.R.Pascal}}Updated) EventName() string { return "{{.R.Snake}}.updated" }
+
+// OccurredAt returns the wall-clock time the event was recorded.
+func (e {{.R.Pascal}}Updated) OccurredAt() time.Time { return e.occurredAt }
+
+// {{.R.Pascal}}Deleted is emitted when a {{.R.Snake}} aggregate is removed.
+type {{.R.Pascal}}Deleted struct {
+	{{.R.Pascal}}ID {{.R.Pascal}}ID
+	occurredAt     time.Time
+}
+
+// EventName returns the dotted event identifier.
+func ({{.R.Pascal}}Deleted) EventName() string { return "{{.R.Snake}}.deleted" }
+
+// OccurredAt returns the wall-clock time the event was recorded.
+func (e {{.R.Pascal}}Deleted) OccurredAt() time.Time { return e.occurredAt }

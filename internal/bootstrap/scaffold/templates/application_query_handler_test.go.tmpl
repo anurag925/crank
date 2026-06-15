@@ -1,0 +1,51 @@
+package {{.R.Snake}}
+
+import (
+	"context"
+	"testing"
+{{- if .HasTime}}
+	"time"
+{{- end}}
+
+	"{{.Module}}/internal/adapters/persistence/memory"
+	"{{.Module}}/internal/domain/{{.R.Snake}}"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+)
+
+func TestNewQueryHandler(t *testing.T) {
+	repo := memory.New{{.R.Pascal}}Repository()
+	h := NewQueryHandler(repo)
+	require.NotNil(t, h)
+}
+
+func Test{{.R.Pascal}}QueryHandler_HandleGet(t *testing.T) {
+	repo := memory.New{{.R.Pascal}}Repository()
+	// Seed a value directly.
+	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID("123e4567-e89b-12d3-a456-426614174000")
+	require.NoError(t, err)
+	seed, err := {{.R.Snake}}.New{{.R.Pascal}}(id{{range .Fields}}, {{.Sample}}{{end}})
+	require.NoError(t, err)
+	require.NoError(t, repo.Save(context.Background(), seed))
+
+	h := NewQueryHandler(repo)
+	got, err := h.HandleGet(context.Background(), Get{{.R.Pascal}}Query{ID: id.String()})
+	require.NoError(t, err)
+	assert.Equal(t, id, got.ID())
+}
+
+func Test{{.R.Pascal}}QueryHandler_HandleGet_NotFound(t *testing.T) {
+	repo := memory.New{{.R.Pascal}}Repository()
+	h := NewQueryHandler(repo)
+	_, err := h.HandleGet(context.Background(), Get{{.R.Pascal}}Query{ID: "123e4567-e89b-12d3-a456-426614174000"})
+	assert.ErrorIs(t, err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound)
+}
+
+func Test{{.R.Pascal}}QueryHandler_HandleList(t *testing.T) {
+	repo := memory.New{{.R.Pascal}}Repository()
+	h := NewQueryHandler(repo)
+	items, err := h.HandleList(context.Background(), List{{.R.PascalPlural}}Query{})
+	require.NoError(t, err)
+	assert.Empty(t, items)
+}

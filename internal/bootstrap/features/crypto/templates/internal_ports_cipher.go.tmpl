@@ -1,0 +1,14 @@
+package ports
+
+// Cipher is the abstraction for symmetric authenticated encryption. The
+// crypto feature provides an AES-256-GCM implementation; tests may swap in
+// a no-op or other implementation.
+type Cipher interface {
+	// Encrypt returns a self-contained ciphertext (nonce + tag + body)
+	// produced from plaintext. Successive calls with the same plaintext
+	// return different ciphertext because the nonce is random.
+	Encrypt(plaintext string) (string, error)
+	// Decrypt returns the original plaintext or an error if the
+	// ciphertext is tampered with or the wrong key was used.
+	Decrypt(ciphertext string) (string, error)
+}

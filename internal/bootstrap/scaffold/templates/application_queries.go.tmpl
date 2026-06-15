@@ -1,0 +1,12 @@
+package {{.R.Snake}}
+
+// Get{{.R.Pascal}}Query is the application-layer request to fetch a single
+// {{.R.Snake}} by its identifier.
+type Get{{.R.Pascal}}Query struct {
+	ID string
+}
+
+// List{{.R.PascalPlural}}Query is the application-layer request to fetch every
+// {{.R.Snake}}. Add filter fields here as the model grows.
+type List{{.R.PascalPlural}}Query struct {
+}

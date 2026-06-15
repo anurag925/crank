@@ -1,7 +1,10 @@
 package scaffold
 
 import (
+	"bufio"
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 )
 
@@ -10,10 +13,12 @@ import (
 type Field struct {
 	Name     string // snake_case column / json name
 	GoName   string // PascalCase struct field name
+	Camel    string // camelCase parameter / accessor name
 	GoType   string // Go type (string, int64, float64, bool, time.Time)
 	SQLType  string // PostgreSQL column type
 	Validate string // go-playground/validator tag, may be empty
 	IsTime   bool   // whether the field uses time.Time
+	IsUUID   bool   // whether the field is a typed identifier (uuid type)
 	Sample   string // a valid Go literal used in generated tests
 }
 
@@ -72,10 +77,12 @@ func ParseFields(specs []string) ([]Field, error) {
 		fields = append(fields, Field{
 			Name:     strings.Join(words, "_"),
 			GoName:   pascalCase(words),
+			Camel:    camelCase(words),
 			GoType:   mapping.goType,
 			SQLType:  mapping.sqlType,
 			Validate: mapping.validate,
 			IsTime:   mapping.isTime,
+			IsUUID:   typ == "uuid",
 			Sample:   mapping.sample,
 		})
 	}
@@ -91,6 +98,141 @@ func hasTimeField(fields []Field) bool {
 		}
 	}
 	return false
+}
+
+// hasUUIDField reports whether any field has the "uuid" type. The scaffold
+// uses this to decide whether to emit a typed-ID value object for the
+// resource. The DDD convention is that the first uuid field (if any) becomes
+// the aggregate's primary identifier.
+func hasUUIDField(fields []Field) bool {
+	return uuidFieldOrNil(fields) != nil
+}
+
+// uuidFieldOrNil returns the first uuid Field in the list, or nil when there
+// is none. Templates use it to pull the typed-ID column name.
+func uuidFieldOrNil(fields []Field) *Field {
+	for i, f := range fields {
+		if f.IsUUID {
+			return &fields[i]
+		}
+	}
+	return nil
+}
+
+// reservedAggregateFields are the lifecycle fields every generated aggregate
+// carries; they are not user data and must be excluded when inferring the
+// domain's field list from a previously generated aggregate file.
+var reservedAggregateFields = map[string]bool{
+	"id":        true,
+	"createdat": true,
+	"updatedat": true,
+	"events":    true,
+}
+
+// InferFieldsFromDomain reads the existing domain aggregate file for `res` in
+// `projectDir` and returns the field list it declares. The aggregate is
+// expected to be in the format produced by `domain_aggregate.go.tmpl`: a
+// struct with unexported, lower-camel fields preceded by `id` and followed
+// by `createdAt`, `updatedAt` and `events`. Returns (nil, nil) when the
+// file is missing or its body cannot be parsed — callers fall back to
+// the user-supplied field list in that case.
+func InferFieldsFromDomain(projectDir string, res Resource) ([]Field, error) {
+	path := filepath.Join(projectDir, res.DDDDomainPath(), res.Snake+".go")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, nil //nolint:nilerr // missing model is a normal "no inference" case
+	}
+	content := string(data)
+
+	inStruct := false
+	braceDepth := 0
+	var fields []Field
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !inStruct {
+			if strings.HasPrefix(line, "type "+res.Pascal+" struct") {
+				inStruct = true
+				braceDepth = 1
+			}
+			continue
+		}
+		// Track brace depth to know when the struct ends.
+		braceDepth += strings.Count(line, "{")
+		braceDepth -= strings.Count(line, "}")
+		if braceDepth <= 0 {
+			break
+		}
+		if line == "" || strings.HasPrefix(line, "//") {
+			continue
+		}
+		// Strip an inline trailing comment.
+		if idx := strings.Index(line, "//"); idx >= 0 {
+			line = strings.TrimSpace(line[:idx])
+		}
+		// A field line is `<name> <type>`. We only need the first two
+		// whitespace-separated tokens; the type may be a complex form
+		// like `[]shared.DomainEvent` or a pointer.
+		parts := strings.Fields(line)
+		if len(parts) < 2 {
+			continue
+		}
+		name := parts[0]
+		// Skip reserved aggregate fields (id, createdAt, updatedAt, events).
+		if reservedAggregateFields[strings.ToLower(name)] {
+			continue
+		}
+		goType := parts[1]
+		// Map the Go type back to a Field. We don't know the SQL type or
+		// validator from the aggregate file (those live in the DTO), so we
+		// synthesise minimal metadata. ParseFields sets the rest.
+		fields = append(fields, fieldFromGoType(name, goType))
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, nil
+	}
+	return fields, nil
+}
+
+// fieldFromGoType re-derives a Field from a name + Go type pair. The
+// validator/SQL/IsUUID fields are best-effort: only types we recognise are
+// tagged, everything else is passed through untouched. The IsTime and
+// IsUUID booleans drive template import decisions and generated tests.
+func fieldFromGoType(name, goType string) Field {
+	mapping, ok := goTypeToMapping(goType)
+	if !ok {
+		// Unknown type — emit a minimal Field and let the user fix the
+		// generated validator if needed. This keeps the generator from
+		// erroring on a hand-edited model with a foreign type.
+		return Field{
+			Name:   name,
+			GoName: pascalCase(splitWords(name)),
+			Camel:  name,
+			GoType: goType,
+		}
+	}
+	return Field{
+		Name:     name,
+		GoName:   pascalCase(splitWords(name)),
+		Camel:    name,
+		GoType:   mapping.goType,
+		SQLType:  mapping.sqlType,
+		Validate: mapping.validate,
+		IsTime:   mapping.isTime,
+		IsUUID:   goType == "string" && mapping.validate == "required,uuid",
+		Sample:   mapping.sample,
+	}
+}
+
+// goTypeToMapping maps a Go type back to the typeMapping that produced it.
+// It's the inverse of the keyword→type table; the validator flag drives
+// IsUUID detection (only the `uuid` keyword produces a `required,uuid`
+// validator, so the round-trip is unambiguous in practice).
+func goTypeToMapping(goType string) (typeMapping, bool) {
+	if mapping, ok := fieldTypes[goType]; ok {
+		return mapping, true
+	}
+	return typeMapping{}, false
 }
 
 func supportedTypes() string {

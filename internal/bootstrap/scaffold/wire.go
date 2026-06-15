@@ -8,133 +8,175 @@ import (
 	"strings"
 )
 
-// handlerFile is the path (relative to the project root) of the central handler
-// aggregator that wires individual handlers into the Echo router.
-const handlerFile = "internal/handler/handler.go"
+// routesFile is the path (relative to the project root) of the central HTTP
+// adapter aggregator that wires per-resource handlers into the Echo router.
+// The file lives under the DDD-shaped web package.
+const routesFile = "internal/adapters/http/web/routes.go"
 
-// Marker comments emitted by the base feature template. When present, new
-// handlers are spliced in at these anchors.
+// legacyHandlerFile is the pre-DDD wiring target. It is consulted only as a
+// defensive fallback: it lets `crank make handler` work against projects
+// generated before the routes.go file exists. New projects always have
+// routes.go, so this fallback is rarely hit.
+const legacyHandlerFile = "internal/handler/handler.go"
+
+// Marker comments emitted by the base feature's routes.go template. New
+// handlers are spliced in at these anchors. The DDD layout dropped the init
+// marker — wiring is done explicitly in cmd/server/main.go.
 const (
-	markerFields   = "// crank:handler-fields"
-	markerInit     = "// crank:handler-init"
-	markerRegister = "// crank:handler-register"
+	markerHTTPFields   = "// crank:http-fields"
+	markerHTTPRegister = "// crank:http-register"
 )
 
-// wireResult reports the outcome of attempting to register a handler in
-// handler.go.
+// wireResult reports the outcome of attempting to register a handler in the
+// routes aggregator.
 type wireResult struct {
-	// Wired is true when handler.go was edited successfully.
+	// Wired is true when the file was edited successfully.
 	Wired bool
 	// Hint, when non-empty, contains manual instructions the user should apply
 	// because automatic wiring was not possible.
 	Hint string
 }
 
-// wireHandler registers a generated handler with the project's central Handler
-// aggregator (internal/handler/handler.go) so its routes are served without any
-// manual edits. It is best-effort and never corrupts the file: if the resulting
-// source does not compile/format, the edit is discarded and a manual hint is
-// returned instead.
+// wireHandler registers a generated handler with the project's central
+// routes aggregator (`internal/adapters/http/web/routes.go`) so its routes
+// are served without any manual edits. It is best-effort and never corrupts
+// the file: if the resulting source does not compile/format, the edit is
+// discarded and a manual hint is returned instead.
 func wireHandler(projectDir string, r Resource) (wireResult, error) {
-	path := filepath.Join(projectDir, handlerFile)
+	// Prefer the DDD target. Fall back to the legacy handler.go only when the
+	// caller explicitly wants to wire a handler into an old (pre-DDD) project
+	// that has not yet migrated.
+	path := filepath.Join(projectDir, routesFile)
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		path = filepath.Join(projectDir, legacyHandlerFile)
+	}
+	rel := projectRel(path, projectDir)
+
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		return wireResult{Hint: manualWireHint(r)}, nil
+		return wireResult{Hint: manualWireHint(r, rel)}, nil
 	}
 	if err != nil {
-		return wireResult{}, fmt.Errorf("read %s: %w", handlerFile, err)
+		return wireResult{}, fmt.Errorf("read %s: %w", rel, err)
 	}
 
 	content := string(data)
 
-	// Already wired? Avoid creating duplicate registrations.
-	ctor := fmt.Sprintf("New%sHandler(deps)", r.Pascal)
-	if strings.Contains(content, ctor) {
+	// Already wired? Avoid creating duplicate registrations. The check is keyed
+	// on the field name (and the route group), so the same handler can be
+	// re-spliced into different routes.go files safely.
+	if isAlreadyWired(content, r) {
 		return wireResult{Wired: true}, nil
 	}
 
-	fieldLine := fmt.Sprintf("\t%s *%sHandler\n", r.CamelPlural, r.Pascal)
-	initLine := fmt.Sprintf("\t\t%s: New%sHandler(deps),\n", r.CamelPlural, r.Pascal)
-	registerLine := fmt.Sprintf("\th.%s.Register(e)\n", r.CamelPlural)
+	fieldLine := fmt.Sprintf("\t%sHandler *%sHandler\n", r.Pascal, r.Pascal)
+	registerLine := fmt.Sprintf("\tg%d := e.Group(\"/%s\")\n\tcfg.%sHandler.Register(g%d)\n",
+		wireGroupIndex(content, r), r.KebabPlural, r.Pascal, wireGroupIndex(content, r))
 
-	updated, ok := spliceAtMarkers(content, fieldLine, initLine, registerLine)
+	updated, ok := spliceAtMarkers(content, fieldLine, registerLine)
 	if !ok {
-		updated, ok = spliceAtBraces(content, fieldLine, initLine, registerLine)
-	}
-	if !ok {
-		return wireResult{Hint: manualWireHint(r)}, nil
+		return wireResult{Hint: manualWireHint(r, rel)}, nil
 	}
 
 	formatted, err := format.Source([]byte(updated))
 	if err != nil {
 		// The edit produced invalid Go; do not write a broken file.
-		return wireResult{Hint: manualWireHint(r)}, nil
+		return wireResult{Hint: manualWireHint(r, rel)}, nil
 	}
 	if err := os.WriteFile(path, formatted, 0o644); err != nil {
-		return wireResult{}, fmt.Errorf("write %s: %w", handlerFile, err)
+		return wireResult{}, fmt.Errorf("write %s: %w", rel, err)
 	}
 	return wireResult{Wired: true}, nil
 }
 
-// spliceAtMarkers inserts the snippets immediately before the marker comments.
-// It returns false if any marker is missing.
-func spliceAtMarkers(content, fieldLine, initLine, registerLine string) (string, bool) {
-	if !strings.Contains(content, markerFields) ||
-		!strings.Contains(content, markerInit) ||
-		!strings.Contains(content, markerRegister) {
+// isAlreadyWired reports whether the routes file already contains a wiring
+// line for the resource (used to keep splicing idempotent).
+func isAlreadyWired(content string, r Resource) bool {
+	// New style: `cfg.OrderHandler.Register(g2)` or a struct field.
+	patterns := []string{
+		fmt.Sprintf("cfg.%sHandler.Register(", r.Pascal),
+		fmt.Sprintf("%s *%sHandler", r.Pascal, r.Pascal),
+	}
+	for _, p := range patterns {
+		if strings.Contains(content, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// wireGroupIndex returns a small integer that can be appended to the local
+// group variable name to avoid clashing with other generated handlers. The
+// first handler wired into a file is `g` (no suffix), the second is `g2`, the
+// third `g3`, and so on. The implementation just counts how many gN = e.Group
+// lines already exist.
+func wireGroupIndex(content string, r Resource) int {
+	if !strings.Contains(content, " := e.Group(") {
+		return 0
+	}
+	// Find the highest "gN" prefix currently in use.
+	max := 0
+	for _, line := range strings.Split(content, "\n") {
+		if !strings.Contains(line, " := e.Group(") {
+			continue
+		}
+		idx := strings.Index(line, ":=")
+		if idx < 0 {
+			continue
+		}
+		name := strings.TrimSpace(line[:idx])
+		if name == "g" {
+			if max < 0 {
+				max = 0
+			}
+			continue
+		}
+		var n int
+		if _, err := fmt.Sscanf(name, "g%d", &n); err == nil {
+			if n > max {
+				max = n
+			}
+		}
+	}
+	// The base feature's first group is named `g` (no suffix); the second
+	// generated resource is therefore `g2`.
+	if max < 2 {
+		return 2
+	}
+	return max + 1
+}
+
+// spliceAtMarkers inserts the snippets immediately before the marker
+// comments. It returns false if any marker is missing.
+func spliceAtMarkers(content, fieldLine, registerLine string) (string, bool) {
+	if !strings.Contains(content, markerHTTPFields) ||
+		!strings.Contains(content, markerHTTPRegister) {
 		return "", false
 	}
-	content = strings.Replace(content, markerFields, strings.TrimPrefix(fieldLine, "\t")+"\t"+markerFields, 1)
-	content = strings.Replace(content, markerInit, strings.TrimPrefix(initLine, "\t\t")+"\t\t"+markerInit, 1)
-	content = strings.Replace(content, markerRegister, strings.TrimPrefix(registerLine, "\t")+"\t"+markerRegister, 1)
+	content = strings.Replace(content, markerHTTPFields, "\n"+strings.TrimRight(fieldLine, "\n")+"\t"+markerHTTPFields, 1)
+	content = strings.Replace(content, markerHTTPRegister, "\n"+strings.TrimRight(registerLine, "\n")+"\t"+markerHTTPRegister, 1)
 	return content, true
 }
 
-// spliceAtBraces is the fallback used for projects generated before markers
-// existed. It locates the Handler struct, the New() composite literal and the
-// Register method body and inserts the snippets before their closing braces.
-func spliceAtBraces(content, fieldLine, initLine, registerLine string) (string, bool) {
-	var ok bool
-	content, ok = insertBeforeClosing(content, "type Handler struct {", "\n}", fieldLine)
-	if !ok {
-		return "", false
+// projectRel returns a project-relative path. It tolerates both relative and
+// absolute projectDir values without panicking.
+func projectRel(path, projectDir string) string {
+	if rel, err := filepath.Rel(projectDir, path); err == nil {
+		return rel
 	}
-	content, ok = insertBeforeClosing(content, "return &Handler{", "\n\t}", initLine)
-	if !ok {
-		return "", false
-	}
-	content, ok = insertBeforeClosing(content, "func (h *Handler) Register(", "\n}", registerLine)
-	if !ok {
-		return "", false
-	}
-	return content, true
+	return path
 }
 
-// insertBeforeClosing finds anchor in content, then the first occurrence of
-// closing after it, and inserts snippet just before that closing token.
-func insertBeforeClosing(content, anchor, closing, snippet string) (string, bool) {
-	start := strings.Index(content, anchor)
-	if start < 0 {
-		return content, false
-	}
-	rel := strings.Index(content[start:], closing)
-	if rel < 0 {
-		return content, false
-	}
-	at := start + rel
-	return content[:at] + "\n" + strings.TrimRight(snippet, "\n") + content[at:], true
-}
-
-// manualWireHint returns copy-pasteable instructions for registering a handler
-// by hand when automatic wiring is not possible.
-func manualWireHint(r Resource) string {
+// manualWireHint returns copy-pasteable instructions for registering a
+// handler by hand when automatic wiring is not possible.
+func manualWireHint(r Resource, target string) string {
 	return fmt.Sprintf(`could not auto-register the handler in %s. Add these manually:
 
-  • in the Handler struct:        %s *%sHandler
-  • in New(), the &Handler{} body: %s: New%sHandler(deps),
-  • in Register():                h.%s.Register(e)`,
-		handlerFile,
-		r.CamelPlural, r.Pascal,
-		r.CamelPlural, r.Pascal,
-		r.CamelPlural)
+  • in the MountConfig struct:   %s *%sHandler
+  • in Mount(), before the marker:
+        g := e.Group("/%s")
+        cfg.%sHandler.Register(g)`,
+		target,
+		r.Pascal, r.Pascal,
+		r.KebabPlural, r.Pascal)
 }

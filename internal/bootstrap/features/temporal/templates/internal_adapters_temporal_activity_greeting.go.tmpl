@@ -1,0 +1,30 @@
+package activity
+
+import (
+	"context"
+
+	"go.temporal.io/sdk/activity"
+)
+
+// GreetingInput is the input payload for the Greet activity.
+type GreetingInput struct {
+	Name string `json:"name"`
+}
+
+// GreetingOutput is the result returned by the Greet activity.
+type GreetingOutput struct {
+	Message string `json:"message"`
+}
+
+// Greet is a sample Temporal activity. Replace the body with the real
+// side-effecting work (DB calls, HTTP requests, ...). Logs are written
+// through the SDK activity logger, which the worker bridges to slog.
+func Greet(ctx context.Context, in GreetingInput) (GreetingOutput, error) {
+	logger := activity.GetLogger(ctx)
+	logger.Info("Greet invoked", "name", in.Name)
+
+	out := GreetingOutput{Message: "Hello, " + in.Name + "!"}
+
+	logger.Info("Greet completed", "message", out.Message)
+	return out, nil
+}

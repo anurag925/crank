@@ -1,0 +1,54 @@
+package web
+
+import (
+	"log/slog"
+	"net/http"
+	"time"
+
+	"github.com/labstack/echo/v4"
+
+	"{{.ModulePath}}/internal/validator"
+)
+
+// NewServer constructs an Echo instance wired with the standard binder
+// (which runs struct validation automatically after Bind), and returns it
+// ready for the composition root to register middleware and routes.
+//
+// The composition root in cmd/server/main.go is responsible for mounting
+// routes, attaching middleware, and starting the listener.
+func NewServer(logger *slog.Logger) *echo.Echo {
+	if logger == nil {
+		logger = slog.Default()
+	}
+	e := echo.New()
+	e.Binder = &echoBinder{defaultBinder: new(echo.DefaultBinder), logger: logger}
+	return e
+}
+
+// Health is a simple liveness probe. It returns 200 OK and the current UTC
+// time, suitable for Kubernetes or load balancer health checks.
+func Health(c echo.Context) error {
+	return c.JSON(http.StatusOK, echo.Map{
+		"status": "ok",
+		"time":   time.Now().UTC().Format(time.RFC3339),
+	})
+}
+
+// echoBinder wraps the default Echo binder so that struct validation is
+// applied automatically on every Bind() call. Handlers no longer need to
+// call the validator manually — if Bind() returns nil the input is
+// guaranteed valid.
+type echoBinder struct {
+	defaultBinder echo.Binder
+	logger        *slog.Logger
+}
+
+func (b *echoBinder) Bind(i any, c echo.Context) error {
+	if err := b.defaultBinder.Bind(i, c); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	if err := validator.Struct(i); err != nil {
+		return err
+	}
+	return nil
+}

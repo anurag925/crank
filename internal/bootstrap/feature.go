@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"embed"
 	"fmt"
+	"go/format"
 	"io/fs"
 	"path/filepath"
 	"sort"
@@ -128,6 +129,17 @@ func generateFeature(projectDir string, f Feature, ctx *Context) ([]string, erro
 		rendered, err := renderTemplate(m.OutputPath, string(body), ctx)
 		if err != nil {
 			return written, fmt.Errorf("feature %s: render %s: %w", f.Name(), m.OutputPath, err)
+		}
+		// Run gofmt on .go files so generated code is always aligned and
+		// import-ordered correctly, regardless of whitespace emitted by
+		// templates. Without this, conditional field insertions in struct
+		// blocks drift out of column alignment.
+		if strings.HasSuffix(m.OutputPath, ".go") {
+			if formatted, ferr := format.Source([]byte(rendered)); ferr == nil {
+				rendered = string(formatted)
+			} else {
+				return written, fmt.Errorf("feature %s: format %s: %w", f.Name(), m.OutputPath, ferr)
+			}
 		}
 		if err := utils.WriteFile(dest, rendered); err != nil {
 			return written, err

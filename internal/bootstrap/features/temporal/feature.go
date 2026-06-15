@@ -19,7 +19,7 @@ func init() {
 
 func (feature) Name() string { return "temporal" }
 func (feature) Description() string {
-	return "Temporal workflow engine: client, worker, slog-bridged logging and example workflow/activity"
+	return "Temporal workflow engine: client, worker, slog-bridged logging and example workflow/activity under internal/adapters/temporal"
 }
 func (feature) Templates() embed.FS { return tmpls }
 
@@ -31,13 +31,10 @@ func (feature) Dependencies() []string {
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
-		{TemplatePath: "templates/pkg_temporal_logger.go.tmpl", OutputPath: "pkg/temporal/logger.go"},
-		{TemplatePath: "templates/pkg_temporal_client.go.tmpl", OutputPath: "pkg/temporal/client.go"},
-		{TemplatePath: "templates/pkg_temporal_worker.go.tmpl", OutputPath: "pkg/temporal/worker.go"},
-		{TemplatePath: "templates/internal_workflow_greeting.go.tmpl", OutputPath: "internal/workflow/greeting.go"},
-		{TemplatePath: "templates/internal_workflow_greeting_test.go.tmpl", OutputPath: "internal/workflow/greeting_test.go"},
-		{TemplatePath: "templates/internal_activity_greeting.go.tmpl", OutputPath: "internal/activity/greeting.go"},
-		{TemplatePath: "templates/internal_activity_greeting_test.go.tmpl", OutputPath: "internal/activity/greeting_test.go"},
+		{TemplatePath: "templates/internal_adapters_temporal_logger.go.tmpl", OutputPath: "internal/adapters/temporal/logger.go"},
+		{TemplatePath: "templates/internal_adapters_temporal_worker.go.tmpl", OutputPath: "internal/adapters/temporal/worker.go"},
+		{TemplatePath: "templates/internal_adapters_temporal_workflow_greeting.go.tmpl", OutputPath: "internal/adapters/temporal/workflow/greeting.go"},
+		{TemplatePath: "templates/internal_adapters_temporal_activity_greeting.go.tmpl", OutputPath: "internal/adapters/temporal/activity/greeting.go"},
 		{TemplatePath: "templates/cmd_worker_main.go.tmpl", OutputPath: "cmd/worker/main.go"},
 	}
 }

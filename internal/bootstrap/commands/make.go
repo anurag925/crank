@@ -127,7 +127,7 @@ func runScaffold(opts scaffold.Options) error {
 	}
 
 	if result.Wired {
-		fmt.Printf("✔ Registered %sHandler in %s\n", result.Resource.Pascal, "internal/handler/handler.go")
+		fmt.Printf("✔ Registered %sHandler in %s\n", result.Resource.Pascal, "internal/adapters/http/web/routes.go")
 	}
 	if result.WireHint != "" {
 		fmt.Println("⚠ " + result.WireHint)

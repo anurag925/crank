@@ -1,0 +1,11 @@
+package {{.R.Snake}}
+
+import "errors"
+
+// Err{{.R.Pascal}}NotFound is returned by the repository when a {{.R.Snake}}
+// lookup by id does not match any stored aggregate.
+var Err{{.R.Pascal}}NotFound = errors.New("{{.R.Snake}} not found")
+
+// ErrInvalid{{.R.Pascal}} is returned by the aggregate constructor when one of
+// its invariants is violated (e.g. an empty string for a required field).
+var ErrInvalid{{.R.Pascal}} = errors.New("invalid {{.R.Snake}}")

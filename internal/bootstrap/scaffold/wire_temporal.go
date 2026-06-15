@@ -10,7 +10,7 @@ import (
 
 // workerFile is the path (relative to the project root) of the Temporal worker
 // aggregator that registers workflows and activities.
-const workerFile = "pkg/temporal/worker.go"
+const workerFile = "internal/adapters/temporal/worker.go"
 
 // Marker comments emitted by the temporal feature's worker template. New
 // workflows and activities are registered immediately before these anchors.
@@ -20,7 +20,7 @@ const (
 )
 
 // wireWorkflow registers a generated workflow with the project's Temporal
-// worker (pkg/temporal/worker.go).
+// worker (internal/adapters/temporal/worker.go).
 func wireWorkflow(projectDir string, r Resource) (wireResult, error) {
 	reg := fmt.Sprintf("w.RegisterWorkflow(workflow.%sWorkflow)", r.Pascal)
 	hint := fmt.Sprintf(`could not auto-register the workflow in %s. Add this to registerWorkflows():
@@ -30,7 +30,7 @@ func wireWorkflow(projectDir string, r Resource) (wireResult, error) {
 }
 
 // wireActivity registers a generated activity with the project's Temporal
-// worker (pkg/temporal/worker.go).
+// worker (internal/adapters/temporal/worker.go).
 func wireActivity(projectDir string, r Resource) (wireResult, error) {
 	reg := fmt.Sprintf("w.RegisterActivity(activity.%sActivity)", r.Pascal)
 	hint := fmt.Sprintf(`could not auto-register the activity in %s. Add this to registerActivities():
