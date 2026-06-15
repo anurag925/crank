@@ -19,6 +19,8 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/crypto"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/otel"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/outbox"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
@@ -29,7 +31,7 @@ var crankBin string
 
 // allFeatureNames lists every feature the application ships, used to validate
 // the `crank list` output and to drive the "all features" compile test.
-var allFeatureNames = []string{"base", "auth", "crypto", "postgres", "redis", "mongodb", "temporal"}
+var allFeatureNames = []string{"base", "auth", "crypto", "postgres", "redis", "mongodb", "temporal", "otel", "outbox"}
 
 // allToolNames lists every tool subcommand the application wraps.
 var allToolNames = []string{"migrate", "swag", "build", "run", "dev", "test", "gofmt", "vet", "tidy"}

@@ -1,0 +1,50 @@
+package middleware
+
+import (
+	"github.com/labstack/echo/v4"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/trace"
+)
+
+// Tracing returns an Echo middleware that opens a span per request. The
+// span is registered as the active span on the request context, so any
+// downstream code (DB calls, external HTTP) that participates in
+// propagation will appear as a child.
+//
+// The middleware is installed in cmd/server/main.go when the `otel`
+// feature is enabled. The composition root calls
+//
+//	e.Use(middleware.Tracing(serviceName))
+//
+// to wire it in.
+func Tracing(serviceName string) echo.MiddlewareFunc {
+	// Honour any W3C trace context the caller sent us.
+	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
+		propagation.TraceContext{},
+		propagation.Baggage{},
+	))
+	tracer := otel.Tracer(serviceName)
+	return func(next echo.HandlerFunc) echo.HandlerFunc {
+		return func(c echo.Context) error {
+			req := c.Request()
+			ctx := otel.GetTextMapPropagator().Extract(req.Context(), propagation.HeaderCarrier(req.Header))
+			spanName := req.Method + " " + c.Path()
+			ctx, span := tracer.Start(ctx, spanName, trace.WithSpanKind(trace.SpanKindServer))
+			defer span.End()
+			span.SetAttributes(
+				attribute.String("http.method", req.Method),
+				attribute.String("http.path", c.Path()),
+				attribute.String("http.client_ip", c.RealIP()),
+			)
+			c.SetRequest(req.WithContext(ctx))
+			err := next(c)
+			if err != nil {
+				span.RecordError(err)
+			}
+			span.SetAttributes(attribute.Int("http.status_code", c.Response().Status))
+			return err
+		}
+	}
+}

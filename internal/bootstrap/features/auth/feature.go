@@ -31,6 +31,8 @@ func (feature) Dependencies() []string {
 	}
 }
 
+func (feature) Requirements() []string { return nil }
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		// Domain: extend the user aggregate with password and email value objects

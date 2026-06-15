@@ -33,6 +33,8 @@ func (feature) Dependencies() []string {
 	}
 }
 
+func (feature) Requirements() []string { return nil }
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		// Postgres persistence adapters

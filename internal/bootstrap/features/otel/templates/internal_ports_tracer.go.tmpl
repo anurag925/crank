@@ -1,0 +1,24 @@
+package ports
+
+import (
+	"context"
+
+	"go.opentelemetry.io/otel/trace"
+)
+
+// TracerProvider is the application-layer port for OpenTelemetry. It returns
+// the project's tracer (used to start spans from inside the application
+// layer) and a Shutdown that flushes any buffered spans. Adapters in
+// internal/adapters/telemetry implement this; the composition root injects
+// the implementation into the HTTP server and (optionally) the application
+// services.
+type TracerProvider interface {
+	// Tracer returns a tracer for the given instrumentation scope (usually
+	// the package or component name). Equivalent to
+	// otel.Tracer(name).trace.Tracer.
+	Tracer(name string) trace.Tracer
+	// Shutdown flushes any buffered spans and releases resources. It is
+	// safe to call multiple times. Should be invoked from a defer in
+	// cmd/server/main.go.
+	Shutdown(ctx context.Context) error
+}

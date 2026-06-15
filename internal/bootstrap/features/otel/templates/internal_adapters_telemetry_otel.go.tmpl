@@ -1,0 +1,78 @@
+package telemetry
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
+	"go.opentelemetry.io/otel/sdk/resource"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
+	semconv "go.opentelemetry.io/otel/semconv/v1.26.0"
+	"go.opentelemetry.io/otel/trace"
+)
+
+// Config controls the OpenTelemetry tracer provider. Values come from the
+// application config (`telemetry.*` keys).
+type Config struct {
+	// ServiceName identifies the service in tracing backends.
+	ServiceName string
+	// Exporter selects the span exporter. Today only "stdout" is
+	// supported; "otlp" is reserved for a future addition.
+	Exporter string
+}
+
+// Provider is the runtime OpenTelemetry tracer provider. It implements
+// ports.TracerProvider.
+type Provider struct {
+	tp       *sdktrace.TracerProvider
+	exporter *stdouttrace.Exporter
+}
+
+// NewProvider builds a Provider that writes spans to stdout. It registers
+// itself as the global tracer provider so any code that calls
+// otel.Tracer(name) gets the same backing instance.
+func NewProvider(ctx context.Context, cfg Config) (*Provider, error) {
+	if cfg.ServiceName == "" {
+		cfg.ServiceName = "app"
+	}
+	exporter, err := stdouttrace.New(
+		stdouttrace.WithWriter(os.Stdout),
+		stdouttrace.WithPrettyPrint(),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("build stdout exporter: %w", err)
+	}
+	res, err := resource.Merge(
+		resource.Default(),
+		resource.NewWithAttributes(
+			semconv.SchemaURL,
+			semconv.ServiceName(cfg.ServiceName),
+		),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("merge resource: %w", err)
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithBatcher(exporter),
+		sdktrace.WithResource(res),
+		sdktrace.WithSampler(sdktrace.AlwaysSample()),
+	)
+	otel.SetTracerProvider(tp)
+	return &Provider{tp: tp, exporter: exporter}, nil
+}
+
+// Tracer returns a tracer scoped to the given instrumentation name.
+func (p *Provider) Tracer(name string) trace.Tracer {
+	return p.tp.Tracer(name)
+}
+
+// Shutdown flushes any buffered spans and stops the exporter. It is safe
+// to call more than once.
+func (p *Provider) Shutdown(ctx context.Context) error {
+	if p == nil || p.tp == nil {
+		return nil
+	}
+	return p.tp.Shutdown(ctx)
+}

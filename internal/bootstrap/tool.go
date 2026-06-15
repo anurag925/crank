@@ -2,6 +2,7 @@ package bootstrap
 
 import (
 	"fmt"
+	"io"
 
 	"github.com/spf13/cobra"
 )
@@ -30,6 +31,35 @@ type Tool interface {
 	Prepare(projectDir string, cmd *cobra.Command) (*ToolInvocation, error)
 	// Install downloads and installs the tool. Returns nil on success.
 	Install() error
+}
+
+// CheckResult is the outcome of a single in-process check. OK is true when the
+// project passed the check; Summary is the human-readable label (e.g. "manifest
+// parses"). Detail is appended on failure to help the user find the problem.
+type CheckResult struct {
+	OK      bool
+	Summary string
+	Detail  string
+}
+
+// InProcessTool is an optional interface a Tool can implement to run its work
+// inside the crank binary (no external binary required). The harness calls
+// RunInProcess instead of looking up a binary and exec'ing it. This is the
+// natural home for tools that operate on project files (linters, health
+// checks) rather than wrapping an external CLI.
+type InProcessTool interface {
+	Tool
+	// RunInProcess executes the tool's checks against projectDir and writes
+	// human-readable results to out. The returned error is reserved for
+	// unrecoverable failures (e.g. the directory is not a crank project);
+	// per-check failures should be reported via CheckResult, not as errors.
+	RunInProcess(projectDir string, out io.Writer) ([]CheckResult, error)
+}
+
+// HasInProcess reports whether t implements InProcessTool.
+func HasInProcess(t Tool) bool {
+	_, ok := t.(InProcessTool)
+	return ok
 }
 
 // ToolInvocation holds the resolved command to execute.

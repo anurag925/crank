@@ -3,35 +3,16 @@ package config
 import (
 	"fmt"
 	"strings"
-{{- if .Has "auth"}}
-	"time"
-{{- end}}
 
 	"github.com/spf13/viper"
 )
 
 // Config is the top-level application configuration loaded from configs/config.yaml and
-// overridden by environment variables.
+// overridden by environment variables. Feature-specific config blocks are
+// injected at the markers below by `crank add` (and by `crank init` for
+// multi-feature generations).
 type Config struct {
 	App AppConfig `mapstructure:"app"`
-{{- if .Has "postgres"}}
-	Database DatabaseConfig `mapstructure:"database"`
-{{- end}}
-{{- if .Has "auth"}}
-	JWT JWTConfig `mapstructure:"jwt"`
-{{- end}}
-{{- if .Has "crypto"}}
-	Crypto CryptoConfig `mapstructure:"crypto"`
-{{- end}}
-{{- if .Has "redis"}}
-	Redis RedisConfig `mapstructure:"redis"`
-{{- end}}
-{{- if .Has "mongodb"}}
-	MongoDB MongoDBConfig `mapstructure:"mongodb"`
-{{- end}}
-{{- if .Has "temporal"}}
-	Temporal TemporalConfig `mapstructure:"temporal"`
-{{- end}}
 	// crank:config-fields
 	Logging LoggingConfig `mapstructure:"logging"`
 }
@@ -43,61 +24,6 @@ type AppConfig struct {
 	Port int    `mapstructure:"port"`
 	Env  string `mapstructure:"env"`
 }
-{{if .Has "postgres"}}
-// DatabaseConfig holds PostgreSQL connection settings.
-type DatabaseConfig struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	User     string `mapstructure:"user"`
-	Password string `mapstructure:"password"`
-	Name     string `mapstructure:"name"`
-	SSLMode  string `mapstructure:"sslmode"`
-}
-
-// DSN returns a libpq-style connection string.
-func (d DatabaseConfig) DSN() string {
-	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
-		d.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode)
-}
-{{end}}
-{{if .Has "auth"}}
-// JWTConfig holds settings for JWT issuance and validation.
-type JWTConfig struct {
-	Secret            string        `mapstructure:"secret"`
-	Expiration        time.Duration `mapstructure:"expiration"`
-	RefreshExpiration time.Duration `mapstructure:"refresh_expiration"`
-}
-{{end}}
-{{if .Has "crypto"}}
-// CryptoConfig holds the encryption secret used by the crypto package.
-// The secret is read from the CRYPTO_SECRET environment variable.
-type CryptoConfig struct {
-	Secret string `mapstructure:"secret"`
-}
-{{end}}
-{{if .Has "redis"}}
-// RedisConfig holds the Redis connection settings.
-type RedisConfig struct {
-	Addr     string `mapstructure:"addr"`
-	Password string `mapstructure:"password"`
-	DB       int    `mapstructure:"db"`
-}
-{{end}}
-{{if .Has "mongodb"}}
-// MongoDBConfig holds the MongoDB connection settings.
-type MongoDBConfig struct {
-	URI      string `mapstructure:"uri"`
-	Database string `mapstructure:"database"`
-}
-{{end}}
-{{if .Has "temporal"}}
-// TemporalConfig holds the Temporal client and worker settings.
-type TemporalConfig struct {
-	HostPort  string `mapstructure:"host_port"`
-	Namespace string `mapstructure:"namespace"`
-	TaskQueue string `mapstructure:"task_queue"`
-}
-{{end}}
 // crank:config-structs
 // LoggingConfig controls slog output.
 type LoggingConfig struct {
@@ -136,38 +62,8 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("app.host", "0.0.0.0")
 	v.SetDefault("app.port", 8080)
 	v.SetDefault("app.env", "development")
-{{- if .Has "postgres"}}
-	v.SetDefault("database.host", "localhost")
-	v.SetDefault("database.port", 5432)
-	v.SetDefault("database.user", "postgres")
-	v.SetDefault("database.password", "postgres")
-	v.SetDefault("database.name", "{{.PackageName}}")
-	v.SetDefault("database.sslmode", "disable")
-{{- end}}
-{{- if .Has "auth"}}
-	v.SetDefault("jwt.secret", "change-me-in-production")
-	v.SetDefault("jwt.expiration", "24h")
-	v.SetDefault("jwt.refresh_expiration", "168h")
-{{- end}}
-{{- if .Has "crypto"}}
-	v.SetDefault("crypto.secret", "change-me-in-production")
-{{- end}}
-{{- if .Has "redis"}}
-	v.SetDefault("redis.addr", "localhost:6379")
-	v.SetDefault("redis.password", "")
-	v.SetDefault("redis.db", 0)
-{{- end}}
-{{- if .Has "mongodb"}}
-	v.SetDefault("mongodb.uri", "mongodb://localhost:27017")
-	v.SetDefault("mongodb.database", "{{.PackageName}}")
-{{- end}}
-{{- if .Has "temporal"}}
-	v.SetDefault("temporal.host_port", "127.0.0.1:7233")
-	v.SetDefault("temporal.namespace", "default")
-	v.SetDefault("temporal.task_queue", "{{.PackageName}}-task-queue")
-{{- end}}
 	// crank:config-defaults
 	v.SetDefault("logging.level", "info")
-	v.SetDefault("logging.format", "json")
+	v.SetDefault("logging.format", "text")
 	v.SetDefault("logging.add_source", false)
 }

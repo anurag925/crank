@@ -70,6 +70,9 @@ func Generate(reg *Registry, opts Options) (*Result, error) {
 	if err := validateFeatures(reg, features); err != nil {
 		return nil, err
 	}
+	if err := validateRequirements(reg, features); err != nil {
+		return nil, err
+	}
 
 	ctx := NewContext(opts.ProjectName, opts.ModulePath, features)
 
@@ -83,8 +86,18 @@ func Generate(reg *Registry, opts Options) (*Result, error) {
 		}
 		all = append(all, written...)
 		allDeps = append(allDeps, f.Dependencies()...)
+		// Inject the feature's config snippets into config.go, config.yaml
+		// and .env.example so multi-feature `crank init` calls produce a
+		// fully wired project. injectConfig is idempotent and skips
+		// features with no config data (e.g. "base").
+		cfgWritten, err := injectConfig(projectDir, name, ctx.PackageName)
+		if err != nil {
+			return nil, err
+		}
+		all = append(all, cfgWritten...)
 	}
 	sort.Strings(all)
+	all = unique(all)
 
 	return &Result{
 		ProjectDir:   projectDir,
@@ -117,15 +130,22 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 	features := ensureBase(append([]string{}, manifest.Features...))
 	features = appendUnique(features, featureName)
 	ctx := NewContext(manifest.ProjectName, manifest.ModulePath, features)
-	if err := ctx.Require(featureName); err != nil {
-		return nil, err
-	}
 
 	// Only render the new feature's templates, not all features.
 	ftr, err := reg.resolve(featureName)
 	if err != nil {
 		return nil, err
 	}
+
+	// Enforce the feature's requirements (e.g. outbox requires postgres).
+	// The check runs against the *projected* feature set so we can detect
+	// missing requirements before any templates are written.
+	for _, req := range ftr.Requirements() {
+		if !ctx.Has(req) {
+			return nil, fmt.Errorf("feature %q requires %q (run `crank add %s` first or `crank init` with both features)", featureName, req, req)
+		}
+	}
+
 	written, err := generateFeature(projectDir, ftr, ctx)
 	if err != nil {
 		return nil, err
@@ -194,6 +214,26 @@ func validateFeatures(reg *Registry, features []string) error {
 		seen[name] = true
 		if _, err := reg.resolve(name); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// validateRequirements walks the requested feature set and refuses to
+// proceed if any feature's Requirements() are not satisfied by the set
+// as a whole. For example, `crank init --features=base,outbox` errors
+// with a clear hint that outbox requires postgres.
+func validateRequirements(reg *Registry, features []string) error {
+	have := make(map[string]bool, len(features))
+	for _, f := range features {
+		have[f] = true
+	}
+	for _, name := range features {
+		f, _ := reg.resolve(name)
+		for _, req := range f.Requirements() {
+			if !have[req] {
+				return fmt.Errorf("feature %q requires %q (include both in --features or run `crank add %s` after init)", name, req, req)
+			}
 		}
 	}
 	return nil

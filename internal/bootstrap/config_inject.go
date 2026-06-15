@@ -127,6 +127,29 @@ func featureConfigData(pkgName string) map[string]configInjection {
 			YAMLSection: "\ntemporal:\n  host_port: \"127.0.0.1:7233\"\n  namespace: \"default\"\n  task_queue: \"" + pkgName + "-task-queue\"\n",
 			EnvSection:  "\nTEMPORAL_HOST_PORT=127.0.0.1:7233\nTEMPORAL_NAMESPACE=default\nTEMPORAL_TASK_QUEUE=" + pkgName + "-task-queue\n",
 		},
+		"otel": {
+			StructField: "\tTelemetry TelemetryConfig " + bt + "mapstructure:\"telemetry\"" + bt + "\n",
+			StructDef: "// TelemetryConfig holds the OpenTelemetry settings.\n" +
+				"type TelemetryConfig struct {\n" +
+				"\tServiceName string " + bt + "mapstructure:\"service_name\"" + bt + "\n" +
+				"\tExporter    string " + bt + "mapstructure:\"exporter\"" + bt + "\n" +
+				"}\n",
+			Defaults:    "\tv.SetDefault(\"telemetry.service_name\", \"" + pkgName + "\")\n" + "\tv.SetDefault(\"telemetry.exporter\", \"stdout\")\n",
+			YAMLSection: "\ntelemetry:\n  service_name: \"" + pkgName + "\"\n  exporter: \"stdout\"\n",
+			EnvSection:  "\nTELEMETRY_SERVICE_NAME=" + pkgName + "\nTELEMETRY_EXPORTER=stdout\n",
+		},
+		"outbox": {
+			StructField: "\tOutbox OutboxConfig " + bt + "mapstructure:\"outbox\"" + bt + "\n",
+			StructDef: "// OutboxConfig holds the transactional outbox worker settings.\n" +
+				"type OutboxConfig struct {\n" +
+				"\tPollInterval time.Duration " + bt + "mapstructure:\"poll_interval\"" + bt + "\n" +
+				"\tBatchSize    int           " + bt + "mapstructure:\"batch_size\"" + bt + "\n" +
+				"}\n",
+			Defaults:    "\tv.SetDefault(\"outbox.poll_interval\", \"1s\")\n" + "\tv.SetDefault(\"outbox.batch_size\", 100)\n",
+			Imports:     []string{"\"time\""},
+			YAMLSection: "\noutbox:\n  poll_interval: 1s\n  batch_size: 100\n",
+			EnvSection:  "\nOUTBOX_POLL_INTERVAL=1s\nOUTBOX_BATCH_SIZE=100\n",
+		},
 	}
 }
 
@@ -184,9 +207,10 @@ func injectGoConfig(path string, data configInjection) (bool, error) {
 	}
 	content := string(raw)
 
-	// Idempotency: skip if the struct field is already present.
-	// We check for a representative field tag rather than the whole struct.
-	fieldTag := strings.TrimSpace(data.StructField)
+	// Idempotency: skip if the struct field is already present. We
+	// check for the field name + mapstructure tag rather than the whole
+	// struct so gofmt-driven whitespace changes don't break the check.
+	fieldTag := fieldSignature(data.StructField)
 	if fieldTag != "" && strings.Contains(content, fieldTag) {
 		return false, nil
 	}
@@ -303,4 +327,30 @@ func firstDataLine(text string) string {
 		}
 	}
 	return ""
+}
+
+// fieldSignature returns the "Name mapstructure:" tag fragment from a
+// Go struct field declaration. This is the whitespace-independent
+// fingerprint used for idempotency checks — gofmt may insert or remove
+// extra alignment spaces, but the field name and the mapstructure tag
+// string are stable.
+func fieldSignature(fieldDecl string) string {
+	trimmed := strings.TrimSpace(fieldDecl)
+	idx := strings.Index(trimmed, "mapstructure:")
+	if idx < 0 {
+		return ""
+	}
+	// Find the field name (first whitespace-delimited token) and
+	// concatenate it with the mapstructure tag.
+	fields := strings.Fields(trimmed)
+	if len(fields) < 2 {
+		return ""
+	}
+	name := fields[0]
+	// Walk back to include the mapstructure tag (and its closing backtick).
+	tag := trimmed[idx:]
+	if !strings.HasSuffix(tag, "`") {
+		tag = tag + "`"
+	}
+	return name + " " + tag
 }

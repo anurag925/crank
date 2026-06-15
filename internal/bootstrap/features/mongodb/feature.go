@@ -29,6 +29,8 @@ func (feature) Dependencies() []string {
 	}
 }
 
+func (feature) Requirements() []string { return nil }
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_adapters_persistence_mongodb_client.go.tmpl", OutputPath: "internal/adapters/persistence/mongodb/client.go"},

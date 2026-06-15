@@ -20,6 +20,7 @@ func (f *dirFeature) Description() string    { return "dir feature " + f.name }
 func (f *dirFeature) Files() []FileMapping   { return nil }
 func (f *dirFeature) Templates() embed.FS    { return embed.FS{} }
 func (f *dirFeature) Dependencies() []string { return nil }
+func (f *dirFeature) Requirements() []string { return nil }
 
 // --- Generate tests (using real features from GlobalRegistry) ---
 

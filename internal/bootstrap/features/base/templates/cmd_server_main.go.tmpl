@@ -27,6 +27,9 @@ import (
 {{- if not (.Has "postgres")}}
 	"{{.ModulePath}}/internal/adapters/persistence/memory"
 {{- end}}
+{{- if not (.Has "outbox")}}
+	"{{.ModulePath}}/internal/adapters/uow"
+{{- end}}
 	userapp "{{.ModulePath}}/internal/application/user"
 	"{{.ModulePath}}/internal/config"
 	"{{.ModulePath}}/internal/domain/user"
@@ -44,6 +47,12 @@ import (
 {{- end}}
 {{- if .Has "temporal"}}
 	"{{.ModulePath}}/internal/adapters/temporal"
+{{- end}}
+{{- if .Has "otel"}}
+	"{{.ModulePath}}/internal/adapters/telemetry"
+{{- end}}
+{{- if .Has "outbox"}}
+	outboxadapter "{{.ModulePath}}/internal/adapters/outbox"
 {{- end}}
 )
 
@@ -81,6 +90,21 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = db.Close() }()
+{{end}}
+{{if .Has "otel"}}
+	tracerProvider, err := telemetry.NewProvider(context.Background(), telemetry.Config{
+		ServiceName: cfg.Telemetry.ServiceName,
+		Exporter:    cfg.Telemetry.Exporter,
+	})
+	if err != nil {
+		logger.Error("failed to set up tracer", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = tracerProvider.Shutdown(shutdownCtx)
+	}()
 {{end}}
 {{if .Has "redis"}}
 	rdb, err := redisclient.NewClient(cfg.Redis)
@@ -120,12 +144,22 @@ func main() {
 {{else}}
 	userRepo := memory.NewUserRepository()
 {{end}}
+{{if .Has "outbox"}}
+	outboxRepo := postgres.NewOutboxRepository(db)
+	uow := outboxadapter.NewPostgresUoW(db, outboxRepo)
+	outboxWorker := outboxadapter.NewWorker(outboxRepo, bus, logger, outboxadapter.Config{
+		Interval:  cfg.Outbox.PollInterval,
+		BatchSize: cfg.Outbox.BatchSize,
+	})
+{{else}}
+	uow := uow.NewInMemoryUoW(bus)
+{{end}}
 {{if .Has "auth"}}
 	hasher := crypto.NewBCryptHasher()
 	tokens := crypto.NewJWTTokenService(cfg.JWT)
 	_ = hasher
 {{end}}
-	userCmd := userapp.NewCommandHandler(userRepo, bus)
+	userCmd := userapp.NewCommandHandler(userRepo, uow)
 	userQry := userapp.NewQueryHandler(userRepo)
 	userHandler := web.NewUserHandler(userCmd, userQry)
 
@@ -134,6 +168,9 @@ func main() {
 	e.HidePort = true
 	e.Use(echomw.Recover())
 	e.Use(middleware.RequestLogger())
+{{if .Has "otel"}}
+	e.Use(middleware.Tracing(cfg.Telemetry.ServiceName))
+{{end}}
 
 	e.GET("/swagger/*", echoSwagger.EchoWrapHandler())
 	e.GET("/health", web.Health)
@@ -170,6 +207,11 @@ func main() {
 	addr := cfg.App.Host + ":" + strconv.Itoa(cfg.App.Port)
 	logger.Info("server listening", "addr", addr)
 
+{{if .Has "outbox"}}
+	outboxCtx, outboxCancel := context.WithCancel(context.Background())
+	defer outboxCancel()
+	go outboxWorker.Run(outboxCtx)
+{{end}}
 	go func() {
 		if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
 			logger.Error("server error", "error", err)
@@ -182,6 +224,9 @@ func main() {
 	<-quit
 
 	logger.Info("shutting down server")
+{{if .Has "outbox"}}
+	outboxCancel()
+{{end}}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := e.Shutdown(ctx); err != nil {

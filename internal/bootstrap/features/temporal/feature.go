@@ -29,6 +29,8 @@ func (feature) Dependencies() []string {
 	}
 }
 
+func (feature) Requirements() []string { return nil }
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_adapters_temporal_logger.go.tmpl", OutputPath: "internal/adapters/temporal/logger.go"},

@@ -1,0 +1,100 @@
+// Package outbox provides the worker that drains the outbox_events
+// table and publishes the recorded events to the in-memory bus. The
+// worker polls on a configurable interval; it stops when its context is
+// cancelled.
+package outbox
+
+import (
+	"context"
+	"log/slog"
+	"time"
+
+	"{{.ModulePath}}/internal/domain/outbox"
+	"{{.ModulePath}}/internal/ports"
+)
+
+// Worker polls the outbox table and publishes events to the bus. The
+// worker is single-goroutine: it claims a batch, publishes each event,
+// then marks the batch published. If publishing fails the events are
+// left unpublished and retried on the next tick.
+type Worker struct {
+	repo       outbox.Repository
+	bus        ports.EventBus
+	logger     *slog.Logger
+	interval   time.Duration
+	batchSize  int
+}
+
+// Config controls the worker's polling behaviour.
+type Config struct {
+	Interval  time.Duration
+	BatchSize int
+}
+
+// NewWorker constructs a Worker against the supplied repository and bus.
+func NewWorker(repo outbox.Repository, bus ports.EventBus, logger *slog.Logger, cfg Config) *Worker {
+	if cfg.Interval <= 0 {
+		cfg.Interval = time.Second
+	}
+	if cfg.BatchSize <= 0 {
+		cfg.BatchSize = 100
+	}
+	return &Worker{
+		repo:      repo,
+		bus:       bus,
+		logger:    logger,
+		interval:  cfg.Interval,
+		batchSize: cfg.BatchSize,
+	}
+}
+
+// Run blocks until ctx is cancelled, draining the outbox on every tick.
+func (w *Worker) Run(ctx context.Context) {
+	t := time.NewTicker(w.interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			if n, err := w.drainOnce(ctx); err != nil {
+				w.logger.Error("outbox drain failed", "error", err)
+			} else if n > 0 {
+				w.logger.Info("outbox drained", "count", n)
+			}
+		}
+	}
+}
+
+// drainOnce fetches a single batch and publishes them. Returns the
+// number of events published (0 on error or empty outbox).
+func (w *Worker) drainOnce(ctx context.Context) (int, error) {
+	events, err := w.repo.FetchUnpublished(ctx, w.batchSize)
+	if err != nil {
+		return 0, err
+	}
+	if len(events) == 0 {
+		return 0, nil
+	}
+	published := make([]string, 0, len(events))
+	for _, e := range events {
+		domainEv, derr := e.AsDomainEvent()
+		if derr != nil {
+			w.logger.Warn("skipping undecodable outbox event", "id", e.ID, "error", derr)
+			// Mark the row published so we don't loop forever on a
+			// permanently undecodable payload. Operators can replay
+			// manually.
+			published = append(published, e.ID)
+			continue
+		}
+		if perr := w.bus.Publish(ctx, domainEv); perr != nil {
+			w.logger.Warn("publish failed; will retry", "id", e.ID, "error", perr)
+			continue
+		}
+		published = append(published, e.ID)
+	}
+	if err := w.repo.MarkPublished(ctx, published); err != nil {
+		return 0, err
+	}
+	return len(published), nil
+}

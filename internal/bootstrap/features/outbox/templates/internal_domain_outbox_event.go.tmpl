@@ -1,0 +1,33 @@
+// Package outbox defines the domain types for the transactional outbox
+// pattern. Events are persisted in the same transaction as the aggregate
+// that produced them; a background worker drains the outbox to the event
+// bus so the two operations are no longer coupled to the application
+// service's call stack.
+package outbox
+
+import (
+	"time"
+
+	"{{.ModulePath}}/internal/domain/shared"
+)
+
+// Event is one row in the outbox_events table. The payload is the
+// JSON-marshalled domain event recorded by the aggregate. After the
+// worker publishes it to the event bus, it stamps PublishedAt and the
+// publisher skips it on subsequent passes.
+type Event struct {
+	ID          string
+	AggregateID string
+	EventType   string
+	Payload     []byte
+	CreatedAt   time.Time
+	PublishedAt *time.Time
+}
+
+// AsDomainEvent unmarshals the JSON payload back into a shared.DomainEvent
+// for re-publication. The concrete type is recovered from the envelope
+// itself rather than the EventType column, which is kept for log/diagnostic
+// purposes.
+func (e *Event) AsDomainEvent() (shared.DomainEvent, error) {
+	return shared.DecodeEvent(e.Payload)
+}

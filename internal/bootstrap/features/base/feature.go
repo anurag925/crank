@@ -35,6 +35,8 @@ func (feature) Dependencies() []string {
 	}
 }
 
+func (feature) Requirements() []string { return nil }
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		// Composition root + scaffolding metadata
@@ -49,6 +51,7 @@ func (feature) Files() []bootstrap.FileMapping {
 
 		// Domain layer — shared kernel + seed aggregate
 		{TemplatePath: "templates/internal_domain_shared_events.go.tmpl", OutputPath: "internal/domain/shared/events.go"},
+		{TemplatePath: "templates/internal_domain_shared_registry.go.tmpl", OutputPath: "internal/domain/shared/registry.go"},
 		{TemplatePath: "templates/internal_domain_user_user.go.tmpl", OutputPath: "internal/domain/user/user.go"},
 		{TemplatePath: "templates/internal_domain_user_id.go.tmpl", OutputPath: "internal/domain/user/user_id.go"},
 		{TemplatePath: "templates/internal_domain_user_events.go.tmpl", OutputPath: "internal/domain/user/events.go"},
@@ -63,11 +66,13 @@ func (feature) Files() []bootstrap.FileMapping {
 
 		// Ports (cross-cutting interfaces)
 		{TemplatePath: "templates/internal_ports_eventbus.go.tmpl", OutputPath: "internal/ports/eventbus.go"},
+		{TemplatePath: "templates/internal_ports_uow.go.tmpl", OutputPath: "internal/ports/uow.go"},
 
-		// Adapters — eventbus, persistence, http
+		// Adapters — eventbus, persistence, http, uow
 		{TemplatePath: "templates/internal_adapters_eventbus_in_memory_eventbus.go.tmpl", OutputPath: "internal/adapters/eventbus/in_memory_eventbus.go"},
 		{TemplatePath: "templates/internal_adapters_persistence_memory_user_repository.go.tmpl", OutputPath: "internal/adapters/persistence/memory/user_repository.go"},
 		{TemplatePath: "templates/internal_adapters_http_web_server.go.tmpl", OutputPath: "internal/adapters/http/web/server.go"},
+		{TemplatePath: "templates/internal_adapters_uow_in_memory_uow.go.tmpl", OutputPath: "internal/adapters/uow/in_memory_uow.go"},
 		{TemplatePath: "templates/internal_adapters_http_web_routes.go.tmpl", OutputPath: "internal/adapters/http/web/routes.go"},
 		{TemplatePath: "templates/internal_adapters_http_web_user_handler.go.tmpl", OutputPath: "internal/adapters/http/web/user_handler.go"},
 		{TemplatePath: "templates/internal_adapters_http_web_middleware_logging.go.tmpl", OutputPath: "internal/adapters/http/web/middleware/logging.go"},

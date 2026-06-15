@@ -48,13 +48,39 @@ func executeTool(t bootstrap.Tool, projectDir string, cmd *cobra.Command) error 
 		return err
 	}
 
-	// 2. Let the tool build its invocation.
+	// 2. In-process tools skip the binary lookup entirely. They run their
+	// checks in-process and write results to stdout.
+	if ip, ok := t.(bootstrap.InProcessTool); ok {
+		results, err := ip.RunInProcess(projectDir, cmd.OutOrStdout())
+		if err != nil {
+			return err
+		}
+		for _, r := range results {
+			if r.OK {
+				fmt.Fprintf(cmd.OutOrStdout(), "✔  %s\n", r.Summary)
+				continue
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "✘  %s\n", r.Summary)
+			if r.Detail != "" {
+				fmt.Fprintf(cmd.OutOrStdout(), "   %s\n", r.Detail)
+			}
+		}
+		// Exit non-zero if any check failed.
+		for _, r := range results {
+			if !r.OK {
+				return fmt.Errorf("doctor found %d issue(s)", countFailures(results))
+			}
+		}
+		return nil
+	}
+
+	// 3. Let the tool build its invocation.
 	inv, err := t.Prepare(projectDir, cmd)
 	if err != nil {
 		return err
 	}
 
-	// 3. Resolve the binary.
+	// 4. Resolve the binary.
 	bin := inv.Binary
 	if bin == "" {
 		b, err := utils.FindBinary(t.BinaryName(), t.InstallCmd())
@@ -78,7 +104,7 @@ func executeTool(t bootstrap.Tool, projectDir string, cmd *cobra.Command) error 
 	}
 	inv.Binary = bin
 
-	// 4. Execute.
+	// 5. Execute.
 	fmt.Printf("→ %s %s\n", t.BinaryName(), strings.Join(inv.Args, " "))
 	return utils.RunExternal(&utils.ExecConfig{
 		Binary: inv.Binary,
@@ -87,6 +113,16 @@ func executeTool(t bootstrap.Tool, projectDir string, cmd *cobra.Command) error 
 		Env:    inv.Env,
 		Stdin:  inv.Stdin,
 	})
+}
+
+func countFailures(rs []bootstrap.CheckResult) int {
+	n := 0
+	for _, r := range rs {
+		if !r.OK {
+			n++
+		}
+	}
+	return n
 }
 
 // NewToolsListCmd returns a `tools` command that lists all registered tools.

@@ -10,20 +10,21 @@ import (
 
 // CommandHandler is the application service that mutates user aggregates in
 // response to Create/Update/Delete commands. It depends only on the domain
-// Repository port and the EventBus port.
+// Repository port and a UnitOfWork that wraps the save+publish atomicity
+// boundary.
 type CommandHandler struct {
-	repo   user.Repository
-	events ports.EventBus
+	repo user.Repository
+	uow  ports.UnitOfWork
 }
 
 // NewCommandHandler wires a CommandHandler against the given repository and
-// event bus.
-func NewCommandHandler(repo user.Repository, events ports.EventBus) *CommandHandler {
-	return &CommandHandler{repo: repo, events: events}
+// unit of work.
+func NewCommandHandler(repo user.Repository, uow ports.UnitOfWork) *CommandHandler {
+	return &CommandHandler{repo: repo, uow: uow}
 }
 
-// HandleCreate creates a new user aggregate, persists it, and publishes the
-// events it recorded during construction.
+// HandleCreate creates a new user aggregate, persists it through the unit of
+// work, and the UoW publishes the events it recorded during construction.
 func (h *CommandHandler) HandleCreate(ctx context.Context, cmd CreateUserCommand) (*user.User, error) {
 	id, err := user.NewUserID(cmd.ID)
 	if err != nil {
@@ -33,18 +34,15 @@ func (h *CommandHandler) HandleCreate(ctx context.Context, cmd CreateUserCommand
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
-	if err := h.repo.Save(ctx, u); err != nil {
+	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context) error { return h.repo.Save(ctx, u) }, u.PullEvents()); err != nil {
 		return nil, fmt.Errorf("save user: %w", err)
-	}
-	if h.events != nil {
-		_ = h.events.Publish(ctx, u.PullEvents()...)
 	}
 	return u, nil
 }
 
 // HandleUpdate loads an existing user aggregate, mutates it through the
-// domain's Update method, persists the result, and publishes the recorded
-// event.
+// domain's Update method, and routes the save+publish through the unit of
+// work so the write and recorded event are committed atomically.
 func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd UpdateUserCommand) (*user.User, error) {
 	id, err := user.NewUserID(cmd.ID)
 	if err != nil {
@@ -55,16 +53,15 @@ func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd UpdateUserCommand
 		return nil, err
 	}
 	u.Update(cmd.Name, cmd.Email)
-	if err := h.repo.Save(ctx, u); err != nil {
+	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context) error { return h.repo.Save(ctx, u) }, u.PullEvents()); err != nil {
 		return nil, fmt.Errorf("save user: %w", err)
-	}
-	if h.events != nil {
-		_ = h.events.Publish(ctx, u.PullEvents()...)
 	}
 	return u, nil
 }
 
-// HandleDelete removes a user aggregate.
+// HandleDelete removes a user aggregate. The delete is routed through the
+// unit of work so the deletion and its recorded event are committed
+// atomically.
 func (h *CommandHandler) HandleDelete(ctx context.Context, cmd DeleteUserCommand) error {
 	id, err := user.NewUserID(cmd.ID)
 	if err != nil {
@@ -75,11 +72,8 @@ func (h *CommandHandler) HandleDelete(ctx context.Context, cmd DeleteUserCommand
 		return err
 	}
 	u.MarkDeleted()
-	if err := h.repo.Delete(ctx, id); err != nil {
+	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context) error { return h.repo.Delete(ctx, id) }, u.PullEvents()); err != nil {
 		return fmt.Errorf("delete user: %w", err)
-	}
-	if h.events != nil {
-		_ = h.events.Publish(ctx, u.PullEvents()...)
 	}
 	return nil
 }

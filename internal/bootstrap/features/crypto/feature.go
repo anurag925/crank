@@ -25,6 +25,8 @@ func (feature) Templates() embed.FS { return tmpls }
 
 func (feature) Dependencies() []string { return nil }
 
+func (feature) Requirements() []string { return nil }
+
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_ports_cipher.go.tmpl", OutputPath: "internal/ports/cipher.go"},

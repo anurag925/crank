@@ -38,6 +38,11 @@ type Feature interface {
 	// Dependencies returns the Go module paths this feature requires.
 	// These are fetched via `go get` in the generated project after scaffolding.
 	Dependencies() []string
+	// Requirements returns the names of other features that must be
+	// installed alongside this one. `crank add` and `crank init` will
+	// refuse to install the feature if any requirement is missing.
+	// Returning nil or an empty slice is valid.
+	Requirements() []string
 }
 
 // Registry holds the set of features known to crank.
