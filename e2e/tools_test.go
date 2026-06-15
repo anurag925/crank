@@ -11,6 +11,7 @@ package e2e
 // `crank <tool>` CLI plumbing.
 
 import (
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -220,18 +221,25 @@ func TestE2E_Tool_Dev_HappyPath_LocalAir(t *testing.T) {
 	// Run with a short timeout — we just want to prove `air` parses the
 	// .air.toml and starts. If it doesn't crash within the first second
 	// we consider this a pass.
-	cmd := exec.Command(crankBin, "dev", "--project", dir)
-	cmd.Dir = dir
-	_ = cmd.Start()
-	done := make(chan error, 1)
-	go func() { done <- cmd.Wait() }()
-	select {
-	case <-done:
+	cmd, err := startCrankCommand(t, dir, nil, "dev", "--project", dir)
+	if err != nil {
+		t.Fatalf("start dev: %v", err)
+	}
+	t.Cleanup(func() { _ = stopCommandAndWait(cmd, 5*time.Second) })
+	switch err := waitForCommandExit(cmd, 1*time.Second); {
+	case err == nil:
 		// If air exited cleanly within 1s that's actually fine for the
 		// "doesn't crash" assertion.
-	case <-time.After(1 * time.Second):
-		_ = cmd.Process.Kill()
-		<-done
+	case errors.Is(err, errProcessStillRunning):
+		if err := stopCommandAndWait(cmd, 5*time.Second); err != nil {
+			t.Fatalf("stop dev command: %v", err)
+		}
+	case isExpectedProcessExit(err):
+		// A non-zero early exit is still a real failure: surface the output
+		// already streamed to the test logs via startCrankCommand.
+		t.Fatalf("dev exited unexpectedly: %v", err)
+	default:
+		t.Fatalf("wait for dev command: %v", err)
 	}
 }
 
