@@ -153,7 +153,8 @@ func (r *ToolRegistry) ForFeature(feature string) []Tool {
 }
 
 // ValidateToolRequirements checks that the project's manifest includes the
-// features required by the tool.
+// features required by the tool. When a tool lists both "bun" and "gorm" as
+// requirements, they are treated as alternatives — only one must be present.
 func ValidateToolRequirements(projectDir string, t Tool) error {
 	reqs := t.RequiresFeatures()
 	if len(reqs) == 0 {
@@ -162,6 +163,34 @@ func ValidateToolRequirements(projectDir string, t Tool) error {
 	m, err := readManifest(projectDir)
 	if err != nil {
 		return nil // no manifest — let Prepare handle it
+	}
+	// Check if the requirements include both bun and gorm (ORM alternatives).
+	wantsBun, wantsGorm := false, false
+	other := make([]string, 0, len(reqs))
+	for _, r := range reqs {
+		switch r {
+		case "bun":
+			wantsBun = true
+		case "gorm":
+			wantsGorm = true
+		default:
+			other = append(other, r)
+		}
+	}
+	// Check non-ORM requirements (must all be present).
+	for _, req := range other {
+		if !contains(m.Features, req) {
+			return fmt.Errorf("tool %q requires feature %q — install it with: crank add %s --project %s",
+				t.Name(), req, req, projectDir)
+		}
+	}
+	// Check ORM requirement (at least one of bun/gorm).
+	if wantsBun && wantsGorm {
+		if !contains(m.Features, "bun") && !contains(m.Features, "gorm") {
+			return fmt.Errorf("tool %q requires a database ORM (bun or gorm) — install one with: crank add bun --project %s or crank add gorm --project %s",
+				t.Name(), projectDir, projectDir)
+		}
+		return nil
 	}
 	for _, req := range reqs {
 		if !contains(m.Features, req) {

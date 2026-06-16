@@ -6,6 +6,7 @@ package e2e
 // multi-feature init path, and the migration that the feature contributes.
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -18,23 +19,25 @@ func TestE2E_Outbox_RequiresBun(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected add outbox to fail without bun\n%s", out)
 	}
-	if !strings.Contains(out, `"outbox" requires "bun"`) {
-		t.Errorf("error should call out outbox->bun requirement, got:\n%s", out)
+	if !strings.Contains(out, "requires a database ORM") {
+		t.Errorf("error should call out outbox ORM requirement, got:\n%s", out)
 	}
 }
 
-// TestE2E_Outbox_RequiresBun_Init confirms the same guard fires
-// during `crank init --features=base,outbox`.
-func TestE2E_Outbox_RequiresBun_Init(t *testing.T) {
-	// init creates a new project dir relative to the current working
-	// directory, so we change into a temp dir first.
+// TestE2E_Outbox_Init_DefaultsToGorm confirms that `crank init --features=base,outbox`
+// auto-adds gorm as the default ORM, so outbox gets the ORM it needs.
+func TestE2E_Outbox_Init_DefaultsToGorm(t *testing.T) {
 	dir := t.TempDir()
-	out, err := runCrankRaw(t, dir, "init", "outbox_no_pg_init", "--features=base,outbox")
-	if err == nil {
-		t.Fatalf("expected init with outbox (no bun) to fail\n%s", out)
+	_, err := runCrankRaw(t, dir, "init", "outbox_init_gorm", "--features=base,outbox")
+	if err != nil {
+		t.Fatalf("expected init with outbox (no explicit ORM) to succeed with gorm auto-added:\n%s", err)
 	}
-	if !strings.Contains(out, `"outbox" requires "bun"`) {
-		t.Errorf("error should call out outbox->bun requirement, got:\n%s", out)
+	manifest := readFile(t, filepath.Join(dir, "outbox_init_gorm"), ".crank.yaml")
+	if !strings.Contains(manifest, "- gorm") {
+		t.Errorf("manifest should include gorm (auto-added default ORM):\n%s", manifest)
+	}
+	if !strings.Contains(manifest, "- outbox") {
+		t.Errorf("manifest should include outbox:\n%s", manifest)
 	}
 }
 

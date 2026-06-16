@@ -1,4 +1,4 @@
-package postgres
+package bun
 
 import (
 	"testing"
@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// With postgres the repository needs a live database, so the CRUD methods
+// With bun the repository needs a live database, so the CRUD methods
 // are not exercised here. These tests cover the parts that do not require a
 // *bun.DB (row mapping, constructor, error sentinel wiring).
 func TestNew{{.R.Pascal}}Repository(t *testing.T) {
