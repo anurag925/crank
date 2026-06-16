@@ -14,7 +14,7 @@ import (
 
 	// Register features so bootstrap.Generate can build a project.
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 )
 
@@ -71,13 +71,13 @@ func dddHandlerLayers() []string {
 		"internal/application/order/queries.go",
 		"internal/application/order/query_handler.go",
 		"internal/adapters/persistence/memory/order_repository.go",
-		"internal/adapters/persistence/postgres/order_repository.go",
+		"internal/adapters/persistence/bun/order_repository.go",
 		"internal/adapters/http/web/order_handler.go",
 	}
 }
 
 func TestGenerateHandlerPostgres(t *testing.T) {
-	dir := newProject(t, []string{"postgres"})
+	dir := newProject(t, []string{"bun"})
 
 	res, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,
@@ -110,7 +110,7 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 
 	// Postgres adapter has its own row DTO and maps sql.ErrNoRows to the
 	// domain sentinel.
-	repo := read(t, dir, "internal/adapters/persistence/postgres/order_repository.go")
+	repo := read(t, dir, "internal/adapters/persistence/bun/order_repository.go")
 	for _, want := range []string{
 		"type orderRow struct",
 		"func NewOrderRepository(db *bun.DB)",
@@ -119,7 +119,7 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 		"ErrOrderNotFound",
 	} {
 		if !strings.Contains(repo, want) {
-			t.Errorf("postgres repository missing %q", want)
+			t.Errorf("bun repository missing %q", want)
 		}
 	}
 
@@ -164,7 +164,7 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 }
 
 func TestGenerateHandlerInMemory(t *testing.T) {
-	dir := newProject(t, nil) // base only, no postgres
+	dir := newProject(t, nil) // base only, no bun
 
 	res, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,
@@ -176,7 +176,7 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 	}
 
 	// All DDD layers are generated, but the persistence adapter is the
-	// in-memory one (no postgres adapter is produced without the feature).
+	// in-memory one (no bun adapter is produced without the feature).
 	for _, rel := range []string{
 		"internal/domain/ticket/ticket.go",
 		"internal/application/ticket/command_handler.go",
@@ -187,16 +187,16 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 			t.Errorf("expected %s", rel)
 		}
 	}
-	if exists(dir, "internal/adapters/persistence/postgres/ticket_repository.go") {
-		t.Error("did not expect a postgres adapter without the postgres feature")
+	if exists(dir, "internal/adapters/persistence/bun/ticket_repository.go") {
+		t.Error("did not expect a bun adapter without the bun feature")
 	}
-	// No migration without postgres.
+	// No migration without bun.
 	ups, _ := filepath.Glob(filepath.Join(dir, "migrations", "*_create_tickets.up.sql"))
 	if len(ups) != 0 {
-		t.Errorf("did not expect a migration for a non-postgres project, found %d", len(ups))
+		t.Errorf("did not expect a migration for a non-bun project, found %d", len(ups))
 	}
 
-	// In-memory repository is produced regardless of postgres.
+	// In-memory repository is produced regardless of bun.
 	assertParses(t, dir, "internal/adapters/persistence/memory/ticket_repository.go")
 
 	if !res.Wired {
@@ -205,7 +205,7 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 }
 
 func TestGenerateModelOnly(t *testing.T) {
-	dir := newProject(t, []string{"postgres"})
+	dir := newProject(t, []string{"bun"})
 
 	_, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,
@@ -228,7 +228,7 @@ func TestGenerateModelOnly(t *testing.T) {
 }
 
 func TestHandlerOnlySkipsDependencies(t *testing.T) {
-	dir := newProject(t, []string{"postgres"})
+	dir := newProject(t, []string{"bun"})
 
 	_, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,
@@ -250,7 +250,7 @@ func TestHandlerOnlySkipsDependencies(t *testing.T) {
 }
 
 func TestPrimaryConflictRequiresForce(t *testing.T) {
-	dir := newProject(t, []string{"postgres"})
+	dir := newProject(t, []string{"bun"})
 	opts := scaffold.Options{ProjectDir: dir, Kind: scaffold.KindModel, Name: "Note"}
 
 	if _, err := scaffold.Generate(opts); err != nil {
@@ -267,7 +267,7 @@ func TestPrimaryConflictRequiresForce(t *testing.T) {
 }
 
 func TestWiringIsIdempotent(t *testing.T) {
-	dir := newProject(t, []string{"postgres"})
+	dir := newProject(t, []string{"bun"})
 	base := scaffold.Options{ProjectDir: dir, Kind: scaffold.KindHandler, Name: "Review"}
 
 	if _, err := scaffold.Generate(base); err != nil {
@@ -291,7 +291,7 @@ func TestGenerateWithTests(t *testing.T) {
 		name     string
 		features []string
 	}{
-		{"postgres", []string{"postgres"}},
+		{"bun", []string{"bun"}},
 		{"in_memory", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -320,7 +320,7 @@ func TestGenerateWithTests(t *testing.T) {
 				"internal/adapters/http/web/order_handler_test.go",
 			}
 			if tc.features != nil {
-				want = append(want, "internal/adapters/persistence/postgres/order_repository_test.go")
+				want = append(want, "internal/adapters/persistence/bun/order_repository_test.go")
 			}
 			for _, rel := range want {
 				if !exists(dir, rel) {
@@ -345,7 +345,7 @@ func TestGenerateWithTests(t *testing.T) {
 }
 
 func TestGenerateWithoutTestsOmitsTestFiles(t *testing.T) {
-	dir := newProject(t, []string{"postgres"})
+	dir := newProject(t, []string{"bun"})
 
 	if _, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,

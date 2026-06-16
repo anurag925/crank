@@ -26,7 +26,7 @@ type tool struct {
 func (*tool) Name() string               { return "migrate" }
 func (*tool) BinaryName() string         { return "migrate" }
 func (*tool) Description() string        { return "Run database migrations via golang-migrate" }
-func (*tool) RequiresFeatures() []string { return []string{"postgres"} }
+func (*tool) RequiresFeatures() []string { return []string{"bun", "gorm"} }
 
 func (*tool) LongDescription() string {
 	return `migrate invokes the golang-migrate CLI inside the target project.

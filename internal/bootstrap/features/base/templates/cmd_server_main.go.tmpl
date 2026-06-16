@@ -18,13 +18,16 @@ import (
 {{- end}}
 
 	_ "{{.ModulePath}}/docs"
-{{- if .Has "postgres"}}
-	"{{.ModulePath}}/internal/adapters/persistence/postgres"
+{{- if .Has "bun"}}
+	"{{.ModulePath}}/internal/adapters/persistence/bun"
+{{- end}}
+{{- if .Has "gorm"}}
+	"{{.ModulePath}}/internal/adapters/persistence/gorm"
 {{- end}}
 	"{{.ModulePath}}/internal/adapters/eventbus"
 	"{{.ModulePath}}/internal/adapters/http/web"
 	"{{.ModulePath}}/internal/adapters/http/web/middleware"
-{{- if not (.Has "postgres")}}
+{{- if and (not (.Has "bun")) (not (.Has "gorm"))}}
 	"{{.ModulePath}}/internal/adapters/persistence/memory"
 {{- end}}
 {{- if not (.Has "outbox")}}
@@ -83,13 +86,27 @@ func main() {
 		"env", cfg.App.Env,
 		"log_level", cfg.Logging.Level,
 	)
-{{if .Has "postgres"}}
-	db, err := postgres.NewDB(cfg.Database)
+{{if .Has "bun"}}
+	db, err := bun.NewDB(cfg.Database)
 	if err != nil {
 		logger.Error("failed to connect to database", "error", err)
 		os.Exit(1)
 	}
 	defer func() { _ = db.Close() }()
+{{end}}
+{{if .Has "gorm"}}
+	gormDB, err := gorm.NewDB(cfg.Database)
+	if err != nil {
+		logger.Error("failed to connect to database", "error", err)
+		os.Exit(1)
+	}
+	defer func() {
+		sqlDB, dbErr := gormDB.DB()
+		if dbErr != nil {
+			return
+		}
+		_ = sqlDB.Close()
+	}()
 {{end}}
 {{if .Has "otel"}}
 	tracerProvider, err := telemetry.NewProvider(context.Background(), telemetry.Config{
@@ -139,14 +156,16 @@ func main() {
 
 	// ---- Composition root: explicit DDD wiring ----
 	bus := eventbus.NewInMemory()
-{{if .Has "postgres"}}
-	userRepo := postgres.NewUserRepository(db)
+{{if .Has "bun"}}
+	userRepo := bun.NewUserRepository(db)
+{{else if .Has "gorm"}}
+	userRepo := gorm.NewUserRepository(gormDB)
 {{else}}
 	userRepo := memory.NewUserRepository()
 {{end}}
 {{if .Has "outbox"}}
-	outboxRepo := postgres.NewOutboxRepository(db)
-	uow := outboxadapter.NewPostgresUoW(db, outboxRepo)
+	outboxRepo := bun.NewOutboxRepository(db)
+	uow := outboxadapter.NewBunUoW(db, outboxRepo)
 	outboxWorker := outboxadapter.NewWorker(outboxRepo, bus, logger, outboxadapter.Config{
 		Interval:  cfg.Outbox.PollInterval,
 		BatchSize: cfg.Outbox.BatchSize,

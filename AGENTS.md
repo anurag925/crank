@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A modular CLI tool that scaffolds production-ready Go backend services and wraps common development tools as subcommands. Given a project name and a list of features, it generates a clean, layered Go service with sensible defaults and optional modules (auth, postgres, redis, mongodb). All day-to-day development tasks (build, test, migrate, swag, etc.) are accessible through the `crank` CLI so developers never need to leave it.
+A modular CLI tool that scaffolds production-ready Go backend services and wraps common development tools as subcommands. Given a project name and a list of features, it generates a clean, layered Go service with sensible defaults and optional modules (auth, gorm, bun, redis, mongodb). GORM is the default ORM; pass `--use-bun` to use Bun instead. All day-to-day development tasks (build, test, migrate, swag, etc.) are accessible through the `crank` CLI so developers never need to leave it.
 
 ## Tech Stack
 
@@ -13,7 +13,7 @@ A modular CLI tool that scaffolds production-ready Go backend services and wraps
 | Config (generated) | Viper + YAML + .env |
 | HTTP (generated) | Echo v4 |
 | Docs (generated) | Swagger via [swaggo/swag](https://github.com/swaggo/swag) + [echo-swagger](https://github.com/swaggo/echo-swagger) |
-| ORM (generated) | Bun |
+| ORM (generated) | GORM (default) or Bun (`--use-bun`) |
 | Logging (generated) | `log/slog` (stdlib) |
 | Migrations (generated) | golang-migrate |
 | Templating | `text/template` + `embed.FS` |
@@ -23,7 +23,8 @@ A modular CLI tool that scaffolds production-ready Go backend services and wraps
 
 ```bash
 # Scaffold a new project (tools are checked/installed automatically)
-./crank init myapp --features=base,auth,postgres
+./crank init myapp --features=base,auth          # GORM (default ORM)
+./crank init myapp --features=base,auth --use-bun  # Bun ORM
 
 # List available features
 ./crank list
@@ -36,7 +37,7 @@ A modular CLI tool that scaffolds production-ready Go backend services and wraps
 
 # Generate application code (Rails/Laravel-style generators)
 ./crank make model Order customer:string total:float --project=./myapp
-./crank make handler Product title:string price:float --project=./myapp   # handler + model + repo/service + route wiring (+ migration if postgres)
+./crank make handler Product title:string price:float --project=./myapp   # handler + model + repo/service + route wiring (+ migration if bun)
 ./crank make handler Product --only --project=./myapp                     # just the handler
 ./crank make scaffold Invoice number:string amount:float --project=./myapp # the full stack
 ./crank make scaffold Invoice number:string --tests --project=./myapp      # the full stack + _test.go files
@@ -110,7 +111,8 @@ crank/
 │   │       ├── base/                      # Echo + Viper + slog + dev tooling
 │   │       ├── auth/                      # JWT middleware + auth handlers
 │   │       ├── crypto/                    # AES-256-GCM encrypt/decrypt helpers
-│   │       ├── postgres/                  # Bun ORM + migrations
+│   │       ├── bun/                       # Bun ORM + migrations
+│   │       ├── gorm/                      # GORM (default ORM)
 │   │       ├── redis/                     # Redis client (placeholder)
 │   │       ├── mongodb/                   # MongoDB client (placeholder)
 │   │       └── temporal/                  # Temporal client + worker + example workflow/activity
@@ -138,7 +140,7 @@ type Feature interface {
 }
 ```
 
-- `Name()` — short identifier used in `--features` lists (e.g. `"base"`, `"auth"`, `"postgres"`)
+- `Name()` — short identifier used in `--features` lists (e.g. `"base"`, `"auth"`, `"bun"`, `"gorm"`)
 - `Description()` — shown by `crank list`
 - `Dependencies()` — Go module paths fetched via `go get` after scaffolding
 - `Files()` — template-to-output path mappings
@@ -165,7 +167,7 @@ type Tool interface {
 - `Name()` — the subcommand name (e.g. `"migrate"` → `crank migrate`)
 - `BinaryName()` — the executable to look up on PATH (e.g. `"migrate"`, `"swag"`)
 - `InstallCmd()` — shown when the tool is missing; also used by `crank init` for auto-install
-- `RequiresFeatures()` — e.g. `migrate` requires `"postgres"`; empty means always available
+- `RequiresFeatures()` — e.g. `migrate` requires `"bun"` or `"gorm"`; empty means always available
 - `AddFlags()` — lets tools register custom flags (e.g. `--database-url`, `--steps`)
 - `Prepare()` — builds the `ToolInvocation` (args, working dir, stdin, env)
 - `Install()` — downloads/installs the tool (usually via `go install`)
@@ -200,7 +202,7 @@ Passed to every template during rendering:
 - `ModulePath` — Go module path for `go.mod` / imports
 - `PackageName` — last segment of module path
 - `Features` — list of enabled feature names
-- `Has(name string) bool` — check if a feature is active (used in templates with `{{if .Has "postgres"}}...{{end}}`)
+- `Has(name string) bool` — check if a feature is active (used in templates with `{{if .Has "bun"}}...{{end}}`)
 - `Require(names ...string) error` — fail if a feature is missing
 
 ### Registry (`internal/bootstrap/feature.go` + `registry.go`)
@@ -224,7 +226,7 @@ Passed to every template during rendering:
 - `GoGet(projectDir, deps)` — runs `go get <deps...>` then `go mod tidy` in the project directory
 - `Tidy(projectDir)` — runs `go mod tidy` in the project directory
 
-## Conventions & Patterns
+| Conventions & Patterns
 
 ### Adding a New Feature
 
@@ -241,6 +243,15 @@ Passed to every template during rendering:
    ```go
    _ "github.com/anurag925/crank/internal/bootstrap/features/<name>"
    ```
+
+crank ships two ORM features (`gorm` and `bun`) that are mutually exclusive:
+one of them is automatically added by `crank init` (GORM by default, bun when
+`--use-bun` is passed). The user can also explicitly pass
+`--features=base,bun,auth` to pick bun without the flag. If neither is
+specified, the `ensureDefaultORM` helper in `commands/init.go` adds GORM
+automatically. Both features must not be present at the same time — a mutual
+exclusion check in `generator.go` (`validateMutuallyExclusive`) enforces
+this at generation time.
 
 ### Adding a New Tool Wrapper
 
@@ -269,11 +280,13 @@ application code inside an existing project, Rails/Laravel style. Kinds:
 
 Key behaviors to preserve when modifying this subsystem:
 
-- **Postgres-aware.** `scaffold.Generate` reads the project manifest via
-  `bootstrap.LoadProjectInfo`. When the `postgres` feature is present it emits a
+- **Bun-aware.** `scaffold.Generate` reads the project manifest via
+  `bootstrap.LoadProjectInfo`. When the `bun` feature is present it emits a
   Bun-backed `repository` plus a create-table migration; otherwise it emits an
   in-memory `service`. Both layers expose the same method set
   (`List/Get/Create/Update/Delete`) so handlers depend on either uniformly.
+  (GORM projects fall back to the in-memory scaffold — GORM-backed repository
+  generation is on the roadmap.)
 - **Dependency pull-in.** A `handler`/`scaffold` generates its model and
   repository/service too (unless `--only` is passed). Generators never overwrite
   existing dependency files — they are skipped. The explicitly requested
@@ -281,7 +294,7 @@ Key behaviors to preserve when modifying this subsystem:
 - **Test generation.** `--tests` adds a `_test.go` beside every generated Go
   layer (template suffix `*_test.go.tmpl`). Test artifacts are expanded from the
   base plan in `withTestArtifacts` and are always non-primary (skipped, never
-  errored, if they already exist). For postgres, repository/handler tests are
+  errored, if they already exist). For bun-backed projects, repository/handler tests are
   route/sentinel-only (no live DB); the in-memory path exercises full CRUD,
   using per-type sample literals (`Field.Sample`) so request bodies satisfy the
   generated validation tags.
@@ -368,7 +381,7 @@ Config files live in a top-level `configs/` directory, following the
 - Viper searches `./configs` first, then `.` as fallback
 - Viper priority: env vars > .env > configs/config.yaml
 
-All feature configs (postgres, auth, crypto, redis, mongodb, temporal) are
+All feature configs (bun, gorm, auth, crypto, redis, mongodb, temporal) are
 consolidated in the base `config.go` template using `{{if .Has "feature"}}`
 conditional sections. Feature-specific packages (e.g. `internal/redis`,
 `internal/temporal`) do **not** define their own Config structs — they import
@@ -421,7 +434,7 @@ file is left untouched and an error is returned.
 
 | Subcommand | Wraps | Binary | Requires |
 |------------|-------|--------|----------|
-| `crank migrate` | golang-migrate | `migrate` | `postgres` feature |
+| `crank migrate` | golang-migrate | `migrate` | `bun` or `gorm` feature |
 | `crank swag` | swaggo/swag | `swag` | — |
 | `crank build` | `go build` | `go` | — |
 | `crank run` | `go run ./cmd/server` | `go` | — |

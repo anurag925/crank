@@ -24,11 +24,12 @@ func (feature) Description() string {
 func (feature) Templates() embed.FS { return tmpls }
 
 // Requirements declares other features that must be installed for outbox
-// to work. The outbox needs a transactional store, which today is the
-// postgres feature; without it, the outbox would silently degrade to the
-// in-memory UnitOfWork the base feature already provides.
+// to work. The outbox needs a transactional store, which today is provided
+// by the bun feature (the outbox's postgres UoW talks to a *bun.DB). Without
+// it, the outbox would silently degrade to the in-memory UnitOfWork the
+// base feature already provides. GORM support is on the roadmap.
 func (feature) Requirements() []string {
-	return []string{"postgres"}
+	return []string{"bun"}
 }
 
 func (feature) Dependencies() []string {
@@ -43,9 +44,9 @@ func (feature) Files() []bootstrap.FileMapping {
 		{TemplatePath: "templates/internal_domain_outbox_event.go.tmpl", OutputPath: "internal/domain/outbox/event.go"},
 		{TemplatePath: "templates/internal_domain_outbox_repository.go.tmpl", OutputPath: "internal/domain/outbox/repository.go"},
 
-		// Adapters — postgres-backed outbox repository + UoW + worker
-		{TemplatePath: "templates/internal_adapters_outbox_postgres_repository.go.tmpl", OutputPath: "internal/adapters/persistence/postgres/outbox_repository.go"},
-		{TemplatePath: "templates/internal_adapters_outbox_postgres_uow.go.tmpl", OutputPath: "internal/adapters/outbox/postgres_uow.go"},
+		// Adapters — bun-backed outbox repository + UoW + worker
+		{TemplatePath: "templates/internal_adapters_outbox_bun_repository.go.tmpl", OutputPath: "internal/adapters/persistence/bun/outbox_repository.go"},
+		{TemplatePath: "templates/internal_adapters_outbox_bun_uow.go.tmpl", OutputPath: "internal/adapters/outbox/bun_uow.go"},
 		{TemplatePath: "templates/internal_adapters_outbox_worker.go.tmpl", OutputPath: "internal/adapters/outbox/worker.go"},
 
 		// Migrations

@@ -13,8 +13,12 @@ handlers, and adapter implementations for HTTP and persistence.
 {{- if .Has "auth"}}
 - Auth: JWT ([golang-jwt/jwt](https://github.com/golang-jwt/jwt))
 {{- end}}
-{{- if .Has "postgres"}}
+{{- if .Has "bun"}}
 - Database: PostgreSQL via [Bun](https://bun.uptrace.dev)
+- Migrations: [golang-migrate](https://github.com/golang-migrate/migrate)
+{{- end}}
+{{- if .Has "gorm"}}
+- Database: PostgreSQL via [GORM](https://gorm.io)
 - Migrations: [golang-migrate](https://github.com/golang-migrate/migrate)
 {{- end}}
 
@@ -51,7 +55,7 @@ the dotted path with underscores (e.g. `database.password` -> `DATABASE_PASSWORD
 │   ├── adapters            # infrastructure: HTTP, persistence, event bus
 │   │   ├── eventbus        # in-process event bus
 │   │   ├── http/web        # Echo handlers + middleware
-│   │   └── persistence     # postgres + memory repositories
+│   │   └── persistence     # {{if .Has "bun"}}bun, {{end}}{{if .Has "gorm"}}gorm, {{end}}memory repositories
 │   ├── application         # use cases: command + query handlers
 │   │   └── user
 │   ├── config              # Viper-backed configuration
@@ -62,7 +66,7 @@ the dotted path with underscores (e.g. `database.password` -> `DATABASE_PASSWORD
 │   ├── ports               # cross-cutting interfaces (EventBus, …)
 │   └── validator           # request validation
 ├── pkg/logging             # structured slog helpers
-{{- if .Has "postgres"}}
+{{- if or (.Has "bun") (.Has "gorm")}}
 ├── migrations              # golang-migrate SQL files
 {{- end}}
 ├── .env.example            # environment template
@@ -88,7 +92,7 @@ from anywhere:
 | `crank gofmt` | Run `gofmt` |
 | `crank vet` | Run `go vet` |
 | `crank swag` | Generate Swagger/OpenAPI docs into `docs/` |
-{{- if .Has "postgres"}}
+{{- if or (.Has "bun") (.Has "gorm")}}
 | `crank migrate up` | Apply all pending migrations |
 | `crank migrate down --steps 1` | Roll back the last migration |
 | `crank make migration <name>` | Generate a new up/down migration pair |

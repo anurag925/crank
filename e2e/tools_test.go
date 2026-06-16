@@ -252,8 +252,8 @@ func TestE2E_Tool_Swag_HappyPath_LocalSwag(t *testing.T) {
 // annotates the migrate tool with its feature requirement.
 func TestE2E_Tool_ToolsList_ShowsRequirements(t *testing.T) {
 	out := runCrank(t, "", "tools")
-	if !strings.Contains(out, "(requires: postgres)") {
-		t.Errorf("`crank tools` should annotate migrate with postgres requirement:\n%s", out)
+	if !strings.Contains(out, "(requires: bun, gorm)") {
+		t.Errorf("`crank tools` should annotate migrate with bun/gorm requirement:\n%s", out)
 	}
 }
 
@@ -297,22 +297,22 @@ func TestE2E_Tool_ToolsList_Ordered(t *testing.T) {
 
 // TestE2E_Tool_Migrate_RequiresPostgres verifies the ValidateToolRequirements
 // gate: `crank migrate` on a base-only project must error with a clear
-// message instructing the user to install the postgres feature.
+// message instructing the user to install the bun feature.
 func TestE2E_Tool_Migrate_RequiresPostgres(t *testing.T) {
 	dir := scaffoldBase(t, "tool_migrate_no_pg")
 	out, err := runCrankRaw(t, "", "migrate", "--project", dir)
 	if err == nil {
 		t.Fatalf("expected feature-requirement error, got success:\n%s", out)
 	}
-	if !strings.Contains(out, "postgres") {
-		t.Errorf("error should mention postgres, got:\n%s", out)
+	if !strings.Contains(out, "bun") {
+		t.Errorf("error should mention bun, got:\n%s", out)
 	}
 }
 
 // TestE2E_Tool_Migrate_NoMigrationsDir verifies the migrations-directory
 // precondition in migrate.Prepare.
 func TestE2E_Tool_Migrate_NoMigrationsDir(t *testing.T) {
-	dir := scaffold(t, "tool_migrate_no_dir", []string{"base", "postgres"})
+	dir := scaffold(t, "tool_migrate_no_dir", []string{"base", "bun"})
 	if err := os.RemoveAll(filepath.Join(dir, "migrations")); err != nil {
 		t.Fatalf("remove migrations: %v", err)
 	}
@@ -326,11 +326,11 @@ func TestE2E_Tool_Migrate_NoMigrationsDir(t *testing.T) {
 }
 
 // TestE2E_Tool_Migrate_NoDSN verifies the DSN resolution path. The
-// project has postgres enabled and a migrations/ dir, but no
+// project has bun enabled and a migrations/ dir, but no
 // DATABASE_URL env var and no config.yaml. Prepare should report it
 // cannot determine a database URL.
 func TestE2E_Tool_Migrate_NoDSN(t *testing.T) {
-	dir := scaffold(t, "tool_migrate_no_dsn", []string{"base", "postgres"})
+	dir := scaffold(t, "tool_migrate_no_dsn", []string{"base", "bun"})
 	out, err := runCrankRaw(t, "", "migrate", "up",
 		"--project", dir,
 		// Make sure we do NOT inherit DATABASE_URL from the env.
@@ -349,7 +349,7 @@ func TestE2E_Tool_Migrate_NoDSN(t *testing.T) {
 // flag. We pass a syntactically invalid URL and expect a clean error
 // from the underlying `migrate` tool.
 func TestE2E_Tool_Migrate_InvalidDatabaseURL(t *testing.T) {
-	dir := scaffold(t, "tool_migrate_bad_url", []string{"base", "postgres"})
+	dir := scaffold(t, "tool_migrate_bad_url", []string{"base", "bun"})
 	out, err := runCrankRaw(t, "", "migrate", "up",
 		"--project", dir,
 		"--database-url", "not-a-real-url",
@@ -366,7 +366,7 @@ func TestE2E_Tool_Migrate_InvalidDatabaseURL(t *testing.T) {
 // resolve a DSN, that's also acceptable; the test is about direction
 // wiring.
 func TestE2E_Tool_Migrate_DownDirection(t *testing.T) {
-	dir := scaffold(t, "tool_migrate_down", []string{"base", "postgres"})
+	dir := scaffold(t, "tool_migrate_down", []string{"base", "bun"})
 	// We expect this to fail (no live DB) but NOT to fail with a
 	// "no DSN" or "no migrations" error.
 	out, err := runCrankRaw(t, "", "migrate", "down",
@@ -374,7 +374,7 @@ func TestE2E_Tool_Migrate_DownDirection(t *testing.T) {
 		"--database-url", "postgres://u:p@127.0.0.1:1/db?sslmode=disable",
 	)
 	if err == nil {
-		// Some environments may have a postgres; the test is non-fatal here.
+		// Some environments may have a real postgres; the test is non-fatal here.
 		t.Logf("`crank migrate down` unexpectedly succeeded:\n%s", out)
 	}
 	// Either we got a connection error (expected) or a DSN parse error;
@@ -386,7 +386,7 @@ func TestE2E_Tool_Migrate_DownDirection(t *testing.T) {
 // test, this only checks that the flag is consumed by crank; the actual
 // `migrate` binary may fail afterwards, which is fine.
 func TestE2E_Tool_Migrate_StepsFlag(t *testing.T) {
-	dir := scaffold(t, "tool_migrate_steps", []string{"base", "postgres"})
+	dir := scaffold(t, "tool_migrate_steps", []string{"base", "bun"})
 	_, _ = runCrankRaw(t, "", "migrate", "down",
 		"--project", dir,
 		"--database-url", "postgres://u:p@127.0.0.1:1/db?sslmode=disable",

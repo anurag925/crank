@@ -73,6 +73,9 @@ func Generate(reg *Registry, opts Options) (*Result, error) {
 	if err := validateRequirements(reg, features); err != nil {
 		return nil, err
 	}
+	if err := validateMutuallyExclusive(features, "bun", "gorm"); err != nil {
+		return nil, err
+	}
 
 	ctx := NewContext(opts.ProjectName, opts.ModulePath, features)
 
@@ -137,13 +140,18 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 		return nil, err
 	}
 
-	// Enforce the feature's requirements (e.g. outbox requires postgres).
+	// Enforce the feature's requirements (e.g. outbox requires bun).
 	// The check runs against the *projected* feature set so we can detect
 	// missing requirements before any templates are written.
 	for _, req := range ftr.Requirements() {
 		if !ctx.Has(req) {
 			return nil, fmt.Errorf("feature %q requires %q (run `crank add %s` first or `crank init` with both features)", featureName, req, req)
 		}
+	}
+	// Also enforce mutual exclusion for `crank add`: you can't add a second
+	// ORM to a project that already has one.
+	if err := validateMutuallyExclusive(features, "bun", "gorm"); err != nil {
+		return nil, err
 	}
 
 	written, err := generateFeature(projectDir, ftr, ctx)
@@ -222,7 +230,7 @@ func validateFeatures(reg *Registry, features []string) error {
 // validateRequirements walks the requested feature set and refuses to
 // proceed if any feature's Requirements() are not satisfied by the set
 // as a whole. For example, `crank init --features=base,outbox` errors
-// with a clear hint that outbox requires postgres.
+// with a clear hint that outbox requires bun.
 func validateRequirements(reg *Registry, features []string) error {
 	have := make(map[string]bool, len(features))
 	for _, f := range features {
@@ -255,6 +263,20 @@ func uniqueDeps(deps []string) []string {
 		out = append(out, d)
 	}
 	return out
+}
+
+// validateMutuallyExclusive refuses a feature set that contains both of the
+// supplied features. crank ships two ORM features (bun and gorm) and only one
+// can be active at a time — the main.go template imports a single adapter
+// package and the user must pick one. The error message is tailored to the
+// ORM pair so the hint is actionable.
+func validateMutuallyExclusive(features []string, a, b string) error {
+	hasA := contains(features, a)
+	hasB := contains(features, b)
+	if hasA && hasB {
+		return fmt.Errorf("features %q and %q are mutually exclusive — pick one ORM (pass --use-bun with `crank init` to swap the default gorm for bun, or omit one of them from --features)", a, b)
+	}
+	return nil
 }
 
 // manifest records which features were applied to a generated project.

@@ -204,29 +204,29 @@ func TestAdd_AuthToBase(t *testing.T) {
 	}
 }
 
-func TestAdd_PostgresToBase(t *testing.T) {
+func TestAdd_BunToBase(t *testing.T) {
 	tmp := t.TempDir()
 	result, err := Generate(GlobalRegistry, Options{
-		ProjectName: "addpg",
+		ProjectName: "addbun",
 		TargetDir:   tmp,
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 
-	result2, err := Add(GlobalRegistry, result.ProjectDir, "postgres")
+	result2, err := Add(GlobalRegistry, result.ProjectDir, "bun")
 	if err != nil {
-		t.Fatalf("Add postgres: %v", err)
+		t.Fatalf("Add bun: %v", err)
 	}
 
-	// postgres files should exist
+	// bun files should exist
 	for _, f := range []string{
-		"internal/adapters/persistence/postgres/db.go",
-		"internal/adapters/persistence/postgres/migrate.go",
+		"internal/adapters/persistence/bun/db.go",
+		"internal/adapters/persistence/bun/migrate.go",
 		"migrations/000001_init.up.sql",
 	} {
 		if _, err := os.Stat(filepath.Join(result2.ProjectDir, f)); os.IsNotExist(err) {
-			t.Errorf("expected %s after Add postgres", f)
+			t.Errorf("expected %s after Add bun", f)
 		}
 	}
 }
@@ -249,8 +249,8 @@ func TestRenderTemplate_ConditionalBlocks(t *testing.T) {
 {{- if .Has "auth"}}
 AUTH
 {{- end}}
-{{- if .Has "postgres"}}
-PG
+{{- if .Has "bun"}}
+BUN
 {{- end}}
 end`
 
@@ -263,13 +263,13 @@ end`
 		if !strings.Contains(out, "AUTH") {
 			t.Error("expected AUTH in output")
 		}
-		if strings.Contains(out, "PG") {
-			t.Error("unexpected PG in output")
+		if strings.Contains(out, "BUN") {
+			t.Error("unexpected BUN in output")
 		}
 	})
 
-	t.Run("postgres only", func(t *testing.T) {
-		ctx := NewContext("app", "app", []string{"base", "postgres"})
+	t.Run("bun only", func(t *testing.T) {
+		ctx := NewContext("app", "app", []string{"base", "bun"})
 		out, err := renderTemplate("test", tmpl, ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -277,19 +277,19 @@ end`
 		if strings.Contains(out, "AUTH") {
 			t.Error("unexpected AUTH in output")
 		}
-		if !strings.Contains(out, "PG") {
-			t.Error("expected PG in output")
+		if !strings.Contains(out, "BUN") {
+			t.Error("expected BUN in output")
 		}
 	})
 
 	t.Run("both", func(t *testing.T) {
-		ctx := NewContext("app", "app", []string{"base", "auth", "postgres"})
+		ctx := NewContext("app", "app", []string{"base", "auth", "bun"})
 		out, err := renderTemplate("test", tmpl, ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(out, "AUTH") || !strings.Contains(out, "PG") {
-			t.Errorf("expected both AUTH and PG, got:\n%s", out)
+		if !strings.Contains(out, "AUTH") || !strings.Contains(out, "BUN") {
+			t.Errorf("expected both AUTH and BUN, got:\n%s", out)
 		}
 	})
 }

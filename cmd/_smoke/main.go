@@ -10,7 +10,7 @@ import (
 	"github.com/anurag925/crank/internal/bootstrap/scaffold"
 
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
 )
 
 func main() {
@@ -31,7 +31,7 @@ func main() {
 		ProjectName: "demo",
 		ModulePath:  "github.com/example/demo",
 		TargetDir:   tmp,
-		Features:    []string{"base", "postgres"},
+		Features:    []string{"base", "bun"},
 	})
 	if err != nil {
 		panic(err)
@@ -71,7 +71,7 @@ func main() {
 		"internal/application/order/command_handler.go",
 		"internal/application/order/queries.go",
 		"internal/application/order/query_handler.go",
-		"internal/adapters/persistence/postgres/order_repository.go",
+		"internal/adapters/persistence/bun/order_repository.go",
 		"internal/adapters/persistence/memory/order_repository.go",
 		"internal/adapters/http/web/order_handler.go",
 		"internal/adapters/http/web/order_handler_test.go",

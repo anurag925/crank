@@ -267,7 +267,7 @@ func TestE2E_Generated_ProjectMainImportsConfig(t *testing.T) {
 // run" workflow: init → make scaffold → add feature → make scaffold →
 // build. The whole thing must succeed end to end.
 func TestE2E_Generated_FeatureCommandsCompose(t *testing.T) {
-	dir := scaffold(t, "gen_compose", []string{"base", "postgres"})
+	dir := scaffold(t, "gen_compose", []string{"base", "bun"})
 
 	// Make a scaffold.
 	runCrank(t, "", "make", "scaffold", "Customer", "name:string", "--project", dir)

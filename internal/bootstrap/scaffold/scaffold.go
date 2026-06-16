@@ -2,8 +2,9 @@
 // make` family). Given a resource name and optional field specs it renders
 // Domain-Driven Go code — domain aggregates + value objects + events +
 // repository ports, application command/query handlers, persistence adapters
-// (postgres + in-memory) and an HTTP handler — into an existing crank-generated
-// project. Generated handlers are automatically wired into the project's
+// (bun-backed when the bun feature is enabled, in-memory otherwise) and an
+// HTTP handler — into an existing crank-generated project. Generated
+// handlers are automatically wired into the project's
 // `internal/adapters/http/web/routes.go` so the resulting endpoints work out
 // of the box.
 package scaffold
@@ -66,8 +67,12 @@ type Result struct {
 // the per-run context (module path, enabled features, the resource) plus a
 // handful of derived flags templates consult to decide which sections to emit.
 type tmplData struct {
-	Module   string
-	Postgres bool
+	Module string
+	// Bun is true when the project has the bun ORM feature enabled. When
+	// true, the scaffold emits a Bun-backed repository; otherwise it falls
+	// back to the in-memory repository. (GORM support is on the roadmap;
+	// gorm-only projects use the in-memory scaffold for now.)
+	Bun      bool
 	Auth     bool
 	Temporal bool
 	R        Resource
@@ -133,7 +138,7 @@ func Generate(opts Options) (*Result, error) {
 	idField := uuidFieldOrNil(fields)
 	data := tmplData{
 		Module:   info.ModulePath,
-		Postgres: info.Has("postgres"),
+		Bun:      info.Has("bun"),
 		Auth:     info.Has("auth"),
 		Temporal: info.Has("temporal"),
 		R:        res,
@@ -243,13 +248,13 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 	qryHandler := artifact{out: r.DDDAppPath() + "/query_handler.go", tmpl: "application_query_handler.go.tmpl", testTmpl: "application_query_handler_test.go.tmpl", goFile: true}
 
 	// Persistence adapters.
-	pgAdapter := artifact{out: r.DDDPostgresAdapterPath(), tmpl: "adapter_persistence_postgres_repository.go.tmpl", testTmpl: "adapter_persistence_postgres_repository_test.go.tmpl", goFile: true}
+	pgAdapter := artifact{out: r.DDDBunAdapterPath(), tmpl: "adapter_persistence_postgres_repository.go.tmpl", testTmpl: "adapter_persistence_postgres_repository_test.go.tmpl", goFile: true}
 	memAdapter := artifact{out: r.DDDMemoryAdapterPath(), tmpl: "adapter_persistence_memory_repository.go.tmpl", testTmpl: "adapter_persistence_memory_repository_test.go.tmpl", goFile: true}
 
 	// HTTP adapter.
 	httpAdapter := artifact{out: r.DDDHTTPHandlerPath(), tmpl: "adapter_http_handler.go.tmpl", testTmpl: "adapter_http_handler_test.go.tmpl", goFile: true}
 
-	migration := data.Postgres && !opts.SkipMigration
+	migration := data.Bun && !opts.SkipMigration
 
 	switch opts.Kind {
 	case KindModel:
@@ -258,9 +263,10 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 		wantMigration = migration
 
 	case KindRepository:
-		// Postgres adapter is primary when postgres is enabled, otherwise the
-		// in-memory adapter is the primary artifact.
-		if data.Postgres {
+		// Bun adapter is primary when the bun feature is enabled, otherwise
+		// the in-memory adapter is the primary artifact. (GORM support is on
+		// the roadmap; gorm-only projects use the in-memory scaffold for now.)
+		if data.Bun {
 			pgAdapter.primary = true
 			plan = []artifact{pgAdapter, memAdapter, repoPort}
 		} else {
@@ -290,7 +296,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 			plan = append(plan, aggregate, idVO, events, derrors, repoPort,
 				commands, cmdHandler, queries, qryHandler,
 				memAdapter)
-			if data.Postgres {
+			if data.Bun {
 				plan = append(plan, pgAdapter)
 			}
 		}
@@ -303,7 +309,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 			aggregate, idVO, events, derrors, repoPort,
 			commands, cmdHandler, queries, qryHandler,
 			memAdapter}
-		if data.Postgres {
+		if data.Bun {
 			plan = append(plan, pgAdapter)
 		}
 		wantMigration = migration
@@ -390,17 +396,17 @@ func renderTemplate(name string, data tmplData) (string, error) {
 // TmplDataFor builds a tmplData value for a single scaffold run. It is
 // exposed so that external callers (e.g. the smoke test under cmd/_smoke)
 // can drive the same template-rendering pipeline that Generate uses.
-func TmplDataFor(module string, postgres, auth bool, r Resource, fields []Field) tmplData {
+func TmplDataFor(module string, bun, auth bool, r Resource, fields []Field) tmplData {
 	idField := uuidFieldOrNil(fields)
 	return tmplData{
-		Module:   module,
-		Postgres: postgres,
-		Auth:     auth,
-		R:        r,
-		Fields:   fields,
-		HasTime:  hasTimeField(fields),
-		HasUUID:  idField != nil,
-		IDField:  idField,
+		Module:  module,
+		Bun:     bun,
+		Auth:    auth,
+		R:       r,
+		Fields:  fields,
+		HasTime: hasTimeField(fields),
+		HasUUID: idField != nil,
+		IDField: idField,
 	}
 }
 

@@ -12,18 +12,19 @@ import (
 	// Feature packages self-register with the global registry via init().
 	_ "github.com/anurag925/crank/internal/bootstrap/features/auth"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/crypto"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/gorm"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/otel"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/outbox"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 
 	// Tool packages self-register with the global tool registry via init().
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/build"
-	_ "github.com/anurag925/crank/internal/bootstrap/tools/doctor"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/dev"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/doctor"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/gofmt"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/migrate"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/run"

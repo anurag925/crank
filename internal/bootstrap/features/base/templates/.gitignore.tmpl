@@ -19,7 +19,7 @@
 # docs/docs.go is committed so the project always compiles; swag overwrites it.
 /docs/swagger.json
 /docs/swagger.yaml
-{{- if .Has "postgres"}}
+{{- if or (.Has "bun") (.Has "gorm")}}
 # Local DB volume
 data/
 {{- end}}

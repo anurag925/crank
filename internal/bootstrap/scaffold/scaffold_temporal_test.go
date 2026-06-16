@@ -67,7 +67,7 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 }
 
 func TestWorkflowGeneratorRequiresTemporalFeature(t *testing.T) {
-	dir := newProject(t, []string{"postgres"}) // temporal not enabled
+	dir := newProject(t, []string{"bun"}) // temporal not enabled
 
 	if _, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,

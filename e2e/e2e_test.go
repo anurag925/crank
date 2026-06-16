@@ -17,11 +17,12 @@ import (
 	// Register all features with the global registry via init().
 	_ "github.com/anurag925/crank/internal/bootstrap/features/auth"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/crypto"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/gorm"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/otel"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/outbox"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/postgres"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 )
@@ -31,10 +32,24 @@ var crankBin string
 
 // allFeatureNames lists every feature the application ships, used to validate
 // the `crank list` output and to drive the "all features" compile test.
-var allFeatureNames = []string{"base", "auth", "crypto", "postgres", "redis", "mongodb", "temporal", "otel", "outbox"}
+var allFeatureNames = []string{"base", "auth", "crypto", "bun", "gorm", "redis", "mongodb", "temporal", "otel", "outbox"}
 
 // allToolNames lists every tool subcommand the application wraps.
 var allToolNames = []string{"migrate", "swag", "build", "run", "dev", "test", "gofmt", "vet", "tidy"}
+
+// allFeaturesMinusGorm returns every feature except gorm. crank ships two
+// mutually exclusive ORM features (bun and gorm) and the "all features" compile
+// matrix uses bun (covered by the dedicated "gorm" case).
+func allFeaturesMinusGorm() []string {
+	out := make([]string, 0, len(allFeatureNames))
+	for _, n := range allFeatureNames {
+		if n == "gorm" {
+			continue
+		}
+		out = append(out, n)
+	}
+	return out
+}
 
 func TestMain(m *testing.M) {
 	root := moduleRoot()
@@ -177,13 +192,16 @@ var compileCases = []struct {
 }{
 	{"base_only", []string{"base"}},
 	{"auth", []string{"auth"}},
-	{"postgres", []string{"postgres"}},
+	{"bun", []string{"bun"}},
+	{"gorm", []string{"gorm"}},
 	{"redis", []string{"redis"}},
 	{"mongodb", []string{"mongodb"}},
 	{"crypto", []string{"crypto"}},
 	{"temporal", []string{"temporal"}},
-	{"auth_postgres_crypto", []string{"auth", "postgres", "crypto"}},
-	{"all", allFeatureNames},
+	{"auth_bun_crypto", []string{"auth", "bun", "crypto"}},
+	// "all" is a curated matrix; bun and gorm are mutually exclusive, so the
+	// "all" case omits gorm (covered separately by the "gorm" case above).
+	{"all", allFeaturesMinusGorm()},
 }
 
 func TestE2E_GenerateAndCompile(t *testing.T) {
@@ -202,15 +220,15 @@ func TestE2E_GenerateAndCompile(t *testing.T) {
 // companion _test.go files — compiles, vets and passes its own tests.
 //
 // It runs against both data-layer variants:
-//   - postgres: Bun-backed repositories + create-table migrations.
+//   - bun: Bun-backed repositories + create-table migrations.
 //   - base only: in-memory services and no migrations.
 func TestE2E_Make(t *testing.T) {
 	cases := []struct {
 		name     string
 		features []string
-		postgres bool
+		bun      bool
 	}{
-		{"postgres", []string{"postgres"}, true},
+		{"bun", []string{"bun"}, true},
 		{"base_only", []string{"base"}, false},
 	}
 
@@ -284,13 +302,13 @@ func TestE2E_Make(t *testing.T) {
 			//
 			// NOTE: the scaffold build plan emits BOTH a repository and a service
 			// for every scaffold. The handler then picks one based on the
-			// postgres flag (repo on postgres, service otherwise) at compile
+			// bun flag (repo on bun, service otherwise) at compile
 			// time, via the `{{.StorePkg}}` template variable. So we don't
 			// assert which one exists or doesn't — both are always present.
-			if tc.postgres {
-				assertExists(t, projectDir, "internal/adapters/persistence/postgres/order_repository.go")
-				assertExists(t, projectDir, "internal/adapters/persistence/postgres/account_repository.go")
-				assertExists(t, projectDir, "internal/adapters/persistence/postgres/ticket_repository.go")
+			if tc.bun {
+				assertExists(t, projectDir, "internal/adapters/persistence/bun/order_repository.go")
+				assertExists(t, projectDir, "internal/adapters/persistence/bun/account_repository.go")
+				assertExists(t, projectDir, "internal/adapters/persistence/bun/ticket_repository.go")
 				// Postgres resources get create-table migrations...
 				for _, name := range []string{"orders", "accounts", "order_items", "categories", "tickets"} {
 					if n := globCount(t, projectDir, "migrations/*_create_"+name+".up.sql"); n != 1 {
@@ -305,9 +323,9 @@ func TestE2E_Make(t *testing.T) {
 				assertExists(t, projectDir, "internal/adapters/persistence/memory/order_repository.go")
 				assertExists(t, projectDir, "internal/adapters/persistence/memory/account_repository.go")
 				assertExists(t, projectDir, "internal/adapters/persistence/memory/cart_repository.go")
-				// Non-postgres scaffolds never emit create-table migrations.
+				// Non-bun scaffolds never emit create-table migrations.
 				if n := globCount(t, projectDir, "migrations/*_create_*.up.sql"); n != 0 {
-					t.Errorf("did not expect create-table migrations for a non-postgres project, found %d", n)
+					t.Errorf("did not expect create-table migrations for a non-bun project, found %d", n)
 				}
 			}
 
@@ -332,17 +350,17 @@ func TestE2E_Make(t *testing.T) {
 // (they never compile the result), so they run against a dependency-free project
 // to stay fast and network-independent.
 func TestE2E_MakeFlags(t *testing.T) {
-	dir := scaffoldNoDeps(t, "make_flags", []string{"postgres"})
+	dir := scaffoldNoDeps(t, "make_flags", []string{"bun"})
 
 	// --only generates just the handler, skipping its model/repository deps.
 	runCrank(t, "", "make", "handler", "Coupon", "--only", "--project", dir)
 	assertExists(t, dir, "internal/adapters/http/web/coupon_handler.go")
 	assertNotExists(t, dir, "internal/domain/coupon/coupon.go")
-	assertNotExists(t, dir, "internal/adapters/persistence/postgres/coupon_repository.go")
+	assertNotExists(t, dir, "internal/adapters/persistence/bun/coupon_repository.go")
 
-	// --skip-migration suppresses the create-table migration even with postgres.
+	// --skip-migration suppresses the create-table migration even with bun.
 	runCrank(t, "", "make", "handler", "Promo", "code:string", "--skip-migration", "--project", dir)
-	assertExists(t, dir, "internal/adapters/persistence/postgres/promo_repository.go")
+	assertExists(t, dir, "internal/adapters/persistence/bun/promo_repository.go")
 	if n := globCount(t, dir, "migrations/*_create_promos.up.sql"); n != 0 {
 		t.Errorf("--skip-migration should not create a migration, found %d", n)
 	}
@@ -426,7 +444,7 @@ func TestE2E_MakeTemporal(t *testing.T) {
 func TestE2E_Add(t *testing.T) {
 	projectDir := scaffold(t, "svc_added", []string{"base"})
 
-	for _, feature := range []string{"postgres", "auth"} {
+	for _, feature := range []string{"bun", "auth"} {
 		res, err := bootstrap.Add(bootstrap.GlobalRegistry, projectDir, feature)
 		if err != nil {
 			t.Fatalf("Add(%s): %v", feature, err)
@@ -441,14 +459,14 @@ func TestE2E_Add(t *testing.T) {
 
 	// Verify the manifest has all three features.
 	manifest := readFile(t, projectDir, ".crank.yaml")
-	for _, f := range []string{"base", "postgres", "auth"} {
+	for _, f := range []string{"base", "bun", "auth"} {
 		if !strings.Contains(manifest, "- "+f) {
 			t.Errorf("manifest missing feature %q", f)
 		}
 	}
 
 	// Verify new feature files were created.
-	assertExists(t, projectDir, "internal/adapters/persistence/postgres/db.go")
+	assertExists(t, projectDir, "internal/adapters/persistence/bun/db.go")
 	assertExists(t, projectDir, "internal/adapters/http/web/middleware/auth.go")
 	assertExists(t, projectDir, "migrations/000001_init.up.sql")
 
