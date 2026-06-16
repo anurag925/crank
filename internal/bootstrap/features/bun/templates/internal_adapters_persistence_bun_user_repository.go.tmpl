@@ -1,0 +1,132 @@
+package bun
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"time"
+
+	"github.com/uptrace/bun"
+
+	"{{.ModulePath}}/internal/domain/user"
+)
+
+// userRow is the postgres row DTO for user aggregates. It is intentionally
+// private to this package: the domain aggregate is the only public contract.
+type userRow struct {
+	ID        string    `bun:"id,pk,type:uuid"`
+	Name      string    `bun:"name,notnull"`
+	Email     string    `bun:"email,notnull,unique"`
+{{- if .Has "auth"}}
+	Password  string    `bun:"password,notnull"`
+{{- end}}
+	CreatedAt time.Time `bun:"created_at,nullzero,notnull,default:current_timestamp"`
+	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
+}
+
+// toAggregate converts a row to a domain aggregate. The error from
+// NewUserID is ignored because the column type guarantees the value is a
+// non-empty uuid at the database level.
+func (row *userRow) toAggregate() *user.User {
+	id, _ := user.NewUserID(row.ID)
+	u, _ := user.NewUser(id, row.Name, row.Email)
+{{- if .Has "auth"}}
+	u.SetPasswordHash(row.Password)
+{{- end}}
+	u.SetTimestamps(row.CreatedAt, row.UpdatedAt)
+	return u
+}
+
+// UserRepository is the postgres-backed implementation of
+// domain/user.Repository.
+type UserRepository struct {
+	db *bun.DB
+}
+
+// NewUserRepository constructs a Bun-backed UserRepository.
+func NewUserRepository(db *bun.DB) *UserRepository {
+	return &UserRepository{db: db}
+}
+
+// onConflictClause returns the SET clause for Save's UPSERT. The password
+// column is included only when the auth feature is enabled.
+func onConflictClause() string {
+{{- if .Has "auth"}}
+	return "name = EXCLUDED.name, email = EXCLUDED.email, password = EXCLUDED.password, updated_at = EXCLUDED.updated_at"
+{{- else}}
+	return "name = EXCLUDED.name, email = EXCLUDED.email, updated_at = EXCLUDED.updated_at"
+{{- end}}
+}
+
+// Save inserts a new row or updates an existing one keyed by id.
+func (r *UserRepository) Save(ctx context.Context, u *user.User) error {
+	row := &userRow{
+		ID:        u.ID().String(),
+		Name:      u.Name(),
+		Email:     u.Email(),
+{{- if .Has "auth"}}
+		Password:  u.PasswordHash(),
+{{- end}}
+		CreatedAt: u.CreatedAt(),
+		UpdatedAt: u.UpdatedAt(),
+	}
+	_, err := r.db.NewInsert().
+		Model(row).
+		On("CONFLICT (id) DO UPDATE SET " + onConflictClause()).
+		Exec(ctx)
+	return err
+}
+
+// Get returns a user aggregate by id, mapping sql.ErrNoRows to
+// domain/user.ErrUserNotFound.
+func (r *UserRepository) Get(ctx context.Context, id user.UserID) (*user.User, error) {
+	row := new(userRow)
+	err := r.db.NewSelect().Model(row).Where("id = ?", id.String()).Scan(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, user.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return row.toAggregate(), nil
+}
+
+// GetByEmail returns a user aggregate by email address, or
+// domain/user.ErrUserNotFound.
+func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
+	row := new(userRow)
+	err := r.db.NewSelect().Model(row).Where("email = ?", email).Scan(ctx)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, user.ErrUserNotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return row.toAggregate(), nil
+}
+
+// List returns every user row as a domain aggregate.
+func (r *UserRepository) List(ctx context.Context) ([]*user.User, error) {
+	var rows []userRow
+	if err := r.db.NewSelect().Model(&rows).OrderExpr("id ASC").Scan(ctx); err != nil {
+		return nil, err
+	}
+	out := make([]*user.User, 0, len(rows))
+	for i := range rows {
+		out = append(out, rows[i].toAggregate())
+	}
+	return out, nil
+}
+
+// Delete removes a user row by id, mapping zero affected rows to
+// domain/user.ErrUserNotFound.
+func (r *UserRepository) Delete(ctx context.Context, id user.UserID) error {
+	res, err := r.db.NewDelete().Model((*userRow)(nil)).Where("id = ?", id.String()).Exec(ctx)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return user.ErrUserNotFound
+	}
+	return nil
+}
