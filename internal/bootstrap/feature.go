@@ -22,6 +22,11 @@ type FileMapping struct {
 	OutputPath string
 	// SkipIfExists causes the generator to leave an existing file untouched.
 	SkipIfExists bool
+	// Requires, if non-empty, causes the file to be generated only when the
+	// named feature is active in the project. Files for inactive ORMs are
+	// silently skipped. Example: outbox sets Requires: "bun" on its bun-backed
+	// repository template so the file is only written when bun is enabled.
+	Requires string
 }
 
 // Feature is implemented by every installable module in crank.
@@ -123,6 +128,11 @@ func generateFeature(projectDir string, f Feature, ctx *Context) ([]string, erro
 	fsys := f.Templates()
 	var written []string
 	for _, m := range f.Files() {
+		// Skip files that require an inactive feature (e.g. the outbox's
+		// bun-backed adapter is only generated when bun is enabled).
+		if m.Requires != "" && !ctx.Has(m.Requires) {
+			continue
+		}
 		dest := filepath.Join(projectDir, m.OutputPath)
 		if m.SkipIfExists && utils.PathExists(dest) {
 			continue

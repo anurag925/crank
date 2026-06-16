@@ -140,13 +140,11 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 		return nil, err
 	}
 
-	// Enforce the feature's requirements (e.g. outbox requires bun).
+	// Enforce the feature's requirements (e.g. outbox requires bun or gorm).
 	// The check runs against the *projected* feature set so we can detect
 	// missing requirements before any templates are written.
-	for _, req := range ftr.Requirements() {
-		if !ctx.Has(req) {
-			return nil, fmt.Errorf("feature %q requires %q (run `crank add %s` first or `crank init` with both features)", featureName, req, req)
-		}
+	if err := checkRequirements(featureName, ftr.Requirements(), ctx); err != nil {
+		return nil, err
 	}
 	// Also enforce mutual exclusion for `crank add`: you can't add a second
 	// ORM to a project that already has one.
@@ -230,7 +228,12 @@ func validateFeatures(reg *Registry, features []string) error {
 // validateRequirements walks the requested feature set and refuses to
 // proceed if any feature's Requirements() are not satisfied by the set
 // as a whole. For example, `crank init --features=base,outbox` errors
-// with a clear hint that outbox requires bun.
+// with a clear hint that outbox requires an ORM (bun or gorm).
+//
+// Special case: when a feature lists both "bun" and "gorm" as
+// requirements, they are treated as alternatives — at least one must
+// be present but both are not required. This allows the outbox feature
+// to work with either ORM.
 func validateRequirements(reg *Registry, features []string) error {
 	have := make(map[string]bool, len(features))
 	for _, f := range features {
@@ -238,9 +241,42 @@ func validateRequirements(reg *Registry, features []string) error {
 	}
 	for _, name := range features {
 		f, _ := reg.resolve(name)
-		for _, req := range f.Requirements() {
-			if !have[req] {
-				return fmt.Errorf("feature %q requires %q (include both in --features or run `crank add %s` after init)", name, req, req)
+		reqs := f.Requirements()
+		if len(reqs) == 0 {
+			continue
+		}
+		// Check if the requirements include both bun and gorm (ORM
+		// alternatives). If so, only one of them needs to be present.
+		wantsBun := false
+		wantsGorm := false
+		other := make([]string, 0, len(reqs))
+		for _, r := range reqs {
+			switch r {
+			case "bun":
+				wantsBun = true
+			case "gorm":
+				wantsGorm = true
+			default:
+				other = append(other, r)
+			}
+		}
+		// Check non-ORM requirements (must all be present).
+		for _, r := range other {
+			if !have[r] {
+				return fmt.Errorf("feature %q requires %q (include both in --features or run `crank add %s` after init)", name, r, r)
+			}
+		}
+		// Check ORM requirement (at least one of bun/gorm).
+		if wantsBun && wantsGorm {
+			if !have["bun"] && !have["gorm"] {
+				return fmt.Errorf("feature %q requires a database ORM (include bun or gorm in --features, or pass --use-bun to `crank init`)", name)
+			}
+			continue
+		}
+		// Standard check: all requirements must be present.
+		for _, r := range reqs {
+			if !have[r] {
+				return fmt.Errorf("feature %q requires %q (include both in --features or run `crank add %s` after init)", name, r, r)
 			}
 		}
 	}
@@ -263,6 +299,45 @@ func uniqueDeps(deps []string) []string {
 		out = append(out, d)
 	}
 	return out
+}
+
+// checkRequirements checks that a feature's requirements are met by the
+// context. When the requirements contain both "bun" and "gorm", they are
+// treated as alternatives (at least one must be present). This mirrors the
+// logic in validateRequirements for the Add path.
+func checkRequirements(featureName string, reqs []string, ctx *Context) error {
+	if len(reqs) == 0 {
+		return nil
+	}
+	wantsBun, wantsGorm := false, false
+	other := make([]string, 0, len(reqs))
+	for _, r := range reqs {
+		switch r {
+		case "bun":
+			wantsBun = true
+		case "gorm":
+			wantsGorm = true
+		default:
+			other = append(other, r)
+		}
+	}
+	for _, r := range other {
+		if !ctx.Has(r) {
+			return fmt.Errorf("feature %q requires %q (run `crank add %s` first or `crank init` with both features)", featureName, r, r)
+		}
+	}
+	if wantsBun && wantsGorm {
+		if !ctx.Has("bun") && !ctx.Has("gorm") {
+			return fmt.Errorf("feature %q requires a database ORM (add bun or gorm to your project first)", featureName)
+		}
+		return nil
+	}
+	for _, r := range reqs {
+		if !ctx.Has(r) {
+			return fmt.Errorf("feature %q requires %q (run `crank add %s` first or `crank init` with both features)", featureName, r, r)
+		}
+	}
+	return nil
 }
 
 // validateMutuallyExclusive refuses a feature set that contains both of the

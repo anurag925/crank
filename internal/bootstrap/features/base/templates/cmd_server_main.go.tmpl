@@ -164,8 +164,14 @@ func main() {
 	userRepo := memory.NewUserRepository()
 {{end}}
 {{if .Has "outbox"}}
+{{if .Has "bun"}}
 	outboxRepo := bun.NewOutboxRepository(db)
 	uow := outboxadapter.NewBunUoW(db, outboxRepo)
+{{end}}
+{{if .Has "gorm"}}
+	outboxRepo := gorm.NewOutboxRepository(gormDB)
+	uow := outboxadapter.NewGormUoW(gormDB, outboxRepo)
+{{end}}
 	outboxWorker := outboxadapter.NewWorker(outboxRepo, bus, logger, outboxadapter.Config{
 		Interval:  cfg.Outbox.PollInterval,
 		BatchSize: cfg.Outbox.BatchSize,

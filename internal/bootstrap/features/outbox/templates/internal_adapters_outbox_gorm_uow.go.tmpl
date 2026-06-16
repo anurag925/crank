@@ -1,0 +1,72 @@
+// Package outbox provides the postgres-backed UnitOfWork implementation
+// that powers the transactional outbox pattern. The unit of work wraps
+// the application's save closure in a database transaction so the
+// aggregate write and the outbox row commit (or roll back) atomically.
+package outbox
+
+import (
+	"context"
+	"fmt"
+
+	"github.com/google/uuid"
+	"gorm.io/gorm"
+
+	"{{.ModulePath}}/internal/domain/outbox"
+	"{{.ModulePath}}/internal/domain/shared"
+)
+
+// GormUoW is a transactional UnitOfWork backed by the outbox_events
+// table. SaveAndPublish runs the supplied save closure in a GORM-managed
+// transaction; on success it appends one outbox row per event and the
+// transaction commits, atomically recording the aggregate write and the
+// events it produced. The event bus is *not* invoked here — the worker
+// drains the outbox and publishes to the bus asynchronously.
+type GormUoW struct {
+	db   *gorm.DB
+	repo outbox.Repository
+}
+
+// NewGormUoW constructs a GormUoW that writes to the given
+// repository inside a transaction on the supplied *gorm.DB.
+func NewGormUoW(db *gorm.DB, repo outbox.Repository) *GormUoW {
+	return &GormUoW{db: db, repo: repo}
+}
+
+// SaveAndPublish runs save(ctx) in a transaction; on success it appends
+// one outbox row per event. Any error from save or from the append
+// causes the transaction to roll back.
+func (u *GormUoW) SaveAndPublish(ctx context.Context, save func(ctx context.Context) error, events []shared.DomainEvent) error {
+	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := save(ctx); err != nil {
+			return err
+		}
+		for _, ev := range events {
+			payload, err := shared.EncodeEvent(ev)
+			if err != nil {
+				return fmt.Errorf("encode event %q: %w", ev.EventName(), err)
+			}
+			row := &outbox.Event{
+				ID:          uuid.NewString(),
+				AggregateID: aggregateIDFromEvent(ev),
+				EventType:   ev.EventName(),
+				Payload:     payload,
+			}
+			if err := u.repo.Append(ctx, row); err != nil {
+				return fmt.Errorf("append outbox event: %w", err)
+			}
+		}
+		return nil
+	})
+}
+
+// aggregateIDFromEvent best-effort extracts an aggregate id from the
+// event's JSON-marshaled body. If the body is empty or the id cannot be
+// determined, the row's aggregate_id is left as the event name so the
+// table stays queryable.
+func aggregateIDFromEvent(ev shared.DomainEvent) string {
+	body, err := shared.EncodeEvent(ev)
+	if err != nil || len(body) == 0 {
+		return ev.EventName()
+	}
+	return string(body)
+}

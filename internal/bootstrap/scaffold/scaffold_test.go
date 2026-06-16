@@ -15,6 +15,7 @@ import (
 	// Register features so bootstrap.Generate can build a project.
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/gorm"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 )
 
@@ -158,6 +159,73 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 	for _, want := range []string{"*OrderHandler", `e.Group("/orders")`, "cfg.OrderHandler.Register("} {
 		if !strings.Contains(hub, want) {
 			t.Errorf("routes.go not wired with %q:\n%s", want, hub)
+		}
+	}
+	assertParses(t, dir, "internal/adapters/http/web/routes.go")
+}
+
+func TestGenerateHandlerGorm(t *testing.T) {
+	dir := newProject(t, []string{"gorm"})
+
+	res, err := scaffold.Generate(scaffold.Options{
+		ProjectDir: dir,
+		Kind:       scaffold.KindHandler,
+		Name:       "Invoice",
+		Fields:     []string{"number:string", "amount:float"},
+	})
+	if err != nil {
+		t.Fatalf("Generate handler on gorm project: %v", err)
+	}
+
+	// GORM adapter exists.
+	gormRepo := "internal/adapters/persistence/gorm/invoice_repository.go"
+	if !exists(dir, gormRepo) {
+		t.Errorf("expected %s to be generated", gormRepo)
+	} else {
+		assertParses(t, dir, gormRepo)
+	}
+
+	// Bun adapter should NOT exist.
+	if exists(dir, "internal/adapters/persistence/bun/invoice_repository.go") {
+		t.Error("bun adapter should not be generated on a gorm project")
+	}
+
+	// In-memory adapter always ships.
+	assertParses(t, dir, "internal/adapters/persistence/memory/invoice_repository.go")
+
+	// Repository uses gorm.DB and GORM tags.
+	repo := read(t, dir, gormRepo)
+	for _, want := range []string{
+		"*gorm.DB",
+		"func NewInvoiceRepository(db *gorm.DB)",
+		"func (r *InvoiceRepository) Save(",
+		"func (r *InvoiceRepository) Delete(",
+		"gorm.ErrRecordNotFound",
+		"TableName",
+	} {
+		if !strings.Contains(repo, want) {
+			t.Errorf("gorm repository missing %q", want)
+		}
+	}
+
+	// A create-table migration was produced.
+	ups, _ := filepath.Glob(filepath.Join(dir, "migrations", "*_create_invoices.up.sql"))
+	if len(ups) != 1 {
+		t.Fatalf("expected one create_invoices.up.sql migration, found %d", len(ups))
+	}
+	up, _ := os.ReadFile(ups[0])
+	if !strings.Contains(string(up), "CREATE TABLE IF NOT EXISTS invoices") {
+		t.Errorf("migration missing CREATE TABLE: %s", up)
+	}
+
+	// The handler was wired.
+	if !res.Wired {
+		t.Errorf("expected handler to be wired, hint=%q", res.WireHint)
+	}
+	hub := read(t, dir, "internal/adapters/http/web/routes.go")
+	for _, want := range []string{"*InvoiceHandler", `e.Group("/invoices")`, "cfg.InvoiceHandler.Register("} {
+		if !strings.Contains(hub, want) {
+			t.Errorf("routes.go not wired with %q: %s", want, hub)
 		}
 	}
 	assertParses(t, dir, "internal/adapters/http/web/routes.go")

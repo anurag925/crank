@@ -15,11 +15,12 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/crypto"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/gorm"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/outbox"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
+	"github.com/anurag925/crank/internal/bootstrap/scaffold"
 )
 
-// allFeatures returns every feature name registered in the global registry.
 func allFeatures(t *testing.T) []string {
 	t.Helper()
 	return bootstrap.GlobalRegistry.Names()
@@ -750,6 +751,120 @@ func TestBun_NotPresent_NoGormImports(t *testing.T) {
 	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
 	assertNotContains(t, content, "gorm.NewDB", "bun-only main has no gorm init")
 	assertNotContains(t, content, "gorm.NewUserRepository", "bun-only main has no gorm user repo")
+}
+
+func TestGorm_Scaffold_GormRepository(t *testing.T) {
+	// A gorm-based project should get a GORM-backed repository via `crank make`.
+	r := generateProject(t, "gormscaff", []string{"gorm"})
+	dir := r.ProjectDir
+
+	// Generate a handler (which pulls in model + repo + service + wiring).
+	res, err := scaffold.Generate(scaffold.Options{
+		ProjectDir: dir,
+		Kind:       scaffold.KindHandler,
+		Name:       "Order",
+		Fields:     []string{"customer:string", "total:float"},
+	})
+	if err != nil {
+		t.Fatalf("Generate handler on gorm project: %v", err)
+	}
+
+	// GORM adapter should exist.
+	assertFileExists(t, dir, "internal/adapters/persistence/gorm/order_repository.go")
+	// No bun adapter (gorm-only project).
+	assertFileNotExists(t, dir, "internal/adapters/persistence/bun/order_repository.go")
+
+	// In-memory adapter always ships.
+	assertFileExists(t, dir, "internal/adapters/persistence/memory/order_repository.go")
+
+	// Repository uses gorm.DB and GORM tags.
+	repo := readFile(t, dir, "internal/adapters/persistence/gorm/order_repository.go")
+	assertContains(t, repo, "*gorm.DB", "gorm repo uses *gorm.DB")
+	assertContains(t, repo, `gorm:"column:id;primaryKey;type:uuid"`, "row DTO carries gorm tags")
+	assertContains(t, repo, "TableName()", "row DTO declares table name")
+	assertContains(t, repo, "func (r *OrderRepository) Save(", "gorm repo has Save")
+	assertContains(t, repo, "gorm.ErrRecordNotFound", "gorm repo maps ErrRecordNotFound")
+
+	// A create-table migration was produced.
+	matches, _ := filepath.Glob(filepath.Join(dir, "migrations", "*_create_orders.up.sql"))
+	if len(matches) != 1 {
+		t.Errorf("expected one create_orders migration, got %d", len(matches))
+	}
+
+	// Handler was wired.
+	if !res.Wired {
+		t.Errorf("expected handler to be wired")
+	}
+}
+
+func TestGorm_Outbox_FilesExist(t *testing.T) {
+	// A base + gorm + outbox project should have GORM outbox files, not bun ones.
+	r := generateProject(t, "gormoutbox", []string{"gorm", "outbox"})
+	dir := r.ProjectDir
+
+	// Domain outbox files (ORM-agnostic).
+	assertFileExists(t, dir, "internal/domain/outbox/event.go")
+	assertFileExists(t, dir, "internal/domain/outbox/repository.go")
+
+	// GORM outbox adapter.
+	assertFileExists(t, dir, "internal/adapters/persistence/gorm/outbox_repository.go")
+	assertFileExists(t, dir, "internal/adapters/outbox/gorm_uow.go")
+	outboxRepo := readFile(t, dir, "internal/adapters/persistence/gorm/outbox_repository.go")
+	assertContains(t, outboxRepo, "*gorm.DB", "gorm outbox repo uses *gorm.DB")
+	assertContains(t, outboxRepo, "NewOutboxRepository", "gorm outbox repo constructor")
+
+	// Bun outbox adapter should NOT exist (gorm-only project).
+	assertFileNotExists(t, dir, "internal/adapters/persistence/bun/outbox_repository.go")
+	assertFileNotExists(t, dir, "internal/adapters/outbox/bun_uow.go")
+
+	// Worker is ORM-agnostic.
+	assertFileExists(t, dir, "internal/adapters/outbox/worker.go")
+
+	// Outbox migrations exist.
+	assertFileExists(t, dir, "migrations/000002_add_outbox_events.up.sql")
+	assertFileExists(t, dir, "migrations/000002_add_outbox_events.down.sql")
+
+	// Main.go wires the GORM outbox.
+	main := readFile(t, dir, "cmd/server/main.go")
+	assertContains(t, main, "gorm.NewOutboxRepository", "main.go wires gorm outbox repo")
+	assertContains(t, main, "outboxadapter.NewGormUoW", "main.go wires gorm UoW")
+	assertNotContains(t, main, "bun.NewOutboxRepository", "main.go has no bun outbox")
+}
+
+func TestBun_Outbox_FilesExist(t *testing.T) {
+	// A base + bun + outbox project should have bun outbox files, not gorm ones.
+	r := generateProject(t, "bunoutbox", []string{"bun", "outbox"})
+	dir := r.ProjectDir
+
+	// Bun outbox adapter exists.
+	assertFileExists(t, dir, "internal/adapters/persistence/bun/outbox_repository.go")
+	assertFileExists(t, dir, "internal/adapters/outbox/bun_uow.go")
+
+	// GORM outbox adapter should NOT exist.
+	assertFileNotExists(t, dir, "internal/adapters/persistence/gorm/outbox_repository.go")
+	assertFileNotExists(t, dir, "internal/adapters/outbox/gorm_uow.go")
+
+	// Main.go wires the bun outbox.
+	main := readFile(t, dir, "cmd/server/main.go")
+	assertContains(t, main, "bun.NewOutboxRepository", "main.go wires bun outbox repo")
+	assertContains(t, main, "outboxadapter.NewBunUoW", "main.go wires bun UoW")
+	assertNotContains(t, main, "gorm.NewOutboxRepository", "main.go has no gorm outbox")
+}
+
+func TestOutbox_NoORM_Fails(t *testing.T) {
+	// Trying to add outbox without either bun or gorm must fail.
+	_, err := bootstrap.Generate(bootstrap.GlobalRegistry, bootstrap.Options{
+		ProjectName: "noormoutbox",
+		ModulePath:  "github.com/example/noormoutbox",
+		TargetDir:   t.TempDir(),
+		Features:    []string{"base", "outbox"},
+	})
+	if err == nil {
+		t.Fatal("expected Generate to refuse outbox without an ORM")
+	}
+	if !strings.Contains(err.Error(), "requires a database ORM") {
+		t.Errorf("expected ORM requirement error, got: %v", err)
+	}
 }
 
 func TestBunAndGorm_MutuallyExclusive(t *testing.T) {
