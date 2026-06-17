@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 )
 
@@ -43,12 +44,39 @@ func RunExternal(cfg *ExecConfig) error {
 func FindBinary(name, installHint string) (string, error) {
 	bin, err := exec.LookPath(name)
 	if err != nil {
+		for _, dir := range goBinDirs() {
+			candidate := filepath.Join(dir, name)
+			if info, statErr := os.Stat(candidate); statErr == nil && !info.IsDir() {
+				return candidate, nil
+			}
+		}
 		if installHint != "" {
 			return "", fmt.Errorf("%s is not installed or not on PATH.\n  Install with: %s", name, installHint)
 		}
 		return "", fmt.Errorf("%s is not installed or not on PATH", name)
 	}
 	return bin, nil
+}
+
+func goBinDirs() []string {
+	dirs := make([]string, 0, 2)
+	if gobin := strings.TrimSpace(os.Getenv("GOBIN")); gobin != "" {
+		dirs = append(dirs, gobin)
+	}
+	gopaths := strings.TrimSpace(os.Getenv("GOPATH"))
+	if gopaths == "" {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			gopaths = filepath.Join(home, "go")
+		}
+	}
+	for _, gopath := range filepath.SplitList(gopaths) {
+		gopath = strings.TrimSpace(gopath)
+		if gopath == "" {
+			continue
+		}
+		dirs = append(dirs, filepath.Join(gopath, "bin"))
+	}
+	return dirs
 }
 
 // ShellJoin joins an argv slice into a human-readable command string.

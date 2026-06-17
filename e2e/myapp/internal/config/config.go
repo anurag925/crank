@@ -1,0 +1,95 @@
+package config
+
+import (
+	"fmt"
+	"strings"
+
+	"github.com/spf13/viper"
+)
+
+// Config is the top-level application configuration loaded from configs/config.yaml and
+// overridden by environment variables. Feature-specific config blocks are
+// injected at the markers below by `crank add` (and by `crank init` for
+// multi-feature generations).
+type Config struct {
+	App      AppConfig      `mapstructure:"app"`
+	Database DatabaseConfig `mapstructure:"database"`
+
+	// crank:config-fields
+	Logging LoggingConfig `mapstructure:"logging"`
+}
+
+// AppConfig holds settings for the HTTP server itself.
+type AppConfig struct {
+	Name string `mapstructure:"name"`
+	Host string `mapstructure:"host"`
+	Port int    `mapstructure:"port"`
+	Env  string `mapstructure:"env"`
+}
+
+// DatabaseConfig holds PostgreSQL connection settings.
+type DatabaseConfig struct {
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	User     string `mapstructure:"user"`
+	Password string `mapstructure:"password"`
+	Name     string `mapstructure:"name"`
+	SSLMode  string `mapstructure:"sslmode"`
+}
+
+// DSN returns a libpq-style connection string.
+func (d DatabaseConfig) DSN() string {
+	return fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		d.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode)
+}
+
+// crank:config-structs
+// LoggingConfig controls slog output.
+type LoggingConfig struct {
+	Level     string `mapstructure:"level"`
+	Format    string `mapstructure:"format"`
+	AddSource bool   `mapstructure:"add_source"`
+}
+
+// Load reads configuration from configs/config.yaml and overrides values with environment
+// variables (e.g. APP_PORT, DATABASE_PASSWORD, JWT_SECRET).
+func Load() *Config {
+	v := viper.New()
+	v.SetConfigName("config")
+	v.SetConfigType("yaml")
+	v.AddConfigPath("./configs")
+	v.AddConfigPath(".")
+	v.SetEnvPrefix("")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
+
+	setDefaults(v)
+
+	if err := v.ReadInConfig(); err != nil {
+		fmt.Printf("warning: could not read configs/config.yaml: %v\n", err)
+	}
+
+	var cfg Config
+	if err := v.Unmarshal(&cfg); err != nil {
+		panic(fmt.Errorf("fatal: cannot parse configuration: %w", err))
+	}
+	return &cfg
+}
+
+func setDefaults(v *viper.Viper) {
+	v.SetDefault("app.name", "myapp")
+	v.SetDefault("app.host", "0.0.0.0")
+	v.SetDefault("app.port", 8080)
+	v.SetDefault("app.env", "development")
+	v.SetDefault("database.host", "localhost")
+	v.SetDefault("database.port", 5432)
+	v.SetDefault("database.user", "postgres")
+	v.SetDefault("database.password", "postgres")
+	v.SetDefault("database.name", "myapp")
+	v.SetDefault("database.sslmode", "disable")
+
+	// crank:config-defaults
+	v.SetDefault("logging.level", "info")
+	v.SetDefault("logging.format", "text")
+	v.SetDefault("logging.add_source", false)
+}

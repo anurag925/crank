@@ -1,0 +1,84 @@
+package memory
+
+import (
+	"context"
+	"sync"
+
+	"myapp/internal/domain/user"
+)
+
+// UserRepository is the in-memory implementation of
+// domain/user.Repository. It is safe for concurrent use and is intended for
+// tests, local development, and projects that do not enable the postgres
+// feature.
+type UserRepository struct {
+	mu    sync.RWMutex
+	byID  map[string]*user.User
+	byEml map[string]*user.User
+}
+
+// NewUserRepository constructs an empty in-memory UserRepository.
+func NewUserRepository() *UserRepository {
+	return &UserRepository{
+		byID:  make(map[string]*user.User),
+		byEml: make(map[string]*user.User),
+	}
+}
+
+// Save stores (or overwrites) a user aggregate.
+func (r *UserRepository) Save(_ context.Context, u *user.User) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.byID[u.ID().String()] = u
+	r.byEml[u.Email()] = u
+	return nil
+}
+
+// Get returns a user aggregate by id, mapping a missing key to
+// domain/user.ErrUserNotFound.
+func (r *UserRepository) Get(_ context.Context, id user.UserID) (*user.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	u, ok := r.byID[id.String()]
+	if !ok {
+		return nil, user.ErrUserNotFound
+	}
+	return u, nil
+}
+
+// GetByEmail returns a user aggregate by email address, or
+// domain/user.ErrUserNotFound.
+func (r *UserRepository) GetByEmail(_ context.Context, email string) (*user.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	u, ok := r.byEml[email]
+	if !ok {
+		return nil, user.ErrUserNotFound
+	}
+	return u, nil
+}
+
+// List returns every stored user aggregate, in unspecified order.
+func (r *UserRepository) List(_ context.Context) ([]*user.User, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]*user.User, 0, len(r.byID))
+	for _, u := range r.byID {
+		out = append(out, u)
+	}
+	return out, nil
+}
+
+// Delete removes a user aggregate by id, mapping a missing key to
+// domain/user.ErrUserNotFound.
+func (r *UserRepository) Delete(_ context.Context, id user.UserID) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	u, ok := r.byID[id.String()]
+	if !ok {
+		return user.ErrUserNotFound
+	}
+	delete(r.byID, id.String())
+	delete(r.byEml, u.Email())
+	return nil
+}

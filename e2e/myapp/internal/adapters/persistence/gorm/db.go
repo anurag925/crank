@@ -1,0 +1,36 @@
+package gorm
+
+import (
+	"fmt"
+	"time"
+
+	"gorm.io/driver/postgres"
+	"gorm.io/gorm"
+
+	"myapp/internal/config"
+)
+
+// NewDB opens a connection to PostgreSQL using the supplied configuration
+// and returns a configured *gorm.DB ready to use. The caller is responsible
+// for closing the underlying *sql.DB at shutdown.
+func NewDB(cfg config.DatabaseConfig) (*gorm.DB, error) {
+	dsn := cfg.DSN()
+	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{})
+	if err != nil {
+		return nil, fmt.Errorf("connect to postgres at %s:%d: %w", cfg.Host, cfg.Port, err)
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return nil, fmt.Errorf("get underlying *sql.DB: %w", err)
+	}
+	sqlDB.SetMaxOpenConns(20)
+	sqlDB.SetMaxIdleConns(5)
+	sqlDB.SetConnMaxLifetime(30 * time.Minute)
+
+	if err := sqlDB.Ping(); err != nil {
+		_ = sqlDB.Close()
+		return nil, fmt.Errorf("ping postgres at %s:%d: %w", cfg.Host, cfg.Port, err)
+	}
+	return db, nil
+}
