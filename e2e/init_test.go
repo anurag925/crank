@@ -151,7 +151,7 @@ func TestE2E_Init_InvalidFeatureErrors(t *testing.T) {
 	if err == nil {
 		t.Fatalf("expected unknown-feature error, got success:\n%s", out)
 	}
-	if !strings.Contains(out, "postgresq") {
+	if !strings.Contains(out, "bunq") {
 		t.Errorf("error should mention the bad feature name, got:\n%s", out)
 	}
 }
