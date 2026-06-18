@@ -120,7 +120,7 @@ func dsnFromConfig(projectDir string) (string, error) {
 			continue
 		}
 		if inDB {
-			if len(s) == 0 || (!bytes.HasPrefix(s, []byte(" ")) && !bytes.HasPrefix(s, []byte("\t"))) {
+			if len(s) == 0 || (!bytes.HasPrefix(line, []byte(" ")) && !bytes.HasPrefix(line, []byte("\t"))) {
 				inDB = false
 				continue
 			}
