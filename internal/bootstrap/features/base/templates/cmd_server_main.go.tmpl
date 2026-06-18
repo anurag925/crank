@@ -239,6 +239,9 @@ func main() {
 	authHandler := web.NewAuthHandler(userCmd, userQry, tokens)
 	authHandler.Register(e)
 {{end}}
+{{if .Has "views"}}
+	web.ServeViews(e, cfg.Views, logger)
+{{end}}
 
 	addr := cfg.App.Host + ":" + strconv.Itoa(cfg.App.Port)
 	logger.Info("server listening", "addr", addr)

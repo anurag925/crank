@@ -21,6 +21,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/qdrant"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/views"
 
 	// Tool packages self-register with the global tool registry via init().
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/build"

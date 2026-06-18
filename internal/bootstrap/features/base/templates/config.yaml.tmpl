@@ -54,6 +54,14 @@ temporal:
   namespace: "default"
   task_queue: "{{.PackageName}}-task-queue"
 {{- end}}
+{{- if .Has "views"}}
+
+views:
+  # Set enabled to true to serve the embedded React SPA.
+  # For local frontend dev, set dev_server to your Vite URL (e.g. "http://localhost:5173").
+  enabled: false
+  dev_server: ""
+{{- end}}
 # crank:config-section
 logging:
   level: "info"

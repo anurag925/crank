@@ -186,6 +186,20 @@ func featureConfigData(pkgName string) map[string]configInjection {
 			YAMLSection: "\noutbox:\n  poll_interval: 1s\n  batch_size: 100\n",
 			EnvSection:  "",
 		},
+		"views": {
+			StructField: "\tViews ViewsConfig " + bt + "mapstructure:\"views\"" + bt + "\n",
+			StructDef: "// ViewsConfig controls the embedded React SPA serving.\n" +
+				"// When Enabled is false the SPA is not served (API-only mode).\n" +
+				"// Set DevServer to a Vite dev server URL (e.g. \"http://localhost:5173\") for\n" +
+				"// hot module replacement during frontend development.\n" +
+				"type ViewsConfig struct {\n" +
+				"\tEnabled   bool   " + bt + "mapstructure:\"enabled\"" + bt + "\n" +
+				"\tDevServer string " + bt + "mapstructure:\"dev_server\"" + bt + "\n" +
+				"}\n",
+			Defaults:    "\tv.SetDefault(\"views.enabled\", false)\n" + "\tv.SetDefault(\"views.dev_server\", \"\")\n",
+			YAMLSection: "\nviews:\n  # Set enabled to true to serve the embedded React SPA.\n  # For local frontend dev, set dev_server to your Vite URL (e.g. \"http://localhost:5173\").\n  enabled: false\n  dev_server: \"\"\n",
+			EnvSection:  "",
+		},
 	}
 }
 
