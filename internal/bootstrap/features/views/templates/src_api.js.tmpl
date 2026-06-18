@@ -1,0 +1,32 @@
+/**
+ * Thin API wrapper for the {{.ProjectName}} backend.
+ *
+ * In development (Vite dev server), requests to the Go backend are proxied
+ * by the Vite config. In production, the Go binary serves both the API and
+ * the embedded frontend from the same origin.
+ */
+
+const BASE = '';
+
+async function request(method, path, body) {
+  const opts = {
+    method,
+    headers: { 'Content-Type': 'application/json' },
+  };
+  if (body) {
+    opts.body = JSON.stringify(body);
+  }
+  const res = await fetch(BASE + path, opts);
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.error || res.statusText);
+  }
+  return res.json();
+}
+
+export const api = {
+  get: (path) => request('GET', path),
+  post: (path, body) => request('POST', path, body),
+  put: (path, body) => request('PUT', path, body),
+  delete: (path) => request('DELETE', path),
+};

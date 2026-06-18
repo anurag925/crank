@@ -1,0 +1,74 @@
+import { Routes, Route, Link, useLocation } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { api } from './api';
+
+function Home() {
+  const [health, setHealth] = useState(null);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    api.get('/health')
+      .then(setHealth)
+      .catch(err => setError(err.message));
+  }, []);
+
+  return (
+    <div className="page">
+      <h1>{{.ProjectName}}</h1>
+      <p className="subtitle">Scaffolded by crank — Go backend + React frontend</p>
+
+      <div className="card">
+        <h2>Backend Health</h2>
+        {error && <p className="error">Error: {error}</p>}
+        {health && (
+          <pre className="json">{JSON.stringify(health, null, 2)}</pre>
+        )}
+        {!health && !error && <p>Checking backend...</p>}
+      </div>
+    </div>
+  );
+}
+
+function About() {
+  return (
+    <div className="page">
+      <h1>About</h1>
+      <p>This is a full-stack application scaffolded by crank.</p>
+      <ul>
+        <li>Go backend with Echo</li>
+        <li>React frontend with Vite</li>
+        <li>Embedded SPA served from a single binary</li>
+      </ul>
+    </div>
+  );
+}
+
+function NotFound() {
+  const location = useLocation();
+  return (
+    <div className="page">
+      <h1>404</h1>
+      <p>No route found for <code>{location.pathname}</code></p>
+      <Link to="/">Go Home</Link>
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <div className="app">
+      <nav>
+        <Link to="/">Home</Link>
+        <Link to="/about">About</Link>
+      </nav>
+
+      <main>
+        <Routes>
+          <Route path="/" element={<Home />} />
+          <Route path="/about" element={<About />} />
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </main>
+    </div>
+  );
+}

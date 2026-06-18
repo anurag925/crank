@@ -25,6 +25,8 @@ func (feature) Templates() embed.FS { return tmpls }
 
 func (feature) Dependencies() []string {
 	return []string{
+		"github.com/caarlos0/env/v11",
+		"github.com/joho/godotenv",
 		"github.com/labstack/echo/v4",
 		"github.com/spf13/viper",
 		"github.com/go-playground/validator/v10",

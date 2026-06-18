@@ -148,15 +148,22 @@ func TestE2E_Generated_BinDirectoryCreated(t *testing.T) {
 // We skip this test on platforms where the timeout doesn't work, and we
 // also skip if the test would interfere with other tests sharing a port
 // (we use port 0 binding in the generated config? — actually, we don't,
-// so we override APP_PORT via env).
+// so we patch configs/config.yaml to use a high port).
 func TestE2E_Generated_RunFromProject_StartAndKill(t *testing.T) {
 	dir := scaffoldBase(t, "gen_run")
+
+	// Use a high port that's unlikely to be in use.
+	yamlPath := filepath.Join(dir, "configs", "config.yaml")
+	yamlBody := readFile(t, dir, "configs/config.yaml")
+	yamlBody = strings.Replace(yamlBody, "port: 8080", "port: 18080", 1)
+	yamlBody = strings.Replace(yamlBody, "host: \"0.0.0.0\"", "host: \"127.0.0.1\"", 1)
+	if err := os.WriteFile(yamlPath, []byte(yamlBody), 0o644); err != nil {
+		t.Fatalf("write config.yaml: %v", err)
+	}
+
 	crankPath := filepath.Dir(crankBin)
 	env := []string{
 		"PATH=" + crankPath + string(os.PathListSeparator) + os.Getenv("PATH"),
-		// Use a high port that's unlikely to be in use.
-		"APP_PORT=18080",
-		"APP_HOST=127.0.0.1",
 	}
 	cmd, err := startCrankCommand(t, dir, env, "run", "--project", dir)
 	if err != nil {

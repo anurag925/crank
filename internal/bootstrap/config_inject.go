@@ -48,11 +48,12 @@ func featureConfigData(pkgName string) map[string]configInjection {
 		"bun": {
 			StructField: "\tDatabase DatabaseConfig " + bt + "mapstructure:\"database\"" + bt + "\n",
 			StructDef: "// DatabaseConfig holds PostgreSQL connection settings.\n" +
+				"// The Password field is a secret — set it via DATABASE_PASSWORD in .env.\n" +
 				"type DatabaseConfig struct {\n" +
 				"\tHost     string " + bt + "mapstructure:\"host\"" + bt + "\n" +
 				"\tPort     int    " + bt + "mapstructure:\"port\"" + bt + "\n" +
 				"\tUser     string " + bt + "mapstructure:\"user\"" + bt + "\n" +
-				"\tPassword string " + bt + "mapstructure:\"password\"" + bt + "\n" +
+				"\tPassword string " + bt + "mapstructure:\"password\" env:\"DATABASE_PASSWORD\"" + bt + "\n" +
 				"\tName     string " + bt + "mapstructure:\"name\"" + bt + "\n" +
 				"\tSSLMode  string " + bt + "mapstructure:\"sslmode\"" + bt + "\n" +
 				"}\n\n" +
@@ -63,16 +64,17 @@ func featureConfigData(pkgName string) map[string]configInjection {
 				"}\n",
 			Defaults:    "\tv.SetDefault(\"database.host\", \"localhost\")\n" + "\tv.SetDefault(\"database.port\", 5432)\n" + "\tv.SetDefault(\"database.user\", \"postgres\")\n" + "\tv.SetDefault(\"database.password\", \"postgres\")\n" + "\tv.SetDefault(\"database.name\", \"" + pkgName + "\")\n" + "\tv.SetDefault(\"database.sslmode\", \"disable\")\n",
 			YAMLSection: "\ndatabase:\n  host: \"localhost\"\n  port: 5432\n  user: \"postgres\"\n  password: \"postgres\"\n  name: \"" + pkgName + "\"\n  sslmode: \"disable\"\n",
-			EnvSection:  "\nDB_HOST=localhost\nDB_PORT=5432\nDB_USER=postgres\nDB_PASSWORD=postgres\nDB_NAME=" + pkgName + "\nDB_SSLMODE=disable\n",
+			EnvSection:  "\nDATABASE_PASSWORD=postgres\n",
 		},
 		"gorm": {
 			StructField: "\tDatabase DatabaseConfig " + bt + "mapstructure:\"database\"" + bt + "\n",
 			StructDef: "// DatabaseConfig holds PostgreSQL connection settings.\n" +
+				"// The Password field is a secret — set it via DATABASE_PASSWORD in .env.\n" +
 				"type DatabaseConfig struct {\n" +
 				"\tHost     string " + bt + "mapstructure:\"host\"" + bt + "\n" +
 				"\tPort     int    " + bt + "mapstructure:\"port\"" + bt + "\n" +
 				"\tUser     string " + bt + "mapstructure:\"user\"" + bt + "\n" +
-				"\tPassword string " + bt + "mapstructure:\"password\"" + bt + "\n" +
+				"\tPassword string " + bt + "mapstructure:\"password\" env:\"DATABASE_PASSWORD\"" + bt + "\n" +
 				"\tName     string " + bt + "mapstructure:\"name\"" + bt + "\n" +
 				"\tSSLMode  string " + bt + "mapstructure:\"sslmode\"" + bt + "\n" +
 				"}\n\n" +
@@ -83,30 +85,30 @@ func featureConfigData(pkgName string) map[string]configInjection {
 				"}\n",
 			Defaults:    "\tv.SetDefault(\"database.host\", \"localhost\")\n" + "\tv.SetDefault(\"database.port\", 5432)\n" + "\tv.SetDefault(\"database.user\", \"postgres\")\n" + "\tv.SetDefault(\"database.password\", \"postgres\")\n" + "\tv.SetDefault(\"database.name\", \"" + pkgName + "\")\n" + "\tv.SetDefault(\"database.sslmode\", \"disable\")\n",
 			YAMLSection: "\ndatabase:\n  host: \"localhost\"\n  port: 5432\n  user: \"postgres\"\n  password: \"postgres\"\n  name: \"" + pkgName + "\"\n  sslmode: \"disable\"\n",
-			EnvSection:  "\nDB_HOST=localhost\nDB_PORT=5432\nDB_USER=postgres\nDB_PASSWORD=postgres\nDB_NAME=" + pkgName + "\nDB_SSLMODE=disable\n",
+			EnvSection:  "\nDATABASE_PASSWORD=postgres\n",
 		},
 		"auth": {
 			StructField: "\tJWT JWTConfig " + bt + "mapstructure:\"jwt\"" + bt + "\n",
 			StructDef: "// JWTConfig holds settings for JWT issuance and validation.\n" +
 				"type JWTConfig struct {\n" +
-				"\tSecret            string        " + bt + "mapstructure:\"secret\"" + bt + "\n" +
+				"\tSecret            string        " + bt + "mapstructure:\"secret\" env:\"JWT_SECRET\"" + bt + "\n" +
 				"\tExpiration        time.Duration " + bt + "mapstructure:\"expiration\"" + bt + "\n" +
 				"\tRefreshExpiration time.Duration " + bt + "mapstructure:\"refresh_expiration\"" + bt + "\n" +
 				"}\n",
 			Defaults:    "\tv.SetDefault(\"jwt.secret\", \"change-me-in-production\")\n" + "\tv.SetDefault(\"jwt.expiration\", \"24h\")\n" + "\tv.SetDefault(\"jwt.refresh_expiration\", \"168h\")\n",
 			Imports:     []string{"\"time\""},
 			YAMLSection: "\njwt:\n  secret: \"change-me-in-production\"\n  expiration: 24h\n  refresh_expiration: 168h\n",
-			EnvSection:  "\nJWT_SECRET=change-me-in-production\nJWT_EXPIRATION=24h\nJWT_REFRESH_EXPIRATION=168h\n",
+			EnvSection:  "\nJWT_SECRET=change-me-in-production\n",
 		},
 		"crypto": {
 			StructField: "\tCrypto CryptoConfig " + bt + "mapstructure:\"crypto\"" + bt + "\n",
 			StructDef: "// CryptoConfig holds the encryption secret used by the crypto package.\n" +
-				"// The secret is read from the CRYPTO_SECRET environment variable.\n" +
-				"// Generate a strong secret with: openssl rand -base64 32\n//\n" +
+				"// Generate a strong secret with: openssl rand -base64 32\n" +
+				"//\n" +
 				"// IMPORTANT: Never commit the real secret. Use .env for local development\n" +
 				"// and your platform's secret manager in production.\n" +
 				"type CryptoConfig struct {\n" +
-				"\tSecret string " + bt + "mapstructure:\"secret\"" + bt + "\n" +
+				"\tSecret string " + bt + "mapstructure:\"secret\" env:\"CRYPTO_SECRET\"" + bt + "\n" +
 				"}\n",
 			Defaults:    "\tv.SetDefault(\"crypto.secret\", \"change-me-in-production\")\n",
 			YAMLSection: "\ncrypto:\n  # Generate a strong secret with: openssl rand -base64 32\n  secret: \"change-me-in-production\"\n",
@@ -117,23 +119,24 @@ func featureConfigData(pkgName string) map[string]configInjection {
 			StructDef: "// RedisConfig holds the Redis connection settings.\n" +
 				"type RedisConfig struct {\n" +
 				"\tAddr     string " + bt + "mapstructure:\"addr\"" + bt + "\n" +
-				"\tPassword string " + bt + "mapstructure:\"password\"" + bt + "\n" +
+				"\tPassword string " + bt + "mapstructure:\"password\" env:\"REDIS_PASSWORD\"" + bt + "\n" +
 				"\tDB       int    " + bt + "mapstructure:\"db\"" + bt + "\n" +
 				"}\n",
 			Defaults:    "\tv.SetDefault(\"redis.addr\", \"localhost:6379\")\n" + "\tv.SetDefault(\"redis.password\", \"\")\n" + "\tv.SetDefault(\"redis.db\", 0)\n",
 			YAMLSection: "\nredis:\n  addr: \"localhost:6379\"\n  password: \"\"\n  db: 0\n",
-			EnvSection:  "\nREDIS_ADDR=localhost:6379\nREDIS_PASSWORD=\nREDIS_DB=0\n",
+			EnvSection:  "\nREDIS_PASSWORD=\n",
 		},
 		"mongodb": {
 			StructField: "\tMongoDB MongoDBConfig " + bt + "mapstructure:\"mongodb\"" + bt + "\n",
 			StructDef: "// MongoDBConfig holds the MongoDB connection settings.\n" +
+				"// The URI may contain credentials — set it via MONGODB_URI in .env.\n" +
 				"type MongoDBConfig struct {\n" +
-				"\tURI      string " + bt + "mapstructure:\"uri\"" + bt + "\n" +
+				"\tURI      string " + bt + "mapstructure:\"uri\" env:\"MONGODB_URI\"" + bt + "\n" +
 				"\tDatabase string " + bt + "mapstructure:\"database\"" + bt + "\n" +
 				"}\n",
 			Defaults:    "\tv.SetDefault(\"mongodb.uri\", \"mongodb://localhost:27017\")\n" + "\tv.SetDefault(\"mongodb.database\", \"" + pkgName + "\")\n",
 			YAMLSection: "\nmongodb:\n  uri: \"mongodb://localhost:27017\"\n  database: \"" + pkgName + "\"\n",
-			EnvSection:  "\nMONGODB_URI=mongodb://localhost:27017\nMONGODB_DATABASE=" + pkgName + "\n",
+			EnvSection:  "\nMONGODB_URI=mongodb://localhost:27017\n",
 		},
 		"qdrant": {
 			StructField: "\tQdrant QdrantConfig " + bt + "mapstructure:\"qdrant\"" + bt + "\n",
@@ -141,12 +144,12 @@ func featureConfigData(pkgName string) map[string]configInjection {
 				"type QdrantConfig struct {\n" +
 				"\tHost   string " + bt + "mapstructure:\"host\"" + bt + "\n" +
 				"\tPort   int    " + bt + "mapstructure:\"port\"" + bt + "\n" +
-				"\tAPIKey string " + bt + "mapstructure:\"api_key\"" + bt + "\n" +
+				"\tAPIKey string " + bt + "mapstructure:\"api_key\" env:\"QDRANT_API_KEY\"" + bt + "\n" +
 				"\tUseTLS bool   " + bt + "mapstructure:\"use_tls\"" + bt + "\n" +
 				"}\n",
 			Defaults:    "\tv.SetDefault(\"qdrant.host\", \"localhost\")\n" + "\tv.SetDefault(\"qdrant.port\", 6334)\n" + "\tv.SetDefault(\"qdrant.api_key\", \"\")\n" + "\tv.SetDefault(\"qdrant.use_tls\", false)\n",
 			YAMLSection: "\nqdrant:\n  host: \"localhost\"\n  port: 6334\n  api_key: \"\"\n  use_tls: false\n",
-			EnvSection:  "\nQDRANT_HOST=localhost\nQDRANT_PORT=6334\nQDRANT_API_KEY=\nQDRANT_USE_TLS=false\n",
+			EnvSection:  "\nQDRANT_API_KEY=\n",
 		},
 		"temporal": {
 			StructField: "\tTemporal TemporalConfig " + bt + "mapstructure:\"temporal\"" + bt + "\n",
@@ -158,7 +161,7 @@ func featureConfigData(pkgName string) map[string]configInjection {
 				"}\n",
 			Defaults:    "\tv.SetDefault(\"temporal.host_port\", \"127.0.0.1:7233\")\n" + "\tv.SetDefault(\"temporal.namespace\", \"default\")\n" + "\tv.SetDefault(\"temporal.task_queue\", \"" + pkgName + "-task-queue\")\n",
 			YAMLSection: "\ntemporal:\n  host_port: \"127.0.0.1:7233\"\n  namespace: \"default\"\n  task_queue: \"" + pkgName + "-task-queue\"\n",
-			EnvSection:  "\nTEMPORAL_HOST_PORT=127.0.0.1:7233\nTEMPORAL_NAMESPACE=default\nTEMPORAL_TASK_QUEUE=" + pkgName + "-task-queue\n",
+			EnvSection:  "",
 		},
 		"otel": {
 			StructField: "\tTelemetry TelemetryConfig " + bt + "mapstructure:\"telemetry\"" + bt + "\n",
@@ -169,7 +172,7 @@ func featureConfigData(pkgName string) map[string]configInjection {
 				"}\n",
 			Defaults:    "\tv.SetDefault(\"telemetry.service_name\", \"" + pkgName + "\")\n" + "\tv.SetDefault(\"telemetry.exporter\", \"stdout\")\n",
 			YAMLSection: "\ntelemetry:\n  service_name: \"" + pkgName + "\"\n  exporter: \"stdout\"\n",
-			EnvSection:  "\nTELEMETRY_SERVICE_NAME=" + pkgName + "\nTELEMETRY_EXPORTER=stdout\n",
+			EnvSection:  "",
 		},
 		"outbox": {
 			StructField: "\tOutbox OutboxConfig " + bt + "mapstructure:\"outbox\"" + bt + "\n",
@@ -181,7 +184,7 @@ func featureConfigData(pkgName string) map[string]configInjection {
 			Defaults:    "\tv.SetDefault(\"outbox.poll_interval\", \"1s\")\n" + "\tv.SetDefault(\"outbox.batch_size\", 100)\n",
 			Imports:     []string{"\"time\""},
 			YAMLSection: "\noutbox:\n  poll_interval: 1s\n  batch_size: 100\n",
-			EnvSection:  "\nOUTBOX_POLL_INTERVAL=1s\nOUTBOX_BATCH_SIZE=100\n",
+			EnvSection:  "",
 		},
 	}
 }
@@ -322,6 +325,9 @@ func injectImports(content string, imports []string) (string, error) {
 // config file. It is idempotent — if the snippet is already present, it
 // returns false without error.
 func injectTextConfig(path, marker, snippet string) (bool, error) {
+	if snippet == "" {
+		return false, nil
+	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {

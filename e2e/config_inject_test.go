@@ -54,19 +54,14 @@ func TestE2E_ConfigInject_Bun(t *testing.T) {
 		"database:",
 		`host: "localhost"`,
 		"port: 5432",
-		`user: "bun"`,
+		`user: "postgres"`,
 		`sslmode: "disable"`,
 	)
 	// The DB_NAME is the project's package name (last segment of the
 	// module path). For scaffoldBaseRaw("ci_bun") that is
 	// "ci_bun".
-	pkgName := filepath.Base(dir)
 	assertContainsAll(t, dir, ".env.example",
-		"DB_HOST=localhost",
-		"DB_PORT=5432",
-		"DB_USER=postgres",
-		"DB_NAME="+pkgName,
-		"DB_SSLMODE=disable",
+		"DATABASE_PASSWORD=postgres",
 	)
 }
 
@@ -97,8 +92,6 @@ func TestE2E_ConfigInject_Auth(t *testing.T) {
 	)
 	assertContainsAll(t, dir, ".env.example",
 		"JWT_SECRET=",
-		"JWT_EXPIRATION=",
-		"JWT_REFRESH_EXPIRATION=",
 	)
 	// The auth feature requires "time" to be imported.
 	if !strings.Contains(cfg, `"time"`) {
@@ -147,9 +140,7 @@ func TestE2E_ConfigInject_Redis(t *testing.T) {
 		"db: 0",
 	)
 	assertContainsAll(t, dir, ".env.example",
-		"REDIS_ADDR=localhost:6379",
 		"REDIS_PASSWORD=",
-		"REDIS_DB=0",
 	)
 }
 
@@ -170,10 +161,8 @@ func TestE2E_ConfigInject_Mongodb(t *testing.T) {
 		"mongodb:",
 		`uri: "mongodb://localhost:27017"`,
 	)
-	pkgName := filepath.Base(dir)
 	assertContainsAll(t, dir, ".env.example",
 		"MONGODB_URI=mongodb://localhost:27017",
-		"MONGODB_DATABASE="+pkgName,
 	)
 }
 
@@ -197,11 +186,9 @@ func TestE2E_ConfigInject_Temporal(t *testing.T) {
 		`host_port: "127.0.0.1:7233"`,
 		"namespace: \"default\"",
 	)
-	pkgName := filepath.Base(dir)
-	assertContainsAll(t, dir, ".env.example",
-		"TEMPORAL_HOST_PORT=127.0.0.1:7233",
-		"TEMPORAL_NAMESPACE=default",
-		"TEMPORAL_TASK_QUEUE="+pkgName+"-task-queue",
+	// Temporal has no secret fields, so nothing is injected into .env.example.
+	assertContainsNone(t, dir, ".env.example",
+		"TEMPORAL_HOST_PORT=",
 	)
 }
 

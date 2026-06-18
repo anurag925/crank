@@ -1,0 +1,150 @@
+package web
+
+import (
+	"io/fs"
+	"log/slog"
+	"net/http"
+	"os"
+	"strings"
+
+	"github.com/labstack/echo/v4"
+	echomw "github.com/labstack/echo/v4/middleware"
+
+	"{{.ModulePath}}/internal/config"
+	"{{.ModulePath}}/static"
+)
+
+// ServeViews mounts the embedded SPA on the Echo instance.
+//
+// In production (DevServer empty), it serves the embedded static files with
+// SPA fallback (any path that doesn't match a file returns index.html).
+//
+// In development (DevServer set), it proxies SPA requests to the Vite dev
+// server for hot module replacement.
+func ServeViews(e *echo.Echo, cfg config.ViewsConfig, logger *slog.Logger) {
+	if !cfg.Enabled {
+		return
+	}
+
+	if cfg.DevServer != "" {
+		logger.Info("views: proxying to Vite dev server", "dev_server", cfg.DevServer)
+		e.Any("/*", proxyToDevServer(cfg.DevServer, logger))
+		return
+	}
+
+	// Strip the "dist" prefix from the embedded FS so paths work naturally.
+	dist, err := fs.Sub(static.FS, "dist")
+	if err != nil {
+		logger.Error("views: failed to open embedded static files", "error", err)
+		return
+	}
+
+	httpFS := http.FS(dist)
+
+	// Serve the embedded SPA with index.html fallback for client-side routing.
+	e.Use(echomw.StaticWithConfig(echomw.StaticConfig{
+		Root:       ".",
+		Index:      "index.html",
+		HTML5:      true,
+		Filesystem: httpFS,
+	}))
+
+	logger.Info("views: serving embedded SPA")
+}
+
+// proxyToDevServer returns an Echo handler that proxies all requests to the
+// Vite dev server. This preserves HMR websocket connections and module
+// resolution during frontend development.
+func proxyToDevServer(target string, logger *slog.Logger) echo.HandlerFunc {
+	// Strip trailing slash.
+	target = strings.TrimRight(target, "/")
+
+	return func(c echo.Context) error {
+		// If the request looks like an API call, skip proxying (let the
+		// Echo router handle it normally). The Vite dev server would have
+		// handled this via its own proxy config, but when the Go server
+		// proxies, we need to let API routes through.
+		path := c.Request().URL.Path
+		if isAPIPath(path) {
+			return echo.ErrNotFound
+		}
+
+		proxyURL := target + path
+		if c.Request().URL.RawQuery != "" {
+			proxyURL += "?" + c.Request().URL.RawQuery
+		}
+
+		req, err := http.NewRequestWithContext(
+			c.Request().Context(),
+			c.Request().Method,
+			proxyURL,
+			c.Request().Body,
+		)
+		if err != nil {
+			return err
+		}
+
+		// Copy headers.
+		for k, vv := range c.Request().Header {
+			for _, v := range vv {
+				req.Header.Add(k, v)
+			}
+		}
+
+		// Forward the host header that Vite expects.
+		req.Header.Set("Host", strings.TrimPrefix(target, "http://"))
+
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			logger.Warn("views: proxy error", "error", err, "url", proxyURL)
+			return echo.NewHTTPError(http.StatusBadGateway, "dev server unreachable")
+		}
+		defer resp.Body.Close()
+
+		// Copy response headers.
+		for k, vv := range resp.Header {
+			for _, v := range vv {
+				c.Response().Header().Add(k, v)
+			}
+		}
+
+		// Forward WebSocket upgrade if present (HMR uses WebSockets).
+		if resp.StatusCode == http.StatusSwitchingProtocols {
+			hijacker, ok := c.Response().Writer.(http.Hijacker)
+			if !ok {
+				return echo.NewHTTPError(http.StatusInternalServerError, "websocket not supported")
+			}
+			conn, _, err := hijacker.Hijack()
+			if err != nil {
+				return err
+			}
+			defer conn.Close()
+
+			// For a proper proxy we'd need a bidirectional copy. As a
+			// simpler fallback, return the status to let the client know
+			// that the dev server is available; HMR will reconnect directly
+			// to Vite's own WebSocket endpoint (ws://localhost:5173).
+			return c.NoContent(http.StatusOK)
+		}
+
+		return c.Stream(resp.StatusCode, resp.Header.Get("Content-Type"), resp.Body)
+	}
+}
+
+// isAPIPath returns true for paths that should NOT be proxied to the
+// Vite dev server (API routes, health checks, Swagger docs).
+func isAPIPath(path string) bool {
+	apiPrefixes := []string{"/api/", "/auth/", "/health", "/swagger/"}
+	// Also check for the .env VITE_PROXY_TARGET env var hint (common pattern).
+	if v := os.Getenv("VIEWS_SKIP_PROXY"); v != "" {
+		for _, prefix := range strings.Split(v, ",") {
+			apiPrefixes = append(apiPrefixes, strings.TrimSpace(prefix))
+		}
+	}
+	for _, prefix := range apiPrefixes {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	return false
+}

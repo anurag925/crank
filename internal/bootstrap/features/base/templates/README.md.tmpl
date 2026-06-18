@@ -7,7 +7,7 @@ handlers, and adapter implementations for HTTP and persistence.
 ## Stack
 
 - HTTP: [Echo v4](https://echo.labstack.com)
-- Config: [Viper](https://github.com/spf13/viper) (`configs/config.yaml` + env vars)
+- Config: [Viper](https://github.com/spf13/viper) (YAML) + [caarlos0/env](https://github.com/caarlos0/env) (secrets via `.env` / env vars)
 - Docs: [Swagger](https://swagger.io) via [swaggo/swag](https://github.com/swaggo/swag) (`/swagger/*`)
 - Logging: `log/slog`
 {{- if .Has "auth"}}
@@ -40,9 +40,9 @@ API docs (Swagger UI): `http://localhost:8080/swagger/index.html` (run `crank sw
 
 ## Configuration
 
-`configs/config.yaml` ships with safe defaults that are safe to commit. Local secrets belong in
-`.env` (git-ignored). Environment variables override file values; keys are derived from
-the dotted path with underscores (e.g. `database.password` -> `DATABASE_PASSWORD`).
+`configs/config.yaml` ships with safe defaults that are safe to commit. Secrets (passwords,
+API keys, tokens) belong in `.env` (git-ignored) and are loaded via `caarlos0/env` using
+explicit `env:"..."` struct tags — non-secret fields stay YAML-only.
 
 ## Layout
 

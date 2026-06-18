@@ -2,15 +2,19 @@ package config
 
 import (
 	"fmt"
-	"strings"
 
+	"github.com/caarlos0/env/v11"
+	"github.com/joho/godotenv"
 	"github.com/spf13/viper"
 )
 
-// Config is the top-level application configuration loaded from configs/config.yaml and
-// overridden by environment variables. Feature-specific config blocks are
-// injected at the markers below by `crank add` (and by `crank init` for
-// multi-feature generations).
+// Config is the top-level application configuration.
+//
+// Non-secret values are loaded from configs/config.yaml by Viper. Secret fields
+// (tagged with `env:"..."`) are overlaid from .env / environment variables via
+// caarlos0/env so they never appear in committed config files. Feature-specific
+// config blocks are injected at the markers below by `crank add` (and by
+// `crank init` for multi-feature generations).
 type Config struct {
 	App AppConfig `mapstructure:"app"`
 	// crank:config-fields
@@ -32,17 +36,20 @@ type LoggingConfig struct {
 	AddSource bool   `mapstructure:"add_source"`
 }
 
-// Load reads configuration from configs/config.yaml and overrides values with environment
-// variables (e.g. APP_PORT, DATABASE_PASSWORD, JWT_SECRET).
+// Load reads non-secret values from configs/config.yaml (via Viper) and then
+// overlays secrets from .env / environment variables (via caarlos0/env). Only
+// fields tagged with `env:"..."` are affected by the env overlay — all other
+// fields stay as configured in the YAML file.
 func Load() *Config {
+	// 1. Load .env file into the process environment (silently skip if missing).
+	_ = godotenv.Load()
+
+	// 2. Read non-secret config from YAML.
 	v := viper.New()
 	v.SetConfigName("config")
 	v.SetConfigType("yaml")
 	v.AddConfigPath("./configs")
 	v.AddConfigPath(".")
-	v.SetEnvPrefix("")
-	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
-	v.AutomaticEnv()
 
 	setDefaults(v)
 
@@ -54,6 +61,14 @@ func Load() *Config {
 	if err := v.Unmarshal(&cfg); err != nil {
 		panic(fmt.Errorf("fatal: cannot parse configuration: %w", err))
 	}
+
+	// 3. Overlay secrets from environment (tags only on secret fields).
+	if err := env.ParseWithOptions(&cfg, env.Options{
+		RequiredIfNoDef: false,
+	}); err != nil {
+		panic(fmt.Errorf("fatal: cannot parse environment: %w", err))
+	}
+
 	return &cfg
 }
 

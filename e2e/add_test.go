@@ -75,7 +75,7 @@ func TestE2E_Add_Redis(t *testing.T) {
 		"addr: \"localhost:6379\"",
 	)
 	assertContainsAll(t, dir, ".env.example",
-		"REDIS_ADDR=",
+		"REDIS_PASSWORD=",
 	)
 }
 
@@ -133,7 +133,8 @@ func TestE2E_Add_Temporal(t *testing.T) {
 		"temporal:",
 		"host_port: \"127.0.0.1:7233\"",
 	)
-	assertContainsAll(t, dir, ".env.example",
+	// Temporal has no secret fields, so nothing is injected into .env.example.
+	assertContainsNone(t, dir, ".env.example",
 		"TEMPORAL_HOST_PORT=",
 	)
 }
