@@ -54,7 +54,7 @@ func TestE2E_ConfigInject_Bun(t *testing.T) {
 		"database:",
 		`host: "localhost"`,
 		"port: 5432",
-		`user: "bun"`,
+		`user: "postgres"`,
 		`sslmode: "disable"`,
 	)
 	// The DB_NAME is the project's package name (last segment of the
