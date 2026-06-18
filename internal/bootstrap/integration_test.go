@@ -16,6 +16,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/gorm"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/outbox"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/qdrant"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 	"github.com/anurag925/crank/internal/bootstrap/scaffold"
@@ -120,6 +121,7 @@ func TestGlobalRegistry_HasAllFeatures(t *testing.T) {
 		"gorm":     true,
 		"redis":    true,
 		"mongodb":  true,
+		"qdrant":   true,
 		"temporal": true,
 	}
 	for _, n := range names {
@@ -1306,6 +1308,51 @@ func TestMongodb_BootstrapManifest(t *testing.T) {
 }
 
 // ==========================================================================
+// QDRANT feature
+// ==========================================================================
+
+func TestQdrant_FilesExist(t *testing.T) {
+	r := generateProject(t, "qdranttest", []string{"qdrant"})
+	assertFileExists(t, r.ProjectDir, "internal/adapters/persistence/qdrant/client.go")
+}
+
+func TestQdrant_Client(t *testing.T) {
+	r := generateProject(t, "qdrantclient", []string{"qdrant"})
+	content := readFile(t, r.ProjectDir, "internal/adapters/persistence/qdrant/client.go")
+	assertContains(t, content, "package qdrant", "qdrant client package")
+	assertContains(t, content, "func NewClient(", "qdrant client NewClient")
+	assertContains(t, content, "qdrantgo.NewClient", "qdrant client uses go-client")
+	assertContains(t, content, "client.HealthCheck", "qdrant client health checks")
+	assertContains(t, content, "config.QdrantConfig", "qdrant client uses shared config type")
+}
+
+func TestQdrant_Config_HasQdrantSection(t *testing.T) {
+	r := generateProject(t, "qdrantcfg", []string{"qdrant"})
+	content := readFile(t, r.ProjectDir, "configs/config.yaml")
+	assertContains(t, content, "qdrant:", "config.yaml qdrant section")
+	assertContains(t, content, "port: 6334", "config.yaml qdrant port key")
+}
+
+func TestQdrant_ConfigGo_HasQdrantConfig(t *testing.T) {
+	r := generateProject(t, "qdrantcfggo", []string{"qdrant"})
+	content := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertContains(t, content, "Qdrant QdrantConfig", "Config struct has Qdrant field")
+	assertContains(t, content, "QdrantConfig struct", "QdrantConfig struct defined")
+}
+
+func TestQdrant_ConfigGo_NoQdrantConfig(t *testing.T) {
+	r := generateProject(t, "noqdrantcfggo", nil)
+	content := readFile(t, r.ProjectDir, "internal/config/config.go")
+	assertNotContains(t, content, "QdrantConfig", "config.go without qdrant has no QdrantConfig")
+}
+
+func TestQdrant_BootstrapManifest(t *testing.T) {
+	r := generateProject(t, "qdrantmanifest", []string{"qdrant"})
+	content := readFile(t, r.ProjectDir, ".crank.yaml")
+	assertContains(t, content, "- qdrant", "manifest includes qdrant")
+}
+
+// ==========================================================================
 // TEMPORAL feature
 // ==========================================================================
 
@@ -1460,6 +1507,9 @@ func TestAll_Features(t *testing.T) {
 	// mongodb files
 	assertFileExists(t, dir, "internal/adapters/persistence/mongodb/client.go")
 
+	// qdrant files
+	assertFileExists(t, dir, "internal/adapters/persistence/qdrant/client.go")
+
 	// temporal files
 	assertFileExists(t, dir, "internal/adapters/temporal/worker.go")
 	assertFileExists(t, dir, "internal/adapters/temporal/workflow/greeting.go")
@@ -1480,6 +1530,7 @@ func TestAll_Features(t *testing.T) {
 	assertContains(t, cfg, "crypto:", "config crypto")
 	assertContains(t, cfg, "redis:", "config redis")
 	assertContains(t, cfg, "mongodb:", "config mongodb")
+	assertContains(t, cfg, "qdrant:", "config qdrant")
 	assertContains(t, cfg, "temporal:", "config temporal")
 
 	// Verify manifest has all features (gorm is excluded from this matrix —

@@ -135,6 +135,19 @@ func featureConfigData(pkgName string) map[string]configInjection {
 			YAMLSection: "\nmongodb:\n  uri: \"mongodb://localhost:27017\"\n  database: \"" + pkgName + "\"\n",
 			EnvSection:  "\nMONGODB_URI=mongodb://localhost:27017\nMONGODB_DATABASE=" + pkgName + "\n",
 		},
+		"qdrant": {
+			StructField: "\tQdrant QdrantConfig " + bt + "mapstructure:\"qdrant\"" + bt + "\n",
+			StructDef: "// QdrantConfig holds the Qdrant vector database connection settings.\n" +
+				"type QdrantConfig struct {\n" +
+				"\tHost   string " + bt + "mapstructure:\"host\"" + bt + "\n" +
+				"\tPort   int    " + bt + "mapstructure:\"port\"" + bt + "\n" +
+				"\tAPIKey string " + bt + "mapstructure:\"api_key\"" + bt + "\n" +
+				"\tUseTLS bool   " + bt + "mapstructure:\"use_tls\"" + bt + "\n" +
+				"}\n",
+			Defaults:    "\tv.SetDefault(\"qdrant.host\", \"localhost\")\n" + "\tv.SetDefault(\"qdrant.port\", 6334)\n" + "\tv.SetDefault(\"qdrant.api_key\", \"\")\n" + "\tv.SetDefault(\"qdrant.use_tls\", false)\n",
+			YAMLSection: "\nqdrant:\n  host: \"localhost\"\n  port: 6334\n  api_key: \"\"\n  use_tls: false\n",
+			EnvSection:  "\nQDRANT_HOST=localhost\nQDRANT_PORT=6334\nQDRANT_API_KEY=\nQDRANT_USE_TLS=false\n",
+		},
 		"temporal": {
 			StructField: "\tTemporal TemporalConfig " + bt + "mapstructure:\"temporal\"" + bt + "\n",
 			StructDef: "// TemporalConfig holds the Temporal client and worker settings.\n" +

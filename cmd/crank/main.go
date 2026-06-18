@@ -18,6 +18,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/otel"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/outbox"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/qdrant"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 

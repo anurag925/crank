@@ -39,6 +39,14 @@ mongodb:
   uri: "mongodb://localhost:27017"
   database: "{{.PackageName}}"
 {{- end}}
+{{- if .Has "qdrant"}}
+
+qdrant:
+  host: "localhost"
+  port: 6334
+  api_key: ""
+  use_tls: false
+{{- end}}
 {{- if .Has "temporal"}}
 
 temporal:

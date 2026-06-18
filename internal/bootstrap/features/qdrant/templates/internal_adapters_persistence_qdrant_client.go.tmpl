@@ -1,0 +1,34 @@
+package qdrant
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	qdrantgo "github.com/qdrant/go-client/qdrant"
+
+	"{{.ModulePath}}/internal/config"
+)
+
+// NewClient constructs a connected *qdrant.Client using the application config
+// and verifies connectivity with a health check. The caller is responsible for
+// closing the client during shutdown.
+func NewClient(ctx context.Context, cfg config.QdrantConfig) (*qdrantgo.Client, error) {
+	client, err := qdrantgo.NewClient(&qdrantgo.Config{
+		Host:   cfg.Host,
+		Port:   cfg.Port,
+		APIKey: cfg.APIKey,
+		UseTLS: cfg.UseTLS,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("qdrant connect: %w", err)
+	}
+
+	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	if _, err := client.HealthCheck(pingCtx); err != nil {
+		_ = client.Close()
+		return nil, fmt.Errorf("qdrant health check: %w", err)
+	}
+	return client, nil
+}

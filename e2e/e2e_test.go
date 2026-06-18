@@ -23,6 +23,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/otel"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/outbox"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/qdrant"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 )
@@ -32,7 +33,7 @@ var crankBin string
 
 // allFeatureNames lists every feature the application ships, used to validate
 // the `crank list` output and to drive the "all features" compile test.
-var allFeatureNames = []string{"base", "auth", "crypto", "bun", "gorm", "redis", "mongodb", "temporal", "otel", "outbox"}
+var allFeatureNames = []string{"base", "auth", "crypto", "bun", "gorm", "redis", "mongodb", "qdrant", "temporal", "otel", "outbox"}
 
 // allToolNames lists every tool subcommand the application wraps.
 var allToolNames = []string{"migrate", "swag", "build", "run", "dev", "test", "gofmt", "vet", "tidy"}
@@ -196,6 +197,7 @@ var compileCases = []struct {
 	{"gorm", []string{"gorm"}},
 	{"redis", []string{"redis"}},
 	{"mongodb", []string{"mongodb"}},
+	{"qdrant", []string{"qdrant"}},
 	{"crypto", []string{"crypto"}},
 	{"temporal", []string{"temporal"}},
 	{"auth_bun_crypto", []string{"auth", "bun", "crypto"}},

@@ -115,6 +115,7 @@ crank/
 │   │       ├── gorm/                      # GORM (default ORM)
 │   │       ├── redis/                     # Redis client (placeholder)
 │   │       ├── mongodb/                   # MongoDB client (placeholder)
+│   │       ├── qdrant/                    # Qdrant vector DB client
 │   │       └── temporal/                  # Temporal client + worker + example workflow/activity
 │   └── utils/
 │       ├── fileutil.go                    # EnsureDir, WriteFile, PathExists, etc.

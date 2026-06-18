@@ -48,6 +48,9 @@ import (
 {{- if .Has "mongodb"}}
 	"{{.ModulePath}}/internal/adapters/persistence/mongodb"
 {{- end}}
+{{- if .Has "qdrant"}}
+	qdrantclient "{{.ModulePath}}/internal/adapters/persistence/qdrant"
+{{- end}}
 {{- if .Has "temporal"}}
 	"{{.ModulePath}}/internal/adapters/temporal"
 {{- end}}
@@ -138,6 +141,14 @@ func main() {
 		os.Exit(1)
 	}
 	defer func() { _ = mdb.Client().Disconnect(context.Background()) }()
+{{end}}
+{{if .Has "qdrant"}}
+	qc, err := qdrantclient.NewClient(context.Background(), cfg.Qdrant)
+	if err != nil {
+		logger.Error("failed to connect to qdrant", "error", err)
+		os.Exit(1)
+	}
+	defer func() { _ = qc.Close() }()
 {{end}}
 {{if .Has "temporal"}}
 	tc, err := temporal.NewClient(cfg.Temporal, logger)
