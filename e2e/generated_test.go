@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestE2E_Generated_VetFromOutside runs `crank vet --project=./myapp`
@@ -171,6 +172,13 @@ func TestE2E_Generated_RunFromProject_StartAndKill(t *testing.T) {
 	// the kill wasn't a no-op because the process had already exited).
 	if err := cmd.Process.Kill(); err != nil {
 		t.Errorf("kill: %v", err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("run process did not exit after kill")
 	}
 }
 

@@ -275,8 +275,8 @@ func startCrankCommand(t *testing.T, dir string, env []string, args ...string) (
 		cmd.Dir = dir
 	}
 	cmd.Env = append(os.Environ(), env...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = io.Discard
+	cmd.Stderr = io.Discard
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
