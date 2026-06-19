@@ -18,9 +18,7 @@ package e2e
 // The helper script `./scripts/test.sh e2e` already does this.
 
 import (
-	"bytes"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -85,19 +83,15 @@ func runCrankRawWithEnv(t *testing.T, dir string, env []string, args ...string) 
 }
 
 // runCmd executes bin with args in dir (or the current working directory if
-// dir is ""), streaming the subprocess's stdout and stderr straight to the
-// test process's own stdout and stderr so e2e runs are not silent. The
-// combined output is also captured in a buffer and returned to the caller so
-// assertions like "the error must mention 'not empty'" still work.
+// dir is "") and returns combined stdout/stderr for assertions. It intentionally
+// does not stream child process output directly to the Go test process: some
+// tools (`go get`, `migrate`, `air`) can spawn descendants, and inherited test
+// stdout/stderr file descriptors can make `go test` report `WaitDelay expired
+// before I/O complete` after all tests have otherwise passed.
 //
-// A single header line
-//
-//	> <bin> <arg1> <arg2> ...
-//
-// is written to stdout immediately before the subprocess starts, so the
-// viewer can correlate each block of output with the command that produced
-// it. If env is non-nil, those KEY=VALUE pairs are appended to the inherited
-// environment.
+// A single header line is written before the subprocess starts, so failures are
+// still easy to correlate with the command that produced them. If env is
+// non-nil, those KEY=VALUE pairs are appended to the inherited environment.
 func runCmd(t *testing.T, dir, bin string, env []string, args ...string) (string, error) {
 	t.Helper()
 	cmd := exec.Command(bin, args...)
@@ -108,11 +102,8 @@ func runCmd(t *testing.T, dir, bin string, env []string, args ...string) (string
 		cmd.Env = append(os.Environ(), env...)
 	}
 	fmt.Fprintf(os.Stdout, "> %s %s\n", bin, strings.Join(args, " "))
-	var buf bytes.Buffer
-	cmd.Stdout = io.MultiWriter(os.Stdout, &buf)
-	cmd.Stderr = io.MultiWriter(os.Stderr, &buf)
-	err := cmd.Run()
-	return buf.String(), err
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }
 
 // ============================================================================
@@ -264,10 +255,14 @@ func modulePathFor(name string) string {
 // ============================================================================
 
 // startCrankCommand starts the crank binary in a subprocess and returns it
-// to the caller. The caller is responsible for killing the process (use
-// cmd.Process.Kill) and waiting on it. The env slice is appended to the
-// parent process's environment, so callers commonly inject PATH or
-// APP_PORT overrides here.
+// to the caller. Long-running crank tools such as `run` and `dev` spawn their
+// own children (`go run`, `air`, and then the generated server), so the helper
+// starts the command in a new process group. Tests can then stop the whole tree
+// with stopCommand instead of leaving a grandchild process holding the Go test
+// runner's stdout/stderr open.
+//
+// The env slice is appended to the parent process's environment, so callers
+// commonly inject PATH or APP_PORT overrides here.
 func startCrankCommand(t *testing.T, dir string, env []string, args ...string) (*exec.Cmd, error) {
 	t.Helper()
 	cmd := exec.Command(crankBin, args...)
@@ -275,12 +270,30 @@ func startCrankCommand(t *testing.T, dir string, env []string, args ...string) (
 		cmd.Dir = dir
 	}
 	cmd.Env = append(os.Environ(), env...)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	configureProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 	return cmd, nil
+}
+
+func stopCommand(t *testing.T, cmd *exec.Cmd) {
+	t.Helper()
+	if cmd == nil || cmd.Process == nil {
+		return
+	}
+	killProcessGroup(cmd)
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Errorf("process %d did not exit after kill", cmd.Process.Pid)
+	}
+}
+
+func killProcessGroup(cmd *exec.Cmd) {
+	killProcessTree(cmd)
 }
 
 // waitFor sleeps for the given number of milliseconds. Used by tests that

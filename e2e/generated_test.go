@@ -169,16 +169,11 @@ func TestE2E_Generated_RunFromProject_StartAndKill(t *testing.T) {
 	if err != nil {
 		t.Fatalf("start run: %v", err)
 	}
-	defer func() { _ = cmd.Process.Kill() }()
 	// Give the server a moment to boot. We don't need it to fully
 	// respond to HTTP — we just need it to not crash within the first
 	// half-second.
 	waitFor(t, 500) // ms
-	// Kill cleanly and check that the process actually started (i.e.,
-	// the kill wasn't a no-op because the process had already exited).
-	if err := cmd.Process.Kill(); err != nil {
-		t.Errorf("kill: %v", err)
-	}
+	stopCommand(t, cmd)
 }
 
 // TestE2E_Generated_ProjectHasCleanTarget verifies the Makefile that

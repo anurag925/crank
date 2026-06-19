@@ -168,7 +168,8 @@ func TestE2E_CLI_UnknownFlag_Errors(t *testing.T) {
 // TestE2E_CLI_Init_BadFeaturesFlag verifies that a malformed --features
 // value (e.g. a stray colon or empty segments) is rejected.
 func TestE2E_CLI_Init_BadFeaturesFlag(t *testing.T) {
-	out, err := runCrankRaw(t, "", "init", "myapp", "--features=")
+	dir := t.TempDir()
+	out, err := runCrankRaw(t, dir, "init", "myapp", "--features=")
 	// An empty --features is equivalent to omitting the flag (defaults
 	// to base). Both are acceptable; we accept either outcome.
 	_ = out

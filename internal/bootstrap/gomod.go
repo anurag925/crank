@@ -66,7 +66,8 @@ func joinDeps(deps []string) string {
 	var out strings.Builder
 	out.WriteString(deps[0])
 	for _, d := range deps[1:] {
-		out.WriteString(" " + d)
+		out.WriteString(" ")
+		out.WriteString(d)
 	}
 	return out.String()
 }

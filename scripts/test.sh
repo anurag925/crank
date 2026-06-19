@@ -26,33 +26,33 @@ target="${1:-all}"
 UNIT_PKGS="./internal/... ./cmd/..."
 
 run_fast() {
-  echo "==> Running unit + integration tests"
-  go test "$@" $UNIT_PKGS
+    echo "==> Running unit + integration tests"
+    go test "$@" $UNIT_PKGS
 }
 
 run_e2e() {
-  echo "==> Running e2e tests (builds binary + compiles generated projects)"
-  echo "    note: requires network access for 'go get'"
-  go test -tags e2e -timeout 20m ./e2e/...
+    echo "==> Running e2e tests (builds binary + compiles generated projects)"
+    echo "    note: requires network access for 'go get'"
+    go test -tags e2e -p 1 -timeout 20m ./e2e/...
 }
 
 case "$target" in
-  unit | integration)
+unit | integration)
     run_fast
     ;;
-  e2e)
+e2e)
     run_e2e
     ;;
-  cover)
+cover)
     echo "==> Running tests with coverage profile -> coverage.out"
     go test -coverprofile=coverage.out $UNIT_PKGS
     go tool cover -func=coverage.out | tail -n 1
     ;;
-  all)
+all)
     run_fast
     run_e2e
     ;;
-  *)
+*)
     echo "unknown target: $target" >&2
     echo "valid targets: unit, integration, e2e, all, cover" >&2
     exit 2

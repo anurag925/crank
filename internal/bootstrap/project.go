@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"bufio"
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"slices"
@@ -63,6 +64,10 @@ func moduleFromGoMod(projectDir string) string {
 	defer func() { _ = f.Close() }()
 
 	scanner := bufio.NewScanner(f)
+	if scanner.Err() != nil {
+		slog.Error("failed to read go.mod", "err", scanner.Err())
+		return ""
+	}
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if strings.HasPrefix(line, "module ") {

@@ -220,9 +220,10 @@ func TestE2E_Tool_Dev_HappyPath_LocalAir(t *testing.T) {
 	// Run with a short timeout — we just want to prove `air` parses the
 	// .air.toml and starts. If it doesn't crash within the first second
 	// we consider this a pass.
-	cmd := exec.Command(crankBin, "dev", "--project", dir)
-	cmd.Dir = dir
-	_ = cmd.Start()
+	cmd, err := startCrankCommand(t, dir, nil, "dev", "--project", dir)
+	if err != nil {
+		t.Fatalf("start dev: %v", err)
+	}
 	done := make(chan error, 1)
 	go func() { done <- cmd.Wait() }()
 	select {
@@ -230,7 +231,7 @@ func TestE2E_Tool_Dev_HappyPath_LocalAir(t *testing.T) {
 		// If air exited cleanly within 1s that's actually fine for the
 		// "doesn't crash" assertion.
 	case <-time.After(1 * time.Second):
-		_ = cmd.Process.Kill()
+		killProcessGroup(cmd)
 		<-done
 	}
 }
