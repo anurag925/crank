@@ -6,6 +6,8 @@ title: Development Workflow
 
 `crank` is intended to be the primary interface for routine work in generated projects.
 
+Generated projects also include `AGENTS.md` and `.agents/skills/crank-project/SKILL.md` so AI coding agents can detect `.crank.yaml`, read enabled features, and use the same system-installed `crank` command you use. See [AI agent support](./ai-agents.md).
+
 ## Run locally
 
 From inside a generated project:

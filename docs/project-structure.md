@@ -29,7 +29,12 @@ myapp/
 │   └── logging/
 ├── migrations/
 ├── docs/
+├── .agents/
+│   └── skills/
+│       └── crank-project/
+│           └── SKILL.md
 ├── .crank.yaml
+├── AGENTS.md
 ├── .env.example
 ├── .gitignore
 ├── .air.toml
@@ -78,6 +83,25 @@ It tracks:
 - generator version metadata
 
 Do not delete it. Commands like `crank add`, `crank make`, `crank migrate`, and `crank doctor` use it to understand the project.
+
+AI coding agents should also use `.crank.yaml` as the primary signal that a repository is Crank-managed and as the source of truth for enabled features.
+
+## Agent guidance files
+
+Generated projects include lightweight guidance for AI agents:
+
+```text
+AGENTS.md
+.agents/skills/crank-project/SKILL.md
+```
+
+`AGENTS.md` is a root-level signpost for agents. The Zed skill under `.agents/skills/crank-project/` gives Zed agents detailed Crank workflow instructions.
+
+Both files tell agents to use the system-installed `crank` command, not a local `./crank` binary, and to pass `--project` when running from outside the project root.
+
+These files are generated with skip-if-exists behavior, so team customizations are preserved.
+
+See [AI agent support](./ai-agents.md) for details.
 
 ## `internal/domain`
 

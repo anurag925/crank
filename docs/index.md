@@ -21,6 +21,7 @@ A generated `crank` project gives you:
 - Optional PostgreSQL persistence through GORM or Bun.
 - Optional modules for auth, Redis, MongoDB, Qdrant, Temporal, OpenTelemetry, React views, crypto helpers, and transactional outbox support.
 - One CLI surface for build, run, test, format, vet, migrations, Swagger, live reload, health checks, and code generation.
+- Agent-friendly project metadata through `.crank.yaml`, `AGENTS.md`, and a project-local Zed skill.
 
 ## Quick example
 
@@ -55,6 +56,7 @@ curl http://localhost:8080/health
 | [Generated project structure](./project-structure.md) | Understand where generated code lives. |
 | [Configuration](./configuration.md) | Configure generated applications safely. |
 | [Development workflow](./development-workflow.md) | Build, run, test, format, migrate, and generate Swagger docs. |
+| [AI agent support](./ai-agents.md) | Understand how generated projects guide AI agents to use Crank correctly. |
 | [Recipes](./recipes.md) | Copy practical workflows for common use cases. |
 | [Troubleshooting](./troubleshooting.md) | Fix common setup and runtime issues. |
 | [Contributing](./contributing.md) | Work on `crank` itself. |
