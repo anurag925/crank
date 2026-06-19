@@ -1,0 +1,7 @@
+{
+  "title": "crank",
+  "description": "Documentation for crank, a CLI that scaffolds production-ready Go backend services and wraps common development tools.",
+  "url": "https://anurag925.github.io/crank",
+  "src": "docs",
+  "out": "dist"
+}

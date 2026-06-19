@@ -1,0 +1,7 @@
+{
+  "private": true,
+  "scripts": {
+    "docs:dev": "npx @docmd/core dev",
+    "docs:build": "npx @docmd/core build"
+  }
+}
