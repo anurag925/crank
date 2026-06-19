@@ -19,6 +19,7 @@ package e2e
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -277,10 +278,56 @@ func startCrankCommand(t *testing.T, dir string, env []string, args ...string) (
 	cmd.Env = append(os.Environ(), env...)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	configureCommandProcessGroup(cmd)
 	if err := cmd.Start(); err != nil {
 		return nil, err
 	}
 	return cmd, nil
+}
+
+var errProcessStillRunning = errors.New("process still running")
+
+func waitForCommandExit(cmd *exec.Cmd, timeout time.Duration) error {
+	done := make(chan error, 1)
+	go func() { done <- cmd.Wait() }()
+
+	select {
+	case err := <-done:
+		return err
+	case <-time.After(timeout):
+		return errProcessStillRunning
+	}
+}
+
+func stopCommandAndWait(cmd *exec.Cmd, timeout time.Duration) error {
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+
+	_ = signalCommandProcessGroup(cmd, processGroupTerminateSignal())
+
+	err := waitForCommandExit(cmd, timeout)
+	if isExpectedProcessExit(err) {
+		return nil
+	}
+	if !errors.Is(err, errProcessStillRunning) {
+		return err
+	}
+
+	_ = signalCommandProcessGroup(cmd, processGroupKillSignal())
+	err = waitForCommandExit(cmd, timeout)
+	if isExpectedProcessExit(err) {
+		return nil
+	}
+	return err
+}
+
+func isExpectedProcessExit(err error) bool {
+	if err == nil {
+		return true
+	}
+	var exitErr *exec.ExitError
+	return errors.As(err, &exitErr)
 }
 
 // waitFor sleeps for the given number of milliseconds. Used by tests that
