@@ -34,9 +34,14 @@ func makefileFixture(t *testing.T, projectDir string, targets map[string]string)
 	b.WriteString("help:\n")
 	b.WriteString("\t@echo \"help target ran\"\n\n")
 	for name, marker := range targets {
-		b.WriteString(name + ":\n")
-		b.WriteString("\t@touch " + marker + "\n")
-		b.WriteString("\t@echo \"ran " + name + "\"\n\n")
+		b.WriteString(name)
+		b.WriteString(":\n")
+		b.WriteString("\t@touch ")
+		b.WriteString(marker)
+		b.WriteString("\n")
+		b.WriteString("\t@echo \"ran ")
+		b.WriteString(name)
+		b.WriteString("\"\n\n")
 	}
 	if err := os.WriteFile(filepath.Join(projectDir, "Makefile"), []byte(b.String()), 0o644); err != nil {
 		t.Fatalf("write Makefile: %v", err)
