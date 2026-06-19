@@ -176,10 +176,27 @@ func TestBase_FilesExist_BaseOnly(t *testing.T) {
 		"go.mod",
 		"README.md",
 		".crank.yaml",
+		"AGENTS.md",
+		".agents/skills/crank-project/SKILL.md",
 	}
 	for _, f := range expectedFiles {
 		assertFileExists(t, dir, f)
 	}
+}
+
+func TestBase_AgentGuidance_UsesSystemCrank(t *testing.T) {
+	r := generateProject(t, "agentguide", nil)
+
+	agents := readFile(t, r.ProjectDir, "AGENTS.md")
+	assertContains(t, agents, "The project root contains `.crank.yaml`", "AGENTS.md")
+	assertContains(t, agents, "Use the system-installed `crank` CLI", "AGENTS.md")
+	assertContains(t, agents, "Do not use `./crank`", "AGENTS.md")
+
+	skill := readFile(t, r.ProjectDir, ".agents/skills/crank-project/SKILL.md")
+	assertContains(t, skill, "name: crank-project", "crank-project skill")
+	assertContains(t, skill, "A project is considered a Crank-generated project if it has a `.crank.yaml` file", "crank-project skill")
+	assertContains(t, skill, "Use the system-installed `crank` binary", "crank-project skill")
+	assertContains(t, skill, "Do not use `./crank`", "crank-project skill")
 }
 
 func TestBase_GoMod_ModulePath(t *testing.T) {

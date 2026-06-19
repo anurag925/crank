@@ -98,5 +98,7 @@ func (feature) Files() []bootstrap.FileMapping {
 		{TemplatePath: "templates/go.mod.tmpl", OutputPath: "go.mod"},
 		{TemplatePath: "templates/README.md.tmpl", OutputPath: "README.md"},
 		{TemplatePath: "templates/.crank.yaml.tmpl", OutputPath: ".crank.yaml"},
+		{TemplatePath: "templates/AGENTS.md.tmpl", OutputPath: "AGENTS.md", SkipIfExists: true},
+		{TemplatePath: "templates/agents_skills_crank_project_SKILL.md.tmpl", OutputPath: ".agents/skills/crank-project/SKILL.md", SkipIfExists: true},
 	}
 }
