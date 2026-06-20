@@ -57,7 +57,7 @@ Committed to source control.
 
 This is the `crank` project manifest. It is not application runtime configuration. It tells the CLI which features are enabled and what module path the project uses.
 
-AI coding agents should also use `.crank.yaml` to detect Crank-generated projects and avoid assuming optional features are installed. See [AI agent support](./ai-agents.md).
+AI coding agents should also use `.crank.yaml` to detect Crank-generated projects and avoid assuming optional features are installed. See [AI agent support](../explanation/ai-agents.md).
 
 ## Common application settings
 

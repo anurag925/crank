@@ -101,7 +101,7 @@ Both files tell agents to use the system-installed `crank` command, not a local 
 
 These files are generated with skip-if-exists behavior, so team customizations are preserved.
 
-See [AI agent support](./ai-agents.md) for details.
+See [AI agent support](../explanation/ai-agents.md) for details.
 
 ## `internal/domain`
 

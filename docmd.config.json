@@ -1,7 +1,84 @@
 {
-  "title": "crank",
+  "title": "Crank",
   "description": "Documentation for crank, a CLI that scaffolds production-ready Go backend services and wraps common development tools.",
-  "url": "https://anurag925.github.io/crank",
+  "url": "https://crank.surgged.xyz/",
   "src": "docs",
-  "out": "dist"
+  "out": "dist",
+
+  "favicon": "assets/logo.png",
+  "theme": {
+    "name": "default",
+    "appearance": "system",
+    "codeHighlight": true,
+    "customCss": ["assets/css/header.css"]
+  },
+  "navigation": [
+    { "title": "Home", "path": "/", "icon": "home" },
+    {
+      "title": "📚 Tutorials",
+      "collapsible": true,
+      "children": [
+        { "title": "Installation", "path": "/tutorials/installation" },
+        { "title": "Getting started", "path": "/tutorials/getting-started" }
+      ]
+    },
+    {
+      "title": "📖 Reference",
+      "collapsible": true,
+      "children": [
+        { "title": "Commands", "path": "/reference/commands" },
+        { "title": "Features", "path": "/reference/features" },
+        { "title": "Generators", "path": "/reference/generators" },
+        { "title": "Configuration", "path": "/reference/configuration" },
+        {
+          "title": "Project structure",
+          "path": "/reference/project-structure"
+        },
+        { "title": "Quick reference", "path": "/reference/quick-reference" }
+      ]
+    },
+    {
+      "title": "🧠 Explanation",
+      "collapsible": true,
+      "children": [
+        {
+          "title": "Navigating the generated application",
+          "path": "/explanation/generated-app"
+        },
+        { "title": "AI agent support", "path": "/explanation/ai-agents" },
+        {
+          "title": "🧩 Features",
+          "collapsible": true,
+          "children": [
+            { "title": "Base", "path": "/explanation/features/base" },
+            { "title": "GORM", "path": "/explanation/features/gorm" },
+            { "title": "Bun", "path": "/explanation/features/bun" },
+            { "title": "Auth", "path": "/explanation/features/auth" },
+            { "title": "Crypto", "path": "/explanation/features/crypto" },
+            { "title": "Redis", "path": "/explanation/features/redis" },
+            { "title": "MongoDB", "path": "/explanation/features/mongodb" },
+            { "title": "Qdrant", "path": "/explanation/features/qdrant" },
+            { "title": "Temporal", "path": "/explanation/features/temporal" },
+            { "title": "OpenTelemetry", "path": "/explanation/features/otel" },
+            { "title": "Outbox", "path": "/explanation/features/outbox" },
+            { "title": "Views", "path": "/explanation/features/views" }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "🔧 How-to Guides",
+      "collapsible": true,
+      "children": [
+        {
+          "title": "Development workflow",
+          "path": "/how-to/development-workflow"
+        },
+        { "title": "Recipes", "path": "/how-to/recipes" },
+        { "title": "Troubleshooting", "path": "/how-to/troubleshooting" },
+        { "title": "Hosting", "path": "/how-to/hosting" },
+        { "title": "Contributing", "path": "/how-to/contributing" }
+      ]
+    }
+  ]
 }

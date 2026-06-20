@@ -1,8 +1,8 @@
 ---
-title: crank Documentation
+title: Crank Documentation
 ---
 
-# crank
+# Crank
 
 `crank` is a CLI for creating and maintaining production-ready Go backend services. It scaffolds a layered service, installs selected features, and wraps day-to-day development tools as first-class `crank` subcommands.
 
@@ -46,21 +46,35 @@ curl http://localhost:8080/health
 
 ## How the docs are organized
 
-| Page | Use it when you want to... |
-| --- | --- |
-| [Installation](./installation.md) | Install `crank` or build it from source. |
-| [Getting started](./getting-started.md) | Scaffold your first app and run it locally. |
-| [Commands](./commands.md) | Learn the full CLI surface. |
-| [Features](./features.md) | Pick the modules to include in a project. |
-| [Generators](./generators.md) | Generate models, handlers, scaffolds, workflows, activities, and migrations. |
-| [Navigating the generated application](./generated-app.md) | **Understand the generated code — architecture, layers, request lifecycle, and how to extend it.** |
-| [Generated project structure](./project-structure.md) | Quick reference for where generated code lives. |
-| [Configuration](./configuration.md) | Configure generated applications safely. |
-| [Development workflow](./development-workflow.md) | Build, run, test, format, migrate, and generate Swagger docs. |
-| [AI agent support](./ai-agents.md) | Understand how generated projects guide AI agents to use Crank correctly. |
-| [Recipes](./recipes.md) | Copy practical workflows for common use cases. |
-| [Troubleshooting](./troubleshooting.md) | Fix common setup and runtime issues. |
-| [Contributing](./contributing.md) | Work on `crank` itself. |
+| Section | Page | Use it when you want to... |
+| --- | --- | --- |
+| **📚 Tutorials** | [Installation](./tutorials/installation.md) | Install `crank` or build it from source. |
+| | [Getting started](./tutorials/getting-started.md) | Scaffold your first app and run it locally. |
+| **📖 Reference** | [Commands](./reference/commands.md) | Learn the full CLI surface. |
+| | [Features](./reference/features.md) | Pick the modules to include in a project. |
+| | [Generators](./reference/generators.md) | Generate models, handlers, scaffolds, workflows, activities, and migrations. |
+| | [Configuration](./reference/configuration.md) | Configure generated applications safely. |
+| | [Project structure](./reference/project-structure.md) | Quick reference for where generated code lives. |
+| | [Quick reference](./reference/quick-reference.md) | Cheat sheet for commands, features, and field types. |
+| **🧠 Explanation** | [Navigating the generated application](./explanation/generated-app.md) | **Deep dive into the generated code — architecture diagrams, request lifecycle, layer walkthroughs, feature modules, and testing patterns.** |
+| | [AI agent support](./explanation/ai-agents.md) | Understand how generated projects guide AI agents to use Crank correctly. |
+| | [Feature: Base](./explanation/features/base.md) | Foundation — Echo, Viper, config, validation, logging, in-memory adapters. |
+| | [Feature: GORM](./explanation/features/gorm.md) | PostgreSQL persistence via GORM (default ORM). |
+| | [Feature: Bun](./explanation/features/bun.md) | PostgreSQL persistence via Bun ORM. |
+| | [Feature: Auth](./explanation/features/auth.md) | JWT authentication, bcrypt hashing, auth endpoints. |
+| | [Feature: Crypto](./explanation/features/crypto.md) | AES-256-GCM encryption helpers. |
+| | [Feature: Redis](./explanation/features/redis.md) | Redis caching client and port interface. |
+| | [Feature: MongoDB](./explanation/features/mongodb.md) | MongoDB document database client. |
+| | [Feature: Qdrant](./explanation/features/qdrant.md) | Qdrant vector database client. |
+| | [Feature: Temporal](./explanation/features/temporal.md) | Temporal workflow orchestration. |
+| | [Feature: OpenTelemetry](./explanation/features/otel.md) | Distributed tracing with OpenTelemetry. |
+| | [Feature: Outbox](./explanation/features/outbox.md) | Transactional outbox for reliable event delivery. |
+| | [Feature: Views](./explanation/features/views.md) | React SPA with Vite, embedded in Go binary. |
+| **🔧 How-to Guides** | [Development workflow](./how-to/development-workflow.md) | Build, run, test, format, migrate, and generate Swagger docs. |
+| | [Recipes](./how-to/recipes.md) | Copy practical workflows for common use cases. |
+| | [Troubleshooting](./how-to/troubleshooting.md) | Fix common setup and runtime issues. |
+| | [Hosting](./how-to/hosting.md) | Host the documentation site. |
+| | [Contributing](./how-to/contributing.md) | Work on `crank` itself. |
 
 ## Core idea
 
@@ -73,4 +87,4 @@ That means teams can standardize on a familiar Go project shape while still keep
 
 ## Recommended next step
 
-Start with [Getting started](./getting-started.md), then read [Features](./features.md) before choosing optional modules for a real project.
+Start with [Getting started](./tutorials/getting-started.md), then read [Features](./reference/features.md) before choosing optional modules for a real project.

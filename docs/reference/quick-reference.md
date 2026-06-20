@@ -1,8 +1,8 @@
 ---
-title: Reference
+title: Quick Reference
 ---
 
-# Reference
+# Quick Reference
 
 Quick reference for commands, features, and field types.
 
