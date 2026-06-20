@@ -1,115 +1,107 @@
 # {{.ProjectName}}
 
-Production-ready Go backend scaffolded by [crank](#). The project follows a
+Production-ready Go backend scaffolded by [crank](https://github.com/anurag925/crank). The project follows a
 Domain-Driven layout: a pure-Go domain layer, application command/query
 handlers, and adapter implementations for HTTP and persistence.
 
 ## Stack
 
-- HTTP: [Echo v4](https://echo.labstack.com)
-- Config: [Viper](https://github.com/spf13/viper) (YAML) + [caarlos0/env](https://github.com/caarlos0/env) (secrets via `.env` / env vars)
-- Docs: [Swagger](https://swagger.io) via [swaggo/swag](https://github.com/swaggo/swag) (`/swagger/*`)
-- Logging: `log/slog`
+| Layer | Technology | Docs |
+|-------|-----------|------|
+| HTTP | [Echo v4](https://echo.labstack.com) | [echo.labstack.com](https://echo.labstack.com) |
+| Config | [Viper](https://github.com/spf13/viper) (YAML) + [caarlos0/env](https://github.com/caarlos0/env) | [spf13/viper](https://github.com/spf13/viper) |
+| Logging | `log/slog` | [pkg.go.dev/log/slog](https://pkg.go.dev/log/slog) |
+| Validation | [go-playground/validator](https://github.com/go-playground/validator) | [pkg.go.dev](https://pkg.go.dev/github.com/go-playground/validator/v10) |
+| Docs | [swaggo/swag](https://github.com/swaggo/swag) | [github.com/swaggo/swag](https://github.com/swaggo/swag) |
 {{- if .Has "auth"}}
-- Auth: JWT ([golang-jwt/jwt](https://github.com/golang-jwt/jwt))
+| Auth | JWT + bcrypt | [golang-jwt](https://github.com/golang-jwt/jwt) |
 {{- end}}
 {{- if .Has "bun"}}
-- Database: PostgreSQL via [Bun](https://bun.uptrace.dev)
-- Migrations: [golang-migrate](https://github.com/golang-migrate/migrate)
+| ORM | Bun | [bun.uptrace.dev](https://bun.uptrace.dev) |
 {{- end}}
 {{- if .Has "gorm"}}
-- Database: PostgreSQL via [GORM](https://gorm.io)
-- Migrations: [golang-migrate](https://github.com/golang-migrate/migrate)
+| ORM | GORM | [gorm.io/docs](https://gorm.io/docs) |
+{{- end}}
+{{- if or (.Has "bun") (.Has "gorm")}}
+| Migrations | golang-migrate | [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate) |
 {{- end}}
 
 ## Quick start
 
 ```bash
-# 1. fetch dependencies
-crank tidy
-
-# 2. copy environment template and adjust as needed
-cp .env.example .env
-
-# 3. run the server
-crank run
+crank tidy                    # fetch dependencies
+cp .env.example .env          # configure local environment
+crank dev                     # run with live reload
 ```
 
-The server listens on `http://localhost:8080` by default. Health probe: `GET /health`.
-API docs (Swagger UI): `http://localhost:8080/swagger/index.html` (run `crank swag` first).
+Health check: `GET http://localhost:8080/health`
 
-## Configuration
-
-`configs/config.yaml` ships with safe defaults that are safe to commit. Secrets (passwords,
-API keys, tokens) belong in `.env` (git-ignored) and are loaded via `caarlos0/env` using
-explicit `env:"..."` struct tags — non-secret fields stay YAML-only.
+{{- if or (.Has "bun") (.Has "gorm")}}
+Before running, ensure PostgreSQL is available and run `crank migrate up`.
+{{- end}}
 
 ## Layout
 
 ```
 .
-├── cmd/server              # application entry point (composition root)
-├── configs                 # config files
-│   └── config.yaml         # non-secret defaults
+├── cmd/server              entry point (composition root)
+├── configs                 config defaults
 ├── internal
-│   ├── adapters            # infrastructure: HTTP, persistence, event bus
-│   │   ├── eventbus        # in-process event bus
-│   │   ├── http/web        # Echo handlers + middleware
-│   │   └── persistence     # {{if .Has "bun"}}bun, {{end}}{{if .Has "gorm"}}gorm, {{end}}memory repositories
-│   ├── application         # use cases: command + query handlers
-│   │   └── user
-│   ├── config              # Viper-backed configuration
-│   ├── domain              # pure Go aggregates, value objects, ports
-│   │   ├── shared          # cross-aggregate interfaces (events)
-│   │   └── user
-│   ├── model               # cross-layer transport DTOs (APIError)
-│   ├── ports               # cross-cutting interfaces (EventBus, …)
-│   └── validator           # request validation
-├── pkg/logging             # structured slog helpers
+│   ├── adapters            HTTP handlers, persistence, event bus
+│   │   ├── http/web        Echo handlers + middleware
+│   │   └── persistence     memory, {{if .Has "bun"}}bun, {{end}}{{if .Has "gorm"}}gorm, {{end}}repositories
+│   ├── application         use cases (CQRS)
+│   ├── config              config loading (Viper + env)
+│   ├── domain              pure Go aggregates, ports, events
+│   ├── model               shared DTOs
+│   ├── ports               cross-cutting interfaces
+│   └── validator           request validation
+├── pkg/logging             slog helpers
 {{- if or (.Has "bun") (.Has "gorm")}}
-├── migrations              # golang-migrate SQL files
+├── migrations              SQL migrations
 {{- end}}
-├── .env.example            # environment template
-├── Makefile
+├── .env.example
+├── .crank.yaml             project manifest (do not delete)
 ├── Dockerfile
-└── .air.toml               # live-reload config
+└── Makefile                project-specific targets
 ```
 
-## Tasks
+## Understanding the generated code
 
-Common development tasks are provided by the [`crank`](https://github.com/anurag925/crank)
-CLI, so they are not duplicated in the `Makefile`. `crank` auto-installs missing
-tools (`swag`/`air`/`migrate`) and accepts `--project` to target this directory
-from anywhere:
+For a deep dive into the architecture — how layers connect, request lifecycle,
+testing patterns, and how each feature module works — see the
+[crank documentation](https://anurag925.github.io/crank/generated-app).
+
+## Commands
 
 | Command | Purpose |
 | ------- | ------- |
-| `crank build` | Compile a static binary into `bin/{{.ProjectName}}` |
-| `crank run` | Run the application |
+| `crank build` | Compile to `bin/{{.ProjectName}}` |
+| `crank run` | Start the server |
 | `crank dev` | Run with live reload (air) |
 | `crank test` | Run all tests |
-| `crank tidy` | Sync module dependencies |
-| `crank gofmt` | Run `gofmt` |
+| `crank gofmt` | Format Go files |
 | `crank vet` | Run `go vet` |
-| `crank swag` | Generate Swagger/OpenAPI docs into `docs/` |
+| `crank tidy` | Sync `go.mod` / `go.sum` |
+| `crank swag` | Generate Swagger docs into `docs/` |
 {{- if or (.Has "bun") (.Has "gorm")}}
-| `crank migrate up` | Apply all pending migrations |
-| `crank migrate down --steps 1` | Roll back the last migration |
-| `crank make migration <name>` | Generate a new up/down migration pair |
+| `crank migrate up` | Apply pending migrations |
+| `crank make migration <name>` | Create a migration pair |
 {{- end}}
-| `crank make handler <Name>` | Scaffold a new resource (domain, app, http) |
+| `crank make scaffold <Name> <field:type>` | Generate a full CRUD resource |
 
 Run `crank tools` to list everything available.
 
 ## Makefile
 
-The `Makefile` intentionally holds only targets that `crank` does not provide
-natively (e.g. `make clean`). It's the place for your own project-specific
-targets. Any target you add can be run with either `make <target>` or
-`crank <target>` — `crank` transparently delegates unknown commands to `make`:
+The `Makefile` holds only targets that `crank` doesn't provide natively (e.g.
+`make clean`). Any target you add can also be run via `crank <target>` — crank
+transparently delegates unknown commands to `make`.
 
 ```bash
 make clean              # remove build artifacts
-crank clean               # same thing, delegated to make
-crank <your-make-target>  # any custom target you add to the Makefile
+crank clean               # same thing
+crank your-custom-target  # any Makefile target
 ```
+
+> Native crank commands always take precedence over Makefile targets.

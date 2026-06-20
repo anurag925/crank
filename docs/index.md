@@ -53,7 +53,8 @@ curl http://localhost:8080/health
 | [Commands](./commands.md) | Learn the full CLI surface. |
 | [Features](./features.md) | Pick the modules to include in a project. |
 | [Generators](./generators.md) | Generate models, handlers, scaffolds, workflows, activities, and migrations. |
-| [Generated project structure](./project-structure.md) | Understand where generated code lives. |
+| [Navigating the generated application](./generated-app.md) | **Understand the generated code — architecture, layers, request lifecycle, and how to extend it.** |
+| [Generated project structure](./project-structure.md) | Quick reference for where generated code lives. |
 | [Configuration](./configuration.md) | Configure generated applications safely. |
 | [Development workflow](./development-workflow.md) | Build, run, test, format, migrate, and generate Swagger docs. |
 | [AI agent support](./ai-agents.md) | Understand how generated projects guide AI agents to use Crank correctly. |
