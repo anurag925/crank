@@ -43,10 +43,10 @@ func (t tool) Install() error {
 
 func (tool) AddFlags(cmd *cobra.Command) {}
 
-func (tool) Prepare(projectDir string, cmd *cobra.Command) (*bootstrap.ToolInvocation, error) {
+func (tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*bootstrap.ToolInvocation, error) {
 	toml := filepath.Join(projectDir, ".air.toml")
 	if !utils.PathExists(toml) {
 		return nil, fmt.Errorf("no .air.toml found in %s", projectDir)
 	}
-	return &bootstrap.ToolInvocation{Args: cmd.Flags().Args(), Dir: projectDir, Stdin: true}, nil
+	return &bootstrap.ToolInvocation{Args: extraArgs, Dir: projectDir, Stdin: true}, nil
 }

@@ -55,7 +55,7 @@ func (t *tool) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().IntVar(&t.steps, "steps", 0, "limit the number of migration steps (0 = all pending)")
 }
 
-func (t *tool) Prepare(projectDir string, cmd *cobra.Command) (*bootstrap.ToolInvocation, error) {
+func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*bootstrap.ToolInvocation, error) {
 	if !utils.PathExists(filepath.Join(projectDir, "migrations")) {
 		return nil, fmt.Errorf("no migrations/ directory found in %s", projectDir)
 	}
@@ -73,10 +73,11 @@ func (t *tool) Prepare(projectDir string, cmd *cobra.Command) (*bootstrap.ToolIn
 	}
 
 	direction := "up"
-	if args := cmd.Flags().Args(); len(args) > 0 {
-		d := strings.ToLower(args[0])
+	if len(extraArgs) > 0 {
+		d := strings.ToLower(extraArgs[0])
 		if d == "up" || d == "down" {
 			direction = d
+			extraArgs = extraArgs[1:]
 		}
 	}
 
@@ -88,6 +89,7 @@ func (t *tool) Prepare(projectDir string, cmd *cobra.Command) (*bootstrap.ToolIn
 	if t.steps > 0 {
 		argv = append(argv, fmt.Sprintf("%d", t.steps))
 	}
+	argv = append(argv, extraArgs...)
 
 	return &bootstrap.ToolInvocation{
 		Args: argv,

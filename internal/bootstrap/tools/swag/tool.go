@@ -45,7 +45,7 @@ func (t tool) Install() error {
 
 func (tool) AddFlags(cmd *cobra.Command) {}
 
-func (tool) Prepare(projectDir string, cmd *cobra.Command) (*bootstrap.ToolInvocation, error) {
+func (tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*bootstrap.ToolInvocation, error) {
 	mainGo := filepath.Join(projectDir, "cmd", "server", "main.go")
 	if !utils.PathExists(mainGo) {
 		return nil, fmt.Errorf("no cmd/server/main.go found in %s", projectDir)
@@ -58,7 +58,7 @@ func (tool) Prepare(projectDir string, cmd *cobra.Command) (*bootstrap.ToolInvoc
 		"--parseInternal",
 		"--parseDependency",
 	}
-	argv = append(argv, cmd.Flags().Args()...)
+	argv = append(argv, extraArgs...)
 
 	return &bootstrap.ToolInvocation{Args: argv, Dir: projectDir}, nil
 }

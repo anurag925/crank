@@ -35,14 +35,14 @@ func (tool) InstallCmd() string          { return "" }
 func (tool) Install() error              { return nil }
 func (tool) AddFlags(cmd *cobra.Command) {}
 
-func (tool) Prepare(projectDir string, cmd *cobra.Command) (*bootstrap.ToolInvocation, error) {
+func (tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*bootstrap.ToolInvocation, error) {
 	mainGo := filepath.Join(projectDir, "cmd", "server")
 	if !utils.PathExists(mainGo) {
 		return nil, fmt.Errorf("no cmd/server/ found in %s", projectDir)
 	}
 
 	argv := []string{"vet", "./..."}
-	argv = append(argv, cmd.Flags().Args()...)
+	argv = append(argv, extraArgs...)
 
 	return &bootstrap.ToolInvocation{Args: argv, Dir: projectDir}, nil
 }

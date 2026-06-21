@@ -26,9 +26,10 @@ type Tool interface {
 	// AddFlags lets the tool register custom CLI flags on the cobra command.
 	AddFlags(cmd *cobra.Command)
 	// Prepare resolves the binary path and builds the final invocation.
-	// It receives the project directory and the cobra command so tools can
-	// read their custom flags via cmd.Flags().
-	Prepare(projectDir string, cmd *cobra.Command) (*ToolInvocation, error)
+	// It receives the project directory, the cobra command (so tools can read
+	// their custom flags via cmd.Flags()), and any extra positional/unknown
+	// arguments that should be forwarded to the underlying binary.
+	Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*ToolInvocation, error)
 	// Install downloads and installs the tool. Returns nil on success.
 	Install() error
 }

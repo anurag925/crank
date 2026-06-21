@@ -56,9 +56,7 @@ Examples:
   cd myapp && crank doctor --fail-fast`
 }
 
-func (tool) Prepare(projectDir string, cmd *cobra.Command) (*bootstrap.ToolInvocation, error) {
-	// Unused: doctor is dispatched via InProcessTool. Returning a nil
-	// invocation signals to the harness that no binary is needed.
+func (tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*bootstrap.ToolInvocation, error) {
 	return nil, nil
 }
 
@@ -103,8 +101,8 @@ func checkManifest(projectDir string) bootstrap.CheckResult {
 		return bootstrap.CheckResult{Summary: "manifest parses", Detail: err.Error()}
 	}
 	var m struct {
-		ProjectName string `yaml:"project_name"`
-		ModulePath  string `yaml:"module_path"`
+		ProjectName string   `yaml:"project_name"`
+		ModulePath  string   `yaml:"module_path"`
 		Features    []string `yaml:"features"`
 	}
 	if err := yaml.Unmarshal(data, &m); err != nil {
