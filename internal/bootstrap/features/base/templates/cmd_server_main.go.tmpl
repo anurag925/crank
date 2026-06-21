@@ -215,7 +215,7 @@ func main() {
 		if c.Response().Committed {
 			return
 		}
-		reqLog := logging.FromContext(c.Request().Context())
+		reqLog := logging.L(c.Request().Context())
 
 		if ve, ok := err.(*validator.ValidationError); ok {
 			reqLog.Warn("validation failed", "errors", ve.Errors)

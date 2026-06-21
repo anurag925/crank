@@ -12,7 +12,6 @@ import (
 type contextKey string
 
 const (
-	loggerKey    contextKey = "logger"
 	requestIDKey contextKey = "request_id"
 	userIDKey    contextKey = "user_id"
 )
@@ -73,34 +72,28 @@ func itoa(n int) string {
 // Context helpers
 // ---------------------------------------------------------------------------
 
-// WithLogger stores a logger in the context.
-func WithLogger(ctx context.Context, l *slog.Logger) context.Context {
-	return context.WithValue(ctx, loggerKey, l)
-}
-
-// FromContext returns the logger stored in the context. If no logger is found
-// the global default is returned.
-func FromContext(ctx context.Context) *slog.Logger {
-	if l, ok := ctx.Value(loggerKey).(*slog.Logger); ok {
-		return l
+// L returns a logger enriched with any request-scoped values found in the
+// context (request_id, user_id). Callers should pass data into context via
+// WithRequestID / WithUserID and retrieve the enriched logger via L(ctx).
+func L(ctx context.Context) *slog.Logger {
+	l := slog.Default()
+	if id, ok := ctx.Value(requestIDKey).(string); ok && id != "" {
+		l = l.With("request_id", id)
 	}
-	return slog.Default()
+	if uid, ok := ctx.Value(userIDKey).(string); ok && uid != "" {
+		l = l.With("user_id", uid)
+	}
+	return l
 }
 
-// WithRequestID stores the request ID in the context and returns the updated
-// context together with the logger enriched with the request_id attribute.
-func WithRequestID(ctx context.Context, id string) (context.Context, *slog.Logger) {
-	ctx = context.WithValue(ctx, requestIDKey, id)
-	l := FromContext(ctx).With("request_id", id)
-	return WithLogger(ctx, l), l
+// WithRequestID stores the request ID in the context.
+func WithRequestID(ctx context.Context, id string) context.Context {
+	return context.WithValue(ctx, requestIDKey, id)
 }
 
-// WithUserID stores the authenticated user ID in the context and enriches
-// the logger with a user_id attribute.
+// WithUserID stores the authenticated user ID in the context.
 func WithUserID(ctx context.Context, id string) context.Context {
-	ctx = context.WithValue(ctx, userIDKey, id)
-	l := FromContext(ctx).With("user_id", id)
-	return WithLogger(ctx, l)
+	return context.WithValue(ctx, userIDKey, id)
 }
 
 // RequestIDFromContext returns the request ID stored in the context, or an

@@ -18,14 +18,15 @@ const (
 
 // RequestLogger returns Echo middleware that:
 //   - Generates a unique request ID (or uses the one from X-Request-ID)
-//   - Stores the request ID and a request-scoped logger in context
+//   - Stores the request ID in context via logging.WithRequestID
 //   - Adds the request ID as a response header
 //   - Logs a structured "request completed" entry at the end with:
 //     request_id, method, path, status, latency, client_ip, bytes_out
 //
-// Downstream handlers can retrieve the request-scoped logger via
-// logging.FromContext(c.Request().Context()) to automatically include the
-// request_id in every log entry.
+// Downstream handlers can retrieve a request-scoped logger via
+// logging.L(c.Request().Context()) — it automatically picks up the
+// request_id (and user_id, if set) from context. Handlers inside
+// the web package can use the private logCtx(c) helper instead.
 func RequestLogger() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -38,9 +39,10 @@ func RequestLogger() echo.MiddlewareFunc {
 				id = generateID()
 			}
 
-			ctx, reqLogger := logging.WithRequestID(req.Context(), id)
+			ctx := logging.WithRequestID(req.Context(), id)
 			c.SetRequest(req.WithContext(ctx))
 			res.Header().Set(RequestIDHeader, id)
+			reqLogger := logging.L(ctx)
 
 			err := next(c)
 			if err != nil {

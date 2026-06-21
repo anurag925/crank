@@ -72,7 +72,8 @@ func (h *AuthHandler) RegisterUser(c echo.Context) error {
 	// The user id is generated server-side at the application layer; we
 	// pass a placeholder string and the command handler will produce a
 	// typed id from it. For a real id, use a uuid library.
-	out, err := h.cmd.HandleCreate(c.Request().Context(), user.CreateUserCommand{
+	ctx, _ := logCtx(c)
+	out, err := h.cmd.HandleCreate(ctx, user.CreateUserCommand{
 		ID:    in.Email,
 		Name:  in.Name,
 		Email: in.Email,
@@ -107,8 +108,10 @@ func (h *AuthHandler) Login(c echo.Context) error {
 	if err := c.Bind(&in); err != nil {
 		return err
 	}
-	u, err := h.qry.HandleGet(c.Request().Context(), user.GetUserQuery{ID: in.Email})
+	ctx, log := logCtx(c)
+	u, err := h.qry.HandleGet(ctx, user.GetUserQuery{ID: in.Email})
 	if err != nil {
+		log.Warn("login failed", "email", in.Email, "error", err)
 		return c.JSON(http.StatusUnauthorized, model.APIError{Error: "invalid credentials"})
 	}
 	if u.Email() != in.Email {

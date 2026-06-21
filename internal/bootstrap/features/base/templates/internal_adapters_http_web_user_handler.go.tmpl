@@ -1,7 +1,9 @@
 package web
 
 import (
+	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/labstack/echo/v4"
@@ -9,6 +11,7 @@ import (
 	appuser "{{.ModulePath}}/internal/application/user"
 	"{{.ModulePath}}/internal/domain/user"
 	"{{.ModulePath}}/internal/model"
+	"{{.ModulePath}}/pkg/logging"
 )
 
 // userDTO is the input/output DTO for user HTTP endpoints. The HTTP layer
@@ -31,6 +34,14 @@ func (d userDTO) toUpdateCommand() appuser.UpdateUserCommand {
 
 func toUserDTO(u *user.User) userDTO {
 	return userDTO{ID: u.ID().String(), Name: u.Name(), Email: u.Email()}
+}
+
+// logCtx extracts the request context from an echo.Context and returns it
+// together with the request-scoped logger. Handlers in the web package use
+// this instead of calling c.Request().Context() and logging.L directly.
+func logCtx(c echo.Context) (context.Context, *slog.Logger) {
+	ctx := c.Request().Context()
+	return ctx, logging.L(ctx)
 }
 
 // UserHandler exposes HTTP endpoints for users. It depends only on the
@@ -67,11 +78,12 @@ func (h *UserHandler) Register(g *echo.Group) {
 //	@Failure      422   {object}  model.APIError
 //	@Router       /users [post]
 func (h *UserHandler) Create(c echo.Context) error {
+	ctx, _ := logCtx(c)
 	var in userDTO
 	if err := c.Bind(&in); err != nil {
 		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
 	}
-	out, err := h.cmd.HandleCreate(c.Request().Context(), in.toCreateCommand())
+	out, err := h.cmd.HandleCreate(ctx, in.toCreateCommand())
 	if errors.Is(err, user.ErrUserNotFound) {
 		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
 	}
@@ -92,7 +104,8 @@ func (h *UserHandler) Create(c echo.Context) error {
 //	@Failure      404  {object}  model.APIError
 //	@Router       /users/{id} [get]
 func (h *UserHandler) Get(c echo.Context) error {
-	out, err := h.qry.HandleGet(c.Request().Context(), appuser.GetUserQuery{ID: c.Param("id")})
+	ctx, _ := logCtx(c)
+	out, err := h.qry.HandleGet(ctx, appuser.GetUserQuery{ID: c.Param("id")})
 	if errors.Is(err, user.ErrUserNotFound) {
 		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
 	}
@@ -111,7 +124,8 @@ func (h *UserHandler) Get(c echo.Context) error {
 //	@Success      200  {array}   userDTO
 //	@Router       /users [get]
 func (h *UserHandler) List(c echo.Context) error {
-	items, err := h.qry.HandleList(c.Request().Context(), appuser.ListUsersQuery{})
+	ctx, _ := logCtx(c)
+	items, err := h.qry.HandleList(ctx, appuser.ListUsersQuery{})
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
 	}
@@ -135,12 +149,13 @@ func (h *UserHandler) List(c echo.Context) error {
 //	@Failure      404  {object}  model.APIError
 //	@Router       /users/{id} [put]
 func (h *UserHandler) Update(c echo.Context) error {
+	ctx, _ := logCtx(c)
 	var in userDTO
 	if err := c.Bind(&in); err != nil {
 		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
 	}
 	in.ID = c.Param("id")
-	out, err := h.cmd.HandleUpdate(c.Request().Context(), in.toUpdateCommand())
+	out, err := h.cmd.HandleUpdate(ctx, in.toUpdateCommand())
 	if errors.Is(err, user.ErrUserNotFound) {
 		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
 	}
@@ -161,7 +176,8 @@ func (h *UserHandler) Update(c echo.Context) error {
 //	@Failure      404  {object}  model.APIError
 //	@Router       /users/{id} [delete]
 func (h *UserHandler) Delete(c echo.Context) error {
-	err := h.cmd.HandleDelete(c.Request().Context(), appuser.DeleteUserCommand{ID: c.Param("id")})
+	ctx, _ := logCtx(c)
+	err := h.cmd.HandleDelete(ctx, appuser.DeleteUserCommand{ID: c.Param("id")})
 	if errors.Is(err, user.ErrUserNotFound) {
 		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
 	}
