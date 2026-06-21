@@ -28,12 +28,20 @@ func NewToolCmd(reg *bootstrap.ToolRegistry, name string) (*cobra.Command, error
 		SilenceUsage:       true,
 		SilenceErrors:      true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Extract --project and --project=<dir> from args.
-			projectDir, rest := splitProjectFlag(args)
-
-			// Register tool flags on cmd.Flags().
+			// Register tool flags early so they appear in help output.
 			cmd.Flags().String("project", ".", "path to the project directory")
 			t.AddFlags(cmd)
+
+			// DisableFlagParsing is set, so cobra does not intercept --help/-h.
+			// Detect them manually and print help without running project validation.
+			for _, arg := range args {
+				if arg == "--help" || arg == "-h" {
+					return cmd.Help()
+				}
+			}
+
+			// Extract --project and --project=<dir> from args.
+			projectDir, rest := splitProjectFlag(args)
 
 			// Separate known flags (registered on cmd.Flags()) from
 			// unknown flags and positional args that get forwarded.
