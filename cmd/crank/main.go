@@ -89,6 +89,7 @@ If --project is not specified, the current directory is used.`,
 	root.AddCommand(
 		commands.NewInitCmd(featReg, toolReg),
 		commands.NewAddCmd(featReg),
+		commands.NewUpdateCmd(),
 		commands.NewListCmd(featReg),
 		commands.NewMakeCmd(),
 		commands.NewToolsListCmd(toolReg),

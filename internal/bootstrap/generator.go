@@ -382,6 +382,41 @@ func readManifest(projectDir string) (*manifest, error) {
 	return m, nil
 }
 
+// Update bumps the crank_version stamp in the project's .crank.yaml manifest
+// to the current crank CLI version. This is the first step toward full
+// template reconciliation; future releases will re-render feature templates
+// and inject updated config sections.
+func Update(projectDir string) (*Result, error) {
+	if !utils.PathExists(projectDir) {
+		return nil, fmt.Errorf("project directory %s does not exist", projectDir)
+	}
+	m, err := readManifest(projectDir)
+	if err != nil {
+		return nil, fmt.Errorf("read manifest: %w", err)
+	}
+
+	if m.CrankVersion == Version {
+		return &Result{
+			ProjectDir: projectDir,
+			Files:      nil,
+			Features:   m.Features,
+		}, nil
+	}
+
+	oldVersion := m.CrankVersion
+	if err := writeManifest(projectDir, m, m.Features); err != nil {
+		return nil, fmt.Errorf("write manifest: %w", err)
+	}
+
+	fmt.Printf("  crank_version: %s → %s\n", oldVersion, Version)
+
+	return &Result{
+		ProjectDir: projectDir,
+		Files:      []string{".crank.yaml"},
+		Features:   m.Features,
+	}, nil
+}
+
 func writeManifest(projectDir string, current *manifest, updated []string) error {
 	if current == nil {
 		current = &manifest{}
