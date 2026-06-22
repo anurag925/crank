@@ -12,3 +12,6 @@
 .idea/
 .vscode/
 *.swp
+
+# ai
+.commandcode/

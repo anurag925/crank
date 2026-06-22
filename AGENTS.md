@@ -2,13 +2,13 @@
 
 ## Project Overview
 
-A modular CLI tool that scaffolds production-ready Go backend services and wraps common development tools as subcommands. Given a project name and a list of features, it generates a clean, layered Go service with sensible defaults and optional modules (auth, gorm, bun, redis, mongodb). GORM is the default ORM; pass `--use-bun` to use Bun instead. All day-to-day development tasks (build, test, migrate, swag, etc.) are accessible through the `crank` CLI so developers never need to leave it.
+A modular CLI tool that scaffolds production-ready Go backend services and wraps common development tools as subcommands. Given a project name and a list of features, it generates a clean, layered Go service with sensible defaults and optional modules (auth, gorm, bun, redis, mongodb, qdrant, temporal, otel, outbox, views, crypto). GORM is the default ORM; pass `--use-bun` to use Bun instead. All day-to-day development tasks (build, test, migrate, swag, etc.) are accessible through the `crank` CLI so developers never need to leave it.
 
 ## Tech Stack
 
 | Layer | Technology |
 |-------|-----------|
-| Language | Go 1.21 |
+| Language | Go 1.26 |
 | CLI Framework | Cobra (`github.com/spf13/cobra`) |
 | Config (generated) | Viper + YAML + .env |
 | HTTP (generated) | Echo v4 |
@@ -34,6 +34,12 @@ A modular CLI tool that scaffolds production-ready Go backend services and wraps
 
 # Add a feature to an existing project
 ./crank add redis --project=./myapp
+
+# Update a generated project to the latest crank version
+./crank update --project=./myapp
+
+# Run health checks on a generated project
+./crank doctor --project=./myapp
 
 # Generate application code (Rails/Laravel-style generators)
 ./crank make model Order customer:string total:float --project=./myapp
@@ -75,18 +81,21 @@ crank/
 ├── internal/
 │   ├── bootstrap/
 │   │   ├── feature.go                     # Feature interface, Registry, template rendering
-│   │   ├── tool.go                        # Tool interface, ToolInvocation, ToolRegistry
+│   │   ├── tool.go                        # Tool interface, ToolInvocation, ToolRegistry, InProcessTool
 │   │   ├── tool_registry.go               # GlobalToolRegistry singleton
-│   │   ├── generator.go                   # Generate() and Add() orchestration logic
-│   │   ├── context.go                     # Template context (ProjectName, ModulePath, Has())
+│   │   ├── generator.go                   # Generate(), Add(), Update() orchestration + manifest I/O
+│   │   ├── context.go                     # Template context (ProjectName, ModulePath, Has(), CrankVersion)
 │   │   ├── manifest.go                    # .crank.yaml encode/decode
 │   │   ├── project.go                     # LoadProjectInfo() — public manifest reader for tooling
+│   │   ├── config_inject.go               # Marker-based config section injection
 │   │   ├── registry.go                    # GlobalRegistry singleton
 │   │   ├── result.go                      # Result.FeaturesUsed() helper
 │   │   ├── gomod.go                       # GoGet, Tidy helpers (go get + go mod tidy)
+│   │   ├── version.go                     # Version variable (set at build time)
 │   │   ├── commands/                      # One Cobra command per CLI subcommand
 │   │   │   ├── init.go                    # `crank init` (includes tool checking)
 │   │   │   ├── add.go                     # `crank add`
+│   │   │   ├── update.go                  # `crank update` (bump crank_version in manifest)
 │   │   │   ├── list.go                    # `crank list`
 │   │   │   ├── make.go                    # `crank make` (migration + code generators)
 │   │   │   └── tools.go                   # Generic tool command factory + `crank tools`
@@ -95,6 +104,7 @@ crank/
 │   │   │   ├── names.go                   # Resource name inflection (singular/plural, cases)
 │   │   │   ├── fields.go                  # "name:type" field-spec parsing
 │   │   │   ├── wire.go                    # Auto-registers generated handlers in handler.go
+│   │   │   ├── wire_temporal.go           # Auto-registers Temporal workflows/activities in worker.go
 │   │   │   └── templates/                 # model/repository/service/handler/migration .tmpl files
 │   │   ├── tools/                         # Tool wrappers (one package per external CLI)
 │   │   │   ├── install.go                 # Shared InstallGoTool helper
@@ -106,7 +116,8 @@ crank/
 │   │   │   ├── test/                      # `crank test` → go test
 │   │   │   ├── gofmt/                     # `crank gofmt` → gofmt
 │   │   │   ├── vet/                       # `crank vet` → go vet
-│   │   │   └── tidy/                      # `crank tidy` → go mod tidy
+│   │   │   ├── tidy/                      # `crank tidy` → go mod tidy
+│   │   │   └── doctor/                    # `crank doctor` → in-process health checks
 │   │   └── features/                      # One package per installable module
 │   │       ├── base/                      # Echo + Viper + slog + dev tooling
 │   │       ├── auth/                      # JWT middleware + auth handlers
@@ -116,7 +127,10 @@ crank/
 │   │       ├── redis/                     # Redis client (placeholder)
 │   │       ├── mongodb/                   # MongoDB client (placeholder)
 │   │       ├── qdrant/                    # Qdrant vector DB client
-│   │       └── temporal/                  # Temporal client + worker + example workflow/activity
+│   │       ├── temporal/                  # Temporal client + worker + example workflow/activity
+│   │       ├── otel/                      # OpenTelemetry tracing + metrics
+│   │       ├── outbox/                    # Transaction outbox pattern (requires bun or gorm)
+│   │       └── views/                     # Database views (requires bun)
 │   └── utils/
 │       ├── fileutil.go                    # EnsureDir, WriteFile, PathExists, etc.
 │       └── exec.go                        # FindBinary, RunExternal, ShellJoin
@@ -138,6 +152,7 @@ type Feature interface {
     Files() []FileMapping
     Templates() embed.FS
     Dependencies() []string
+    Requirements() []string
 }
 ```
 
@@ -146,6 +161,7 @@ type Feature interface {
 - `Dependencies()` — Go module paths fetched via `go get` after scaffolding
 - `Files()` — template-to-output path mappings
 - `Templates()` — the `embed.FS` containing `.tmpl` files
+- `Requirements()` — names of other features that must be installed alongside this one (e.g. `outbox` requires `bun` or `gorm`); `crank add`/`crank init` refuse to install if any requirement is missing
 
 ### Tool Interface (`internal/bootstrap/tool.go`)
 
@@ -160,7 +176,7 @@ type Tool interface {
     InstallCmd() string                  // human-readable install instruction
     RequiresFeatures() []string          // features that must be enabled
     AddFlags(cmd *cobra.Command)         // register custom CLI flags
-    Prepare(projectDir string, cmd *cobra.Command) (*ToolInvocation, error)
+    Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*ToolInvocation, error)
     Install() error                      // auto-install the tool
 }
 ```
@@ -170,8 +186,30 @@ type Tool interface {
 - `InstallCmd()` — shown when the tool is missing; also used by `crank init` for auto-install
 - `RequiresFeatures()` — e.g. `migrate` requires `"bun"` or `"gorm"`; empty means always available
 - `AddFlags()` — lets tools register custom flags (e.g. `--database-url`, `--steps`)
-- `Prepare()` — builds the `ToolInvocation` (args, working dir, stdin, env)
+- `Prepare()` — builds the `ToolInvocation` (args, working dir, stdin, env); receives `extraArgs` (unknown flags/positional args) to forward to the underlying binary
 - `Install()` — downloads/installs the tool (usually via `go install`)
+
+#### InProcessTool
+
+Tools that don't wrap an external binary (e.g. `doctor`) implement the optional
+`InProcessTool` interface, which extends `Tool` with a `RunInProcess` method:
+
+```go
+type InProcessTool interface {
+    Tool
+    RunInProcess(projectDir string, out io.Writer) ([]CheckResult, error)
+}
+```
+
+Each `CheckResult` represents a single pass/fail check:
+
+```go
+type CheckResult struct {
+    OK      bool
+    Summary string
+    Detail  string
+}
+```
 
 ### ToolInvocation (`internal/bootstrap/tool.go`)
 
@@ -180,7 +218,7 @@ type ToolInvocation struct {
     Binary string   // full path to the binary
     Args   []string // arguments (without binary name)
     Dir    string   // working directory
-    Env    []string // additional KEY=VALUE env vars
+    Env    []string // additional KEY=VALUE env vars (merged with os.Environ)
     Stdin  bool     // whether to pass os.Stdin through
 }
 ```
@@ -192,6 +230,7 @@ type FileMapping struct {
     TemplatePath string  // path inside the embedded FS
     OutputPath   string  // destination relative to project root
     SkipIfExists bool    // leave existing file untouched
+    Requires     string  // optional feature name; file is only generated when this feature is active
 }
 ```
 
@@ -205,6 +244,7 @@ Passed to every template during rendering:
 - `Features` — list of enabled feature names
 - `Has(name string) bool` — check if a feature is active (used in templates with `{{if .Has "bun"}}...{{end}}`)
 - `Require(names ...string) error` — fail if a feature is missing
+- `CrankVersion` — the crank CLI version that generated this project
 
 ### Registry (`internal/bootstrap/feature.go` + `registry.go`)
 
@@ -219,11 +259,13 @@ Passed to every template during rendering:
 - `cmd/crank/main.go` imports tool packages with `_` (blank import) to trigger registration
 - `ForFeatures(features)` — returns tools whose requirements are satisfied by the given feature set
 - `ForFeature(feature)` — returns tools that specifically require one feature
+- `ValidateToolRequirements` — checks the project manifest against a tool's required features before running the tool
 
 ### Generator (`internal/bootstrap/generator.go`)
 
 - `Generate(reg, opts)` — creates a new project from scratch; `base` is always first; returns `Result.Dependencies` for the caller to run `go get`
 - `Add(reg, projectDir, featureName)` — adds a feature to an existing project; renders the new feature's templates; injects the feature's config sections into existing config files via marker-based injection (preserving user edits); updates `.crank.yaml` manifest; returns `Result.Dependencies` with the new feature's deps
+- `Update(projectDir)` — bumps the `crank_version` stamp in `.crank.yaml` to the current CLI version (future releases will re-render templates)
 - `GoGet(projectDir, deps)` — runs `go get <deps...>` then `go mod tidy` in the project directory
 - `Tidy(projectDir)` — runs `go mod tidy` in the project directory
 
@@ -254,6 +296,12 @@ automatically. Both features must not be present at the same time — a mutual
 exclusion check in `generator.go` (`validateMutuallyExclusive`) enforces
 this at generation time.
 
+Features that don't care which ORM is used (e.g. `outbox`) can list both
+`"bun"` and `"gorm"` in `Requirements()`. When both are listed, they are
+treated as alternatives — at least one must be present, but both are not
+required. This is enforced by `validateRequirements` during `crank init`
+and by `checkRequirements` during `crank add`.
+
 ### Adding a New Tool Wrapper
 
 1. Create `internal/bootstrap/tools/<name>/tool.go`
@@ -268,6 +316,12 @@ this at generation time.
 5. Add a blank import in `cmd/crank/main.go`:
    ```go
    _ "github.com/anurag925/crank/internal/bootstrap/tools/<name>"
+   ```
+6. For in-process tools (no external binary), also implement the `InProcessTool` interface:
+   ```go
+   func (tool) RunInProcess(projectDir string, out io.Writer) ([]bootstrap.CheckResult, error) {
+       // run checks, return results
+   }
    ```
 
 The command factory in `commands/tools.go` handles everything else: `--project` flag, binary lookup, auto-install on missing, and execution.
@@ -382,7 +436,7 @@ Config files live in a top-level `configs/` directory, following the
 - Viper searches `./configs` first, then `.` as fallback
 - Viper priority: env vars > .env > configs/config.yaml
 
-All feature configs (bun, gorm, auth, crypto, redis, mongodb, temporal) are
+All feature configs (bun, gorm, auth, crypto, redis, mongodb, qdrant, temporal, otel, outbox, views) are
 consolidated in the base `config.go` template using `{{if .Has "feature"}}`
 conditional sections. Feature-specific packages (e.g. `internal/redis`,
 `internal/temporal`) do **not** define their own Config structs — they import
@@ -444,6 +498,7 @@ file is left untouched and an error is returned.
 | `crank gofmt` | `gofmt -s -w .` | `gofmt` | — |
 | `crank vet` | `go vet ./...` | `go` | — |
 | `crank tidy` | `go mod tidy` | `go` | — |
+| `crank doctor` | in-process health checks | — | — |
 
 All tools accept `--project <dir>`. If `--project` is not specified, the current directory is used as the project root.
 
@@ -522,6 +577,8 @@ so its generated output is compiled end-to-end.
 
 Direct dependencies (from `go.mod`):
 - `github.com/spf13/cobra v1.8.0` — CLI framework
+- `github.com/spf13/pflag v1.0.5` — flag parsing (used for known/unknown flag splitting)
+- `golang.org/x/term v0.44.0` — terminal detection
 - `gopkg.in/yaml.v3 v3.0.1` — YAML manifest parsing
 
 Generated projects pull in their own dependencies (Echo, Bun, Viper, etc.) via their `go.mod` templates.

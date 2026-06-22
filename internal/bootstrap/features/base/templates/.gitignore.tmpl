@@ -15,10 +15,7 @@
 /dist/
 /out/
 
-# Generated Swagger spec (re-generate with `crank swag`).
-# docs/docs.go is committed so the project always compiles; swag overwrites it.
-/docs/swagger.json
-/docs/swagger.yaml
+
 {{- if or (.Has "bun") (.Has "gorm")}}
 # Local DB volume
 data/
