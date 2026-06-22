@@ -206,7 +206,7 @@ func TestBase_GoMod_ModulePath(t *testing.T) {
 	assertContains(t, content, "go 1.26", "go.mod")
 
 	// Dependencies are now returned via Result and installed via go get.
-	assertDepsContains(t, r.Dependencies, "github.com/labstack/echo/v4", "base deps")
+	assertDepsContains(t, r.Dependencies, "github.com/labstack/echo/v5", "base deps")
 	assertDepsContains(t, r.Dependencies, "github.com/spf13/viper", "base deps")
 	assertDepsContains(t, r.Dependencies, "github.com/go-playground/validator/v10", "base deps")
 }

@@ -83,7 +83,7 @@ func TestE2E_Doctor_UnwiredHandler(t *testing.T) {
 	unwired := filepath.Join(dir, "internal/adapters/http/web/coupon_handler.go")
 	body := `package web
 
-import "github.com/labstack/echo/v4"
+import "github.com/labstack/echo/v5"
 
 type CouponHandler struct{}
 

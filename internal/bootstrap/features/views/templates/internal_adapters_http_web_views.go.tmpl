@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/labstack/echo/v4"
-	echomw "github.com/labstack/echo/v4/middleware"
+	"github.com/labstack/echo/v5"
+	echomw "github.com/labstack/echo/v5/middleware"
 
 	"{{.ModulePath}}/internal/config"
 	"{{.ModulePath}}/static"
@@ -59,7 +59,7 @@ func proxyToDevServer(target string, logger *slog.Logger) echo.HandlerFunc {
 	// Strip trailing slash.
 	target = strings.TrimRight(target, "/")
 
-	return func(c echo.Context) error {
+	return func(	c *echo.Context) error {
 		// If the request looks like an API call, skip proxying (let the
 		// Echo router handle it normally). The Vite dev server would have
 		// handled this via its own proxy config, but when the Go server
@@ -110,7 +110,7 @@ func proxyToDevServer(target string, logger *slog.Logger) echo.HandlerFunc {
 
 		// Forward WebSocket upgrade if present (HMR uses WebSockets).
 		if resp.StatusCode == http.StatusSwitchingProtocols {
-			hijacker, ok := c.Response().Writer.(http.Hijacker)
+			hijacker, ok := c.Response().(http.Hijacker)
 			if !ok {
 				return echo.NewHTTPError(http.StatusInternalServerError, "websocket not supported")
 			}

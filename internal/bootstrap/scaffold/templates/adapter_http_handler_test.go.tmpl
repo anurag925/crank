@@ -13,7 +13,7 @@ import (
 	app{{.R.Pascal}} "{{.Module}}/internal/application/{{.R.Snake}}"
 	"{{.Module}}/internal/adapters/persistence/memory"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +23,6 @@ import (
 // production.
 func new{{.R.Pascal}}TestEcho() *echo.Echo {
 	e := echo.New()
-	e.HideBanner = true
 	e.Binder = &echoBinder{defaultBinder: new(echo.DefaultBinder)}
 	return e
 }
@@ -53,7 +52,7 @@ func Test{{.R.Pascal}}Handler_Routes(t *testing.T) {
 	new{{.R.Pascal}}Handler().Register(g)
 
 	routes := map[string]bool{}
-	for _, r := range e.Routes() {
+	for _, r := range e.Router().Routes() {
 		routes[r.Method+" "+r.Path] = true
 	}
 	assert.True(t, routes["GET /{{.R.KebabPlural}}"], "list route should exist")
@@ -93,8 +92,7 @@ func Test{{.R.Pascal}}Handler_CreateAndGet(t *testing.T) {
 	getRec := httptest.NewRecorder()
 	gc := e.NewContext(getReq, getRec)
 	gc.SetPath("/{{.R.KebabPlural}}/:id")
-	gc.SetParamNames("id")
-	gc.SetParamValues("123e4567-e89b-12d3-a456-426614174000")
+	gc.SetPathValues(echo.PathValues{echo.PathValue{Name: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}})
 	require.NoError(t, h.Get(gc))
 	assert.Equal(t, http.StatusOK, getRec.Code)
 }
@@ -105,8 +103,7 @@ func Test{{.R.Pascal}}Handler_GetNotFound(t *testing.T) {
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)
 	c.SetPath("/{{.R.KebabPlural}}/:id")
-	c.SetParamNames("id")
-	c.SetParamValues("123e4567-e89b-12d3-a456-426614174000")
+	c.SetPathValues(echo.PathValues{echo.PathValue{Name: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}})
 
 	h := new{{.R.Pascal}}Handler()
 	require.NoError(t, h.Get(c))
@@ -133,8 +130,7 @@ func Test{{.R.Pascal}}Handler_Delete(t *testing.T) {
 	delRec := httptest.NewRecorder()
 	dc := e.NewContext(delReq, delRec)
 	dc.SetPath("/{{.R.KebabPlural}}/:id")
-	dc.SetParamNames("id")
-	dc.SetParamValues("123e4567-e89b-12d3-a456-426614174000")
+	dc.SetPathValues(echo.PathValues{echo.PathValue{Name: "id", Value: "123e4567-e89b-12d3-a456-426614174000"}})
 	require.NoError(t, h.Delete(dc))
 	assert.Equal(t, http.StatusNoContent, delRec.Code)
 }

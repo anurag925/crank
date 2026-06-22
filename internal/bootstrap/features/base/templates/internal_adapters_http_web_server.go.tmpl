@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"{{.ModulePath}}/internal/validator"
 )
@@ -27,8 +27,8 @@ func NewServer(logger *slog.Logger) *echo.Echo {
 
 // Health is a simple liveness probe. It returns 200 OK and the current UTC
 // time, suitable for Kubernetes or load balancer health checks.
-func Health(c echo.Context) error {
-	return c.JSON(http.StatusOK, echo.Map{
+func Health(c *echo.Context) error {
+	return c.JSON(http.StatusOK, map[string]interface{}{
 		"status": "ok",
 		"time":   time.Now().UTC().Format(time.RFC3339),
 	})
@@ -39,15 +39,15 @@ func Health(c echo.Context) error {
 // call the validator manually — if Bind() returns nil the input is
 // guaranteed valid.
 type echoBinder struct {
-	defaultBinder echo.Binder
+	defaultBinder *echo.DefaultBinder
 	logger        *slog.Logger
 }
 
-func (b *echoBinder) Bind(i any, c echo.Context) error {
-	if err := b.defaultBinder.Bind(i, c); err != nil {
+func (b *echoBinder) Bind(c *echo.Context, target any) error {
+	if err := b.defaultBinder.Bind(c, target); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
-	if err := validator.Struct(i); err != nil {
+	if err := validator.Struct(target); err != nil {
 		return err
 	}
 	return nil

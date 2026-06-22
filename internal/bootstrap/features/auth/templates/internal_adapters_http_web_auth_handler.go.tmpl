@@ -4,7 +4,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"{{.ModulePath}}/internal/application/user"
 	"{{.ModulePath}}/internal/adapters/http/web/middleware"
@@ -64,7 +64,7 @@ type tokenResponse struct {
 //	@Success      201          {object}  tokenResponse
 //	@Failure      422          {object}  model.APIError
 //	@Router       /auth/register [post]
-func (h *AuthHandler) RegisterUser(c echo.Context) error {
+func (h *AuthHandler) RegisterUser(	c *echo.Context) error {
 	var in credentials
 	if err := c.Bind(&in); err != nil {
 		return err
@@ -103,7 +103,7 @@ func (h *AuthHandler) RegisterUser(c echo.Context) error {
 //	@Success      200          {object}  tokenResponse
 //	@Failure      401          {object}  model.APIError
 //	@Router       /auth/login [post]
-func (h *AuthHandler) Login(c echo.Context) error {
+func (h *AuthHandler) Login(	c *echo.Context) error {
 	var in credentials
 	if err := c.Bind(&in); err != nil {
 		return err
@@ -139,7 +139,7 @@ func (h *AuthHandler) Login(c echo.Context) error {
 //	@Success      200   {object}  tokenResponse
 //	@Failure      401   {object}  model.APIError
 //	@Router       /auth/refresh [post]
-func (h *AuthHandler) Refresh(c echo.Context) error {
+func (h *AuthHandler) Refresh(	c *echo.Context) error {
 	var in refreshRequest
 	if err := c.Bind(&in); err != nil {
 		return err
@@ -165,9 +165,9 @@ func (h *AuthHandler) Refresh(c echo.Context) error {
 //	@Success      200  {object}  map[string]string
 //	@Failure      401  {object}  model.APIError
 //	@Router       /me [get]
-func (h *AuthHandler) Me(c echo.Context) error {
+func (h *AuthHandler) Me(	c *echo.Context) error {
 	uid, _ := c.Get("user_id").(string)
-	return c.JSON(http.StatusOK, echo.Map{"user_id": uid})
+	return c.JSON(http.StatusOK, map[string]interface{}{"user_id": uid})
 }
 
 // errAuthInvalid is a sentinel for the auth flow; keep here for future use.

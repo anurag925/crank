@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/labstack/echo/v4"
-	echomw "github.com/labstack/echo/v4/middleware"
-	echoSwagger "github.com/swaggo/echo-swagger"
+	"github.com/labstack/echo/v5"
+	echomw "github.com/labstack/echo/v5/middleware"
+	echoSwagger "github.com/swaggo/echo-swagger/v2"
 {{- if .Has "temporal"}}
 	"go.temporal.io/sdk/worker"
 {{- end}}
@@ -200,19 +200,17 @@ func main() {
 	userHandler := web.NewUserHandler(userCmd, userQry)
 
 	e := web.NewServer(logger)
-	e.HideBanner = true
-	e.HidePort = true
 	e.Use(echomw.Recover())
 	e.Use(middleware.RequestLogger())
 {{if .Has "otel"}}
 	e.Use(middleware.Tracing(cfg.Telemetry.ServiceName))
 {{end}}
 
-	e.GET("/swagger/*", echoSwagger.EchoWrapHandler())
+	e.GET("/swagger/*", echoSwagger.WrapHandler)
 	e.GET("/health", web.Health)
 
-	e.HTTPErrorHandler = func(err error, c echo.Context) {
-		if c.Response().Committed {
+	e.HTTPErrorHandler = func(c *echo.Context, err error) {
+		if resp, _ := echo.UnwrapResponse(c.Response()); resp != nil && resp.Committed {
 			return
 		}
 		reqLog := logging.L(c.Request().Context())
@@ -223,11 +221,7 @@ func main() {
 			return
 		}
 		if he, ok := err.(*echo.HTTPError); ok {
-			if msg, ok := he.Message.(string); ok {
-				_ = c.JSON(he.Code, model.APIError{Error: msg})
-				return
-			}
-			_ = c.JSON(he.Code, echo.Map{"error": he.Message})
+			_ = c.JSON(he.Code, model.APIError{Error: he.Message})
 			return
 		}
 		reqLog.Error("unhandled error", "error", err)
@@ -248,29 +242,26 @@ func main() {
 
 {{if .Has "outbox"}}
 	outboxCtx, outboxCancel := context.WithCancel(context.Background())
-	defer outboxCancel()
 	go outboxWorker.Run(outboxCtx)
 {{end}}
-	go func() {
-		if err := e.Start(addr); err != nil && err != http.ErrServerClosed {
-			logger.Error("server error", "error", err)
-			os.Exit(1)
-		}
-	}()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
 
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	sc := echo.StartConfig{
+		Address:         addr,
+		HideBanner:      true,
+		HidePort:        true,
+		GracefulTimeout: 10 * time.Second,
+	}
+	if err := sc.Start(ctx, e); err != nil && err != http.ErrServerClosed {
+		logger.Error("server error", "error", err)
+		os.Exit(1)
+	}
 
-	logger.Info("shutting down server")
 {{if .Has "outbox"}}
 	outboxCancel()
 {{end}}
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	if err := e.Shutdown(ctx); err != nil {
-		logger.Error("server forced to shutdown", "error", err)
-	}
+	logger.Info("server stopped")
 }
 
 func parseLevel(s string) slog.Level {

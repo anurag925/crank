@@ -11,8 +11,8 @@ A modular CLI tool that scaffolds production-ready Go backend services and wraps
 | Language | Go 1.26 |
 | CLI Framework | Cobra (`github.com/spf13/cobra`) |
 | Config (generated) | Viper + YAML + .env |
-| HTTP (generated) | Echo v4 |
-| Docs (generated) | Swagger via [swaggo/swag](https://github.com/swaggo/swag) + [echo-swagger](https://github.com/swaggo/echo-swagger) |
+| HTTP (generated) | Echo v5 |
+| Docs (generated) | Swagger via [swaggo/swag](https://github.com/swaggo/swag) + [echo-swagger v2](https://github.com/swaggo/echo-swagger) |
 | ORM (generated) | GORM (default) or Bun (`--use-bun`) |
 | Logging (generated) | `log/slog` (stdlib) |
 | Migrations (generated) | golang-migrate |

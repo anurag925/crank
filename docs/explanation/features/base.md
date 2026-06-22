@@ -27,7 +27,7 @@ The `base` feature is the **foundation of every generated project**. It is alway
 
 | Library | Purpose | Documentation |
 |---------|---------|---------------|
-| [Echo v4](https://github.com/labstack/echo) | HTTP router and web framework | [echo.labstack.com](https://echo.labstack.com) |
+| [Echo v5](https://github.com/labstack/echo) | HTTP router and web framework | [echo.labstack.com](https://echo.labstack.com) |
 | [Viper](https://github.com/spf13/viper) | Configuration management (YAML + env) | [github.com/spf13/viper](https://github.com/spf13/viper) |
 | [godotenv](https://github.com/joho/godotenv) | `.env` file loader | [github.com/joho/godotenv](https://github.com/joho/godotenv) |
 | [caarlos0/env](https://github.com/caarlos0/env) | Struct-tag based env variable parsing | [github.com/caarlos0/env](https://github.com/caarlos0/env) |

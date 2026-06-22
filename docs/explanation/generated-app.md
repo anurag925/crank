@@ -333,16 +333,16 @@ that **automatically validates** after every `c.Bind()`:
 
 ```go
 type echoBinder struct {
-    defaultBinder echo.Binder
+    defaultBinder *echo.DefaultBinder
     logger        *slog.Logger
 }
 
-func (b *echoBinder) Bind(i any, c echo.Context) error {
-    if err := b.defaultBinder.Bind(i, c); err != nil {
+func (b *echoBinder) Bind(c *echo.Context, target any) error {
+    if err := b.defaultBinder.Bind(c, target); err != nil {
         return echo.NewHTTPError(http.StatusBadRequest, err.Error())
     }
-    if err := validator.Struct(i); err != nil {
-        return err  // automatically formatted as ValidationError
+    if err := validator.Struct(target); err != nil {
+        return err
     }
     return nil
 }
@@ -351,7 +351,7 @@ func (b *echoBinder) Bind(i any, c echo.Context) error {
 This means handlers **never** call the validator explicitly:
 
 ```go
-func (h *UserHandler) Create(c echo.Context) error {
+func (h *UserHandler) Create(c *echo.Context) error {
     var in userDTO
     if err := c.Bind(&in); err != nil {  // Bind + validate in one call
         return err

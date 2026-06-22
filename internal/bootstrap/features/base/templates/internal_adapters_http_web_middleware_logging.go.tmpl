@@ -6,7 +6,7 @@ import (
 	"log/slog"
 	"time"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"{{.ModulePath}}/pkg/logging"
 )
@@ -29,7 +29,7 @@ const (
 // the web package can use the private logCtx(c) helper instead.
 func RequestLogger() echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(c *echo.Context) error {
 			start := time.Now()
 			req := c.Request()
 			res := c.Response()
@@ -46,18 +46,26 @@ func RequestLogger() echo.MiddlewareFunc {
 
 			err := next(c)
 			if err != nil {
-				c.Error(err)
+				c.Echo().HTTPErrorHandler(c, err)
+			}
+
+			rw, _ := echo.UnwrapResponse(res)
+			status := 0
+			size := int64(0)
+			if rw != nil {
+				status = rw.Status
+				size = rw.Size
 			}
 
 			latency := time.Since(start)
 			attrs := []slog.Attr{
 				slog.String("method", req.Method),
 				slog.String("path", req.URL.Path),
-				slog.Int("status", res.Status),
+				slog.Int("status", status),
 				slog.String("latency", latency.String()),
 				slog.Int64("latency_ms", latency.Milliseconds()),
 				slog.String("client_ip", c.RealIP()),
-				slog.Int64("bytes_out", res.Size),
+				slog.Int64("bytes_out", size),
 			}
 			if query := req.URL.RawQuery; query != "" {
 				attrs = append(attrs, slog.String("query", query))
@@ -65,10 +73,10 @@ func RequestLogger() echo.MiddlewareFunc {
 
 			level := slog.LevelInfo
 			msg := "request completed"
-			if res.Status >= 500 {
+			if status >= 500 {
 				level = slog.LevelError
 				msg = "request completed with server error"
-			} else if res.Status >= 400 {
+			} else if status >= 400 {
 				level = slog.LevelWarn
 				msg = "request completed with client error"
 			}

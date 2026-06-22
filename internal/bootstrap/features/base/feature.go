@@ -27,11 +27,11 @@ func (feature) Dependencies() []string {
 	return []string{
 		"github.com/caarlos0/env/v11",
 		"github.com/joho/godotenv",
-		"github.com/labstack/echo/v4",
+		"github.com/labstack/echo/v5",
 		"github.com/spf13/viper",
 		"github.com/go-playground/validator/v10",
 		"github.com/stretchr/testify",
-		"github.com/swaggo/echo-swagger",
+		"github.com/swaggo/echo-swagger/v2",
 		"github.com/swaggo/files",
 		"github.com/swaggo/swag",
 	}

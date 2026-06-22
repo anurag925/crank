@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/labstack/echo/v4"
+	"github.com/labstack/echo/v5"
 
 	"{{.ModulePath}}/internal/ports"
 )
@@ -14,7 +14,7 @@ import (
 // request context for downstream handlers to read.
 func JWTAuth(tokens ports.TokenService) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
+		return func(	c *echo.Context) error {
 			header := c.Request().Header.Get("Authorization")
 			if header == "" {
 				return echo.NewHTTPError(http.StatusUnauthorized, "missing authorization header")

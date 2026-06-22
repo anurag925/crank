@@ -36,7 +36,7 @@ func (feature) Dependencies() []string {
 		"go.opentelemetry.io/otel/sdk/trace",
 		"go.opentelemetry.io/otel/semconv/v1.26.0",
 		"go.opentelemetry.io/otel/exporters/stdout/stdouttrace",
-		"github.com/labstack/echo/v4", // echoed middleware is the same package
+		"github.com/labstack/echo/v5",
 	}
 }
 
