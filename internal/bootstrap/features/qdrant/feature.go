@@ -26,6 +26,7 @@ func (feature) Templates() embed.FS { return tmpls }
 func (feature) Dependencies() []string {
 	return []string{
 		"github.com/qdrant/go-client",
+		"github.com/go-resty/resty/v2",
 	}
 }
 
@@ -34,5 +35,7 @@ func (feature) Requirements() []string { return nil }
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_adapters_persistence_qdrant_client.go.tmpl", OutputPath: "internal/adapters/persistence/qdrant/client.go"},
+		{TemplatePath: "templates/internal_ports_platform_qdrant.go.tmpl", OutputPath: "internal/ports/platform/qdrant.go"},
+		{TemplatePath: "templates/internal_adapters_platform_qdrant.go.tmpl", OutputPath: "internal/adapters/platform/qdrant.go"},
 	}
 }

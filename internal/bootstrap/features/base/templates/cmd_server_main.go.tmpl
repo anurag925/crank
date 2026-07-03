@@ -60,6 +60,10 @@ import (
 {{- if .Has "outbox"}}
 	outboxadapter "{{.ModulePath}}/internal/adapters/outbox"
 {{- end}}
+{{- if .Has "audit"}}
+	auditadapter "{{.ModulePath}}/internal/adapters/audit"
+	auditapp "{{.ModulePath}}/internal/application/audit"
+{{- end}}
 )
 
 // @title           {{.ProjectName}} API
@@ -80,8 +84,7 @@ import (
 func main() {
 	cfg := config.Load()
 
-	level := parseLevel(cfg.Logging.Level)
-	logger := logging.New(level, cfg.Logging.AddSource)
+	logger := logging.New(logging.ParseLevel(cfg.Logging.Level), cfg.Logging.AddSource)
 	slog.SetDefault(logger)
 
 	logger.Info("starting application",
@@ -158,7 +161,7 @@ func main() {
 	}
 	defer tc.Close()
 	go func() {
-		w := temporal.NewWorker(tc, cfg.Temporal)
+		w := temporal.NewWorker(tc, cfg.Temporal, nil)
 		if err := w.Run(worker.InterruptCh()); err != nil {
 			logger.Error("temporal worker stopped with error", "error", err)
 		}
@@ -195,6 +198,17 @@ func main() {
 	tokens := crypto.NewJWTTokenService(cfg.JWT)
 	_ = hasher
 {{end}}
+{{if .Has "audit"}}
+{{if .Has "gorm"}}
+	auditRepo := gorm.NewAuditRepository(gormDB)
+{{else if .Has "bun"}}
+	auditRepo := bun.NewAuditRepository(db)
+{{end}}
+	auditLogger := auditadapter.NewLogger(auditRepo)
+	auditLogger.Subscribe(bus)
+	auditQry := auditapp.NewQueryHandler(auditRepo)
+	auditHandler := web.NewAuditHandler(auditQry)
+{{end}}
 	userCmd := userapp.NewCommandHandler(userRepo, uow)
 	userQry := userapp.NewQueryHandler(userRepo)
 	userHandler := web.NewUserHandler(userCmd, userQry)
@@ -213,10 +227,10 @@ func main() {
 		if resp, _ := echo.UnwrapResponse(c.Response()); resp != nil && resp.Committed {
 			return
 		}
-		reqLog := logging.L(c.Request().Context())
+		ctx := c.Request().Context()
 
 		if ve, ok := err.(*validator.ValidationError); ok {
-			reqLog.Warn("validation failed", "errors", ve.Errors)
+			slog.WarnContext(ctx, "validation failed", "errors", ve.Errors)
 			_ = c.JSON(ve.HTTPStatus, model.APIError{Error: ve.Message, Details: ve.Errors})
 			return
 		}
@@ -224,7 +238,7 @@ func main() {
 			_ = c.JSON(he.Code, model.APIError{Error: he.Message})
 			return
 		}
-		reqLog.Error("unhandled error", "error", err)
+		slog.ErrorContext(ctx, "unhandled error", "error", err)
 		_ = c.JSON(http.StatusInternalServerError, model.APIError{Error: "internal server error"})
 	}
 
@@ -232,6 +246,9 @@ func main() {
 {{if .Has "auth"}}
 	authHandler := web.NewAuthHandler(userCmd, userQry, tokens)
 	authHandler.Register(e)
+{{end}}
+{{if .Has "audit"}}
+	auditHandler.Register(e.Group("/api/v1"))
 {{end}}
 {{if .Has "views"}}
 	web.ServeViews(e, cfg.Views, logger)
@@ -262,19 +279,6 @@ func main() {
 	outboxCancel()
 {{end}}
 	logger.Info("server stopped")
-}
-
-func parseLevel(s string) slog.Level {
-	switch s {
-	case "debug":
-		return slog.LevelDebug
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
-	}
 }
 
 var _ = user.ErrUserNotFound

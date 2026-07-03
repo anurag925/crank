@@ -1,0 +1,60 @@
+package platform
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"github.com/redis/go-redis/v9"
+
+	"{{.ModulePath}}/internal/ports"
+)
+
+// RedisCache implements ports.Cache using go-redis. It is nil-safe: a nil
+// receiver returns ("", false, nil) from Get and nil from Set/Del.
+type RedisCache struct {
+	client *redis.Client
+}
+
+// NewRedisCache wraps a *redis.Client as a ports.Cache implementation.
+func NewRedisCache(client *redis.Client) *RedisCache {
+	return &RedisCache{client: client}
+}
+
+// Compile-time assertion.
+var _ ports.Cache = (*RedisCache)(nil)
+
+func (c *RedisCache) Get(ctx context.Context, key string) (string, bool, error) {
+	if c == nil || c.client == nil {
+		return "", false, nil
+	}
+	val, err := c.client.Get(ctx, key).Result()
+	if err == redis.Nil {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, fmt.Errorf("redis get %s: %w", key, err)
+	}
+	return val, true, nil
+}
+
+func (c *RedisCache) Set(ctx context.Context, key, value string, ttl time.Duration) error {
+	if c == nil || c.client == nil {
+		return nil
+	}
+	if err := c.client.Set(ctx, key, value, ttl).Err(); err != nil {
+		return fmt.Errorf("redis set %s: %w", key, err)
+	}
+	return nil
+}
+
+func (c *RedisCache) Del(ctx context.Context, keys ...string) (int64, error) {
+	if c == nil || c.client == nil {
+		return 0, nil
+	}
+	n, err := c.client.Del(ctx, keys...).Result()
+	if err != nil {
+		return 0, fmt.Errorf("redis del: %w", err)
+	}
+	return n, nil
+}

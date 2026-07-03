@@ -1,0 +1,19 @@
+package audit
+
+import (
+	"context"
+
+	"{{.ModulePath}}/internal/domain/audit"
+)
+
+type QueryHandler struct {
+	repo audit.Repository
+}
+
+func NewQueryHandler(repo audit.Repository) *QueryHandler {
+	return &QueryHandler{repo: repo}
+}
+
+func (h *QueryHandler) ListByEntity(ctx context.Context, entityType, entityID string) ([]audit.AuditEvent, error) {
+	return h.repo.ListByEntity(ctx, entityType, entityID)
+}

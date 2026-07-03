@@ -2,6 +2,7 @@ package web
 
 import (
 	"errors"
+	"log/slog"
 	"net/http"
 
 	"github.com/labstack/echo/v5"
@@ -72,7 +73,7 @@ func (h *AuthHandler) RegisterUser(	c *echo.Context) error {
 	// The user id is generated server-side at the application layer; we
 	// pass a placeholder string and the command handler will produce a
 	// typed id from it. For a real id, use a uuid library.
-	ctx, _ := logCtx(c)
+	ctx := c.Request().Context()
 	out, err := h.cmd.HandleCreate(ctx, user.CreateUserCommand{
 		ID:    in.Email,
 		Name:  in.Name,
@@ -108,10 +109,10 @@ func (h *AuthHandler) Login(	c *echo.Context) error {
 	if err := c.Bind(&in); err != nil {
 		return err
 	}
-	ctx, log := logCtx(c)
+	ctx := c.Request().Context()
 	u, err := h.qry.HandleGet(ctx, user.GetUserQuery{ID: in.Email})
 	if err != nil {
-		log.Warn("login failed", "email", in.Email, "error", err)
+		slog.WarnContext(ctx, "login failed", "email", in.Email, "error", err)
 		return c.JSON(http.StatusUnauthorized, model.APIError{Error: "invalid credentials"})
 	}
 	if u.Email() != in.Email {

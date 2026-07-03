@@ -16,15 +16,47 @@ const (
 	userIDKey    contextKey = "user_id"
 )
 
-// New creates a slog.Logger configured with the given level and wrapped with
-// the redaction handler. When addSource is true every log entry includes a
+// ContextHandler wraps a slog.Handler and automatically injects
+// request_id and user_id from the Go context into every log record.
+// This means any code calling slog.InfoContext, slog.WarnContext, etc.
+// with a context.Context gets enrichment for free — no need to call a
+// helper function. Third-party code and deferred goroutines also benefit
+// automatically as long as the context is propagated.
+type ContextHandler struct {
+	slog.Handler
+}
+
+func (h *ContextHandler) Handle(ctx context.Context, r slog.Record) error {
+	if id, ok := ctx.Value(requestIDKey).(string); ok && id != "" {
+		r.AddAttrs(slog.String("request_id", id))
+	}
+	if uid, ok := ctx.Value(userIDKey).(string); ok && uid != "" {
+		r.AddAttrs(slog.String("user_id", uid))
+	}
+	return h.Handler.Handle(ctx, r)
+}
+
+func (h *ContextHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	return &ContextHandler{Handler: h.Handler.WithAttrs(attrs)}
+}
+
+func (h *ContextHandler) WithGroup(name string) slog.Handler {
+	return &ContextHandler{Handler: h.Handler.WithGroup(name)}
+}
+
+// New creates a slog.Logger with a three-layer handler stack:
+//
+//	JSONHandler → redactionHandler → ContextHandler
+//
+// JSON emits structured output, the redaction handler scrubs sensitive
+// values, and ContextHandler auto-injects request_id and user_id from
+// the Go context. When addSource is true every log entry includes a
 // compressed source location (e.g. "handler/user.go:42").
 func New(level slog.Leveler, addSource bool) *slog.Logger {
 	opts := &slog.HandlerOptions{
 		Level:     level,
 		AddSource: addSource,
 		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-			// Compress the source path to a project-relative short form.
 			if a.Key == slog.SourceKey {
 				if src, ok := a.Value.Any().(*slog.Source); ok {
 					a.Value = slog.StringValue(shortSource(src))
@@ -34,10 +66,25 @@ func New(level slog.Leveler, addSource bool) *slog.Logger {
 		},
 	}
 
-	handler := slog.NewJSONHandler(os.Stdout, opts)
+	jsonHandler := slog.NewJSONHandler(os.Stdout, opts)
+	redactHandler := &redactionHandler{handler: jsonHandler}
+	ctxHandler := &ContextHandler{Handler: redactHandler}
 
-	// Wrap with the redaction handler to scrub sensitive keywords.
-	return slog.New(&redactionHandler{handler: handler})
+	return slog.New(ctxHandler)
+}
+
+// ParseLevel converts a config string to a slog.Level. Defaults to Info.
+func ParseLevel(s string) slog.Level {
+	switch s {
+	case "debug":
+		return slog.LevelDebug
+	case "warn":
+		return slog.LevelWarn
+	case "error":
+		return slog.LevelError
+	default:
+		return slog.LevelInfo
+	}
 }
 
 // shortSource compresses a full source path to the last two directory
@@ -71,20 +118,6 @@ func itoa(n int) string {
 // ---------------------------------------------------------------------------
 // Context helpers
 // ---------------------------------------------------------------------------
-
-// L returns a logger enriched with any request-scoped values found in the
-// context (request_id, user_id). Callers should pass data into context via
-// WithRequestID / WithUserID and retrieve the enriched logger via L(ctx).
-func L(ctx context.Context) *slog.Logger {
-	l := slog.Default()
-	if id, ok := ctx.Value(requestIDKey).(string); ok && id != "" {
-		l = l.With("request_id", id)
-	}
-	if uid, ok := ctx.Value(userIDKey).(string); ok && uid != "" {
-		l = l.With("user_id", uid)
-	}
-	return l
-}
 
 // WithRequestID stores the request ID in the context.
 func WithRequestID(ctx context.Context, id string) context.Context {

@@ -200,6 +200,13 @@ func featureConfigData(pkgName string) map[string]configInjection {
 			YAMLSection: "\nviews:\n  # Set enabled to true to serve the embedded React SPA.\n  # For local frontend dev, set dev_server to your Vite URL (e.g. \"http://localhost:5173\").\n  enabled: false\n  dev_server: \"\"\n",
 			EnvSection:  "",
 		},
+		"audit": {
+			StructField: "",
+			StructDef:   "",
+			Defaults:    "",
+			YAMLSection: "",
+			EnvSection:  "",
+		},
 	}
 }
 

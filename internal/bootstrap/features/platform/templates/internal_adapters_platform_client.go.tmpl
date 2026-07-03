@@ -1,0 +1,79 @@
+package platform
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+	"time"
+
+	"github.com/go-resty/resty/v2"
+)
+
+// Client is a small HTTP helper used by every typed platform client. It owns
+// only the minimum surface: request building, timeouts, status checks, and
+// JSON decoding. It does not retry or do tracing.
+type Client struct {
+	BaseURL string
+	Resty   *resty.Client
+}
+
+// NewClient builds a Client with a 5-second timeout. An empty baseURL is
+// allowed; the caller is responsible for guarding the client when it is empty.
+func NewClient(baseURL string) *Client {
+	r := resty.New().
+		SetTimeout(5 * time.Second).
+		SetBaseURL(strings.TrimRight(baseURL, "/"))
+
+	return &Client{
+		BaseURL: strings.TrimRight(baseURL, "/"),
+		Resty:   r,
+	}
+}
+
+// Health returns nil if the server responds with a success-ish status and an
+// error otherwise. Honours the OpenBao-style "sealed/uninitialized" convention
+// where 501 and 503 still count as alive.
+func (c *Client) Health(ctx context.Context, path string) error {
+	if c == nil || c.BaseURL == "" {
+		return fmt.Errorf("platform: base url is empty")
+	}
+
+	resp, err := c.Resty.R().SetContext(ctx).Get("/" + strings.TrimLeft(path, "/"))
+	if err != nil {
+		return err
+	}
+
+	statusCode := resp.StatusCode()
+	if statusCode >= 200 && statusCode < 400 {
+		return nil
+	}
+	if statusCode == http.StatusServiceUnavailable || statusCode == http.StatusNotImplemented {
+		return nil
+	}
+
+	url := c.BaseURL + "/" + strings.TrimLeft(path, "/")
+	return fmt.Errorf("platform: %s returned %d", url, statusCode)
+}
+
+// GetJSON issues a GET and decodes JSON into out. Does not follow redirects.
+func (c *Client) GetJSON(ctx context.Context, path string, out any) error {
+	if c == nil || c.BaseURL == "" {
+		return fmt.Errorf("platform: base url is empty")
+	}
+
+	resp, err := c.Resty.R().
+		SetContext(ctx).
+		SetHeader("Accept", "application/json").
+		SetResult(out).
+		Get("/" + strings.TrimLeft(path, "/"))
+	if err != nil {
+		return err
+	}
+
+	if resp.IsError() {
+		url := c.BaseURL + "/" + strings.TrimLeft(path, "/")
+		return fmt.Errorf("platform: %s returned %d", url, resp.StatusCode())
+	}
+	return nil
+}

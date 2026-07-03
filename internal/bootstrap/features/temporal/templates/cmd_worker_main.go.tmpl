@@ -6,8 +6,9 @@ import (
 
 	"go.temporal.io/sdk/worker"
 
-	"{{.ModulePath}}/internal/config"
 	"{{.ModulePath}}/internal/adapters/temporal"
+	"{{.ModulePath}}/internal/adapters/temporal/activity"
+	"{{.ModulePath}}/internal/config"
 	"{{.ModulePath}}/pkg/logging"
 )
 
@@ -21,7 +22,7 @@ import (
 func main() {
 	cfg := config.Load()
 
-	logger := logging.New(parseLevel(cfg.Logging.Level), cfg.Logging.AddSource)
+	logger := logging.New(logging.ParseLevel(cfg.Logging.Level), cfg.Logging.AddSource)
 	slog.SetDefault(logger)
 
 	logger.Info("starting temporal worker",
@@ -37,25 +38,12 @@ func main() {
 	}
 	defer c.Close()
 
-	w := temporal.NewWorker(c, cfg.Temporal)
+	acts := activity.NewActivities()
+	w := temporal.NewWorker(c, cfg.Temporal, acts)
 
 	logger.Info("temporal worker running; press Ctrl+C to stop", "task_queue", cfg.Temporal.TaskQueue)
 	if err := w.Run(worker.InterruptCh()); err != nil {
 		logger.Error("temporal worker stopped with error", "error", err)
 		os.Exit(1)
-	}
-}
-
-// parseLevel converts a config string to a slog.Level. Defaults to Info.
-func parseLevel(s string) slog.Level {
-	switch s {
-	case "debug":
-		return slog.LevelDebug
-	case "warn":
-		return slog.LevelWarn
-	case "error":
-		return slog.LevelError
-	default:
-		return slog.LevelInfo
 	}
 }

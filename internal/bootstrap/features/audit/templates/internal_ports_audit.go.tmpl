@@ -1,0 +1,13 @@
+package ports
+
+import (
+	"context"
+
+	"{{.ModulePath}}/internal/domain/audit"
+)
+
+// AuditStore is the application-layer port for querying audit events.
+// The audit feature provides a GORM/Bun implementation.
+type AuditStore interface {
+	ListByEntity(ctx context.Context, entityType, entityID string) ([]audit.AuditEvent, error)
+}

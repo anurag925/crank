@@ -1,0 +1,20 @@
+package platform
+
+import "context"
+
+// Qdrant is the internal client for the Qdrant vector store. Only the
+// minimum surface used by the application layer is exposed.
+type Qdrant interface {
+	Health(ctx context.Context) error
+	CollectionExists(ctx context.Context, name string) (bool, error)
+	EnsureCollection(ctx context.Context, name string, vectorSize int) error
+	UpsertPoint(ctx context.Context, collection string, pointID string, vector []float32, payload map[string]any) error
+	SearchPoints(ctx context.Context, collection string, vector []float32, limit int) ([]SearchResult, error)
+	DeletePoint(ctx context.Context, collection string, pointID string) error
+}
+
+type SearchResult struct {
+	PointID string
+	Score   float32
+	Payload map[string]any
+}

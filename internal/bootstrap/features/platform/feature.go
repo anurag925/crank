@@ -1,4 +1,4 @@
-package redis
+package platform
 
 import (
 	"embed"
@@ -17,15 +17,15 @@ func init() {
 	}
 }
 
-func (feature) Name() string { return "redis" }
+func (feature) Name() string { return "platform" }
 func (feature) Description() string {
-	return "Redis Cache port + go-redis client (session storage, caching, rate limiting)"
+	return "Platform client pattern: shared HTTP helper + typed port interfaces for external services"
 }
 func (feature) Templates() embed.FS { return tmpls }
 
 func (feature) Dependencies() []string {
 	return []string{
-		"github.com/redis/go-redis/v9",
+		"github.com/go-resty/resty/v2",
 	}
 }
 
@@ -33,8 +33,7 @@ func (feature) Requirements() []string { return nil }
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
-		{TemplatePath: "templates/internal_ports_cache.go.tmpl", OutputPath: "internal/ports/cache.go"},
-		{TemplatePath: "templates/internal_adapters_cache_redis_client.go.tmpl", OutputPath: "internal/adapters/cache/redis/client.go"},
-		{TemplatePath: "templates/internal_adapters_platform_redis.go.tmpl", OutputPath: "internal/adapters/platform/redis.go"},
+		{TemplatePath: "templates/internal_adapters_platform_client.go.tmpl", OutputPath: "internal/adapters/platform/client.go"},
+		{TemplatePath: "templates/internal_ports_platform_types.go.tmpl", OutputPath: "internal/ports/platform/types.go"},
 	}
 }

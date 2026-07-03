@@ -23,6 +23,10 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/views"
 
+	// Phase 4-5: new features.
+	_ "github.com/anurag925/crank/internal/bootstrap/features/platform"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/audit"
+
 	// Tool packages self-register with the global tool registry via init().
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/build"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/dev"

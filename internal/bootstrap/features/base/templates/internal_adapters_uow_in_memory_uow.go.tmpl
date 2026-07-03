@@ -6,6 +6,7 @@ package uow
 
 import (
 	"context"
+	"log/slog"
 
 	"{{.ModulePath}}/internal/domain/shared"
 	"{{.ModulePath}}/internal/ports"
@@ -27,13 +28,17 @@ func NewInMemoryUoW(bus ports.EventBus) *InMemoryUoW {
 
 // SaveAndPublish runs the save closure, then publishes events if save
 // succeeded. The save closure decides which repository to use; the
-// UnitOfWork itself does not touch the database.
+// UnitOfWork itself does not touch the database. If the publish step
+// fails the error is logged but the save is not unwound — consistent
+// with the behaviour of calling repo.Save and bus.Publish separately.
 func (u *InMemoryUoW) SaveAndPublish(ctx context.Context, save func(ctx context.Context) error, events []shared.DomainEvent) error {
 	if err := save(ctx); err != nil {
 		return err
 	}
 	if u.bus != nil && len(events) > 0 {
-		_ = u.bus.Publish(ctx, events...)
+		if err := u.bus.Publish(ctx, events...); err != nil {
+			slog.ErrorContext(ctx, "failed to publish domain events", "error", err)
+		}
 	}
 	return nil
 }

@@ -1,0 +1,33 @@
+package audit
+
+import "time"
+
+// AuditEvent is a persisted record of a domain event. It is the queryable
+// audit trail — every event published through the EventBus is appended
+// here by the audit logger.
+type AuditEvent struct {
+	id         string
+	entityType string
+	entityID   string
+	eventType  string
+	payload    []byte
+	occurredAt time.Time
+}
+
+func NewAuditEvent(id, entityType, entityID, eventType string, payload []byte, occurredAt time.Time) AuditEvent {
+	return AuditEvent{
+		id:         id,
+		entityType: entityType,
+		entityID:   entityID,
+		eventType:  eventType,
+		payload:    payload,
+		occurredAt: occurredAt,
+	}
+}
+
+func (e AuditEvent) ID() string              { return e.id }
+func (e AuditEvent) EntityType() string      { return e.entityType }
+func (e AuditEvent) EntityID() string        { return e.entityID }
+func (e AuditEvent) EventType() string       { return e.eventType }
+func (e AuditEvent) Payload() []byte         { return e.payload }
+func (e AuditEvent) OccurredAt() time.Time   { return e.occurredAt }

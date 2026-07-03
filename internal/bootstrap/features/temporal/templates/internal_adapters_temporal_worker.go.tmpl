@@ -29,26 +29,25 @@ func NewClient(cfg config.TemporalConfig, logger *slog.Logger) (client.Client, e
 	return c, nil
 }
 
-// NewWorker creates a Temporal worker bound to the configured task queue
-// and registers every workflow and activity in the project.
+// NewWorker creates a Temporal worker bound to the configured task queue.
 //
-// Workflows and activities generated with `crank make workflow|activity` are
-// wired in automatically at the marker comments below — do not remove them.
-func NewWorker(c client.Client, cfg config.TemporalConfig) worker.Worker {
+// Pass acts=nil for the in-process server worker (sample workflows only, no
+// activities). Pass a non-nil acts for the dedicated worker process that
+// registers all real activities.
+//
+// Workflows and activities generated via `crank make` are auto-registered
+// through marker comments in registerWorkflows() and the Activities.Register()
+// method. Do not remove either marker.
+func NewWorker(c client.Client, cfg config.TemporalConfig, acts *activity.Activities) worker.Worker {
 	w := worker.New(c, cfg.TaskQueue, worker.Options{})
 	registerWorkflows(w)
-	registerActivities(w)
+	if acts != nil {
+		acts.Register(w)
+	}
 	return w
 }
 
-// registerWorkflows registers all workflow functions with the worker.
 func registerWorkflows(w worker.Worker) {
 	w.RegisterWorkflow(workflow.GreetingWorkflow)
 	// crank:workflow-register (do not remove — `crank make workflow` inserts registrations here)
-}
-
-// registerActivities registers all activity functions with the worker.
-func registerActivities(w worker.Worker) {
-	w.RegisterActivity(activity.Greet)
-	// crank:activity-register (do not remove — `crank make activity` inserts registrations here)
 }

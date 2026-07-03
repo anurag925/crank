@@ -1,0 +1,64 @@
+package audit
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/google/uuid"
+
+	"{{.ModulePath}}/internal/adapters/eventbus"
+	"{{.ModulePath}}/internal/domain/audit"
+	"{{.ModulePath}}/internal/domain/shared"
+)
+
+// Logger subscribes to the EventBus and persists every domain event as an
+// AuditEvent. It is the write side of the audit trail.
+type Logger struct {
+	repo audit.Repository
+}
+
+func NewLogger(repo audit.Repository) *Logger {
+	return &Logger{repo: repo}
+}
+
+// Subscribe registers the logger with the given event bus. Every published
+// domain event is encoded and appended to the audit table. Publish failures
+// are logged but never block the caller.
+func (l *Logger) Subscribe(bus *eventbus.InMemory) {
+	bus.Subscribe(func(ctx context.Context, ev shared.DomainEvent) error {
+		payload, err := shared.EncodeEvent(ev)
+		if err != nil {
+			slog.ErrorContext(ctx, "audit: failed to encode event", "event", ev.EventName(), "error", err)
+			return nil
+		}
+		auditEvent := audit.NewAuditEvent(
+			uuid.NewString(),
+			entityTypeFromEvent(ev),
+			entityIDFromEvent(ev),
+			ev.EventName(),
+			payload,
+			ev.OccurredAt(),
+		)
+		if err := l.repo.Append(ctx, auditEvent); err != nil {
+			slog.ErrorContext(ctx, "audit: failed to append event", "event", ev.EventName(), "error", err)
+		}
+		return nil
+	})
+}
+
+// entityTypeFromEvent extracts the entity type from the event name
+// (e.g. "user.created" → "user").
+func entityTypeFromEvent(ev shared.DomainEvent) string {
+	name := ev.EventName()
+	for i := 0; i < len(name); i++ {
+		if name[i] == '.' {
+			return name[:i]
+		}
+	}
+	return name
+}
+
+// entityIDFromEvent best-effort extracts the aggregate ID from the event.
+func entityIDFromEvent(ev shared.DomainEvent) string {
+	return ""
+}

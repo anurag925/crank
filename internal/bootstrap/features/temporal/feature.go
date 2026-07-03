@@ -35,8 +35,10 @@ func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_adapters_temporal_logger.go.tmpl", OutputPath: "internal/adapters/temporal/logger.go"},
 		{TemplatePath: "templates/internal_adapters_temporal_worker.go.tmpl", OutputPath: "internal/adapters/temporal/worker.go"},
+		{TemplatePath: "templates/internal_adapters_temporal_activity_activities.go.tmpl", OutputPath: "internal/adapters/temporal/activity/activities.go"},
 		{TemplatePath: "templates/internal_adapters_temporal_workflow_greeting.go.tmpl", OutputPath: "internal/adapters/temporal/workflow/greeting.go"},
 		{TemplatePath: "templates/internal_adapters_temporal_activity_greeting.go.tmpl", OutputPath: "internal/adapters/temporal/activity/greeting.go"},
 		{TemplatePath: "templates/cmd_worker_main.go.tmpl", OutputPath: "cmd/worker/main.go"},
+		{TemplatePath: "templates/Dockerfile.worker.tmpl", OutputPath: "Dockerfile.worker"},
 	}
 }

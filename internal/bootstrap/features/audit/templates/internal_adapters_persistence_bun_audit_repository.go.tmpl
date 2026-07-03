@@ -1,0 +1,71 @@
+package bun
+
+import (
+	"context"
+	"database/sql"
+	"time"
+
+	"{{.ModulePath}}/internal/domain/audit"
+
+	"github.com/uptrace/bun"
+)
+
+type auditRow struct {
+	bun.BaseModel `bun:"table:audit_events"`
+
+	ID         string    `bun:"id,pk,type:varchar(255)"`
+	EntityType string    `bun:"entity_type,type:varchar(128)"`
+	EntityID   string    `bun:"entity_id,type:varchar(255)"`
+	EventType  string    `bun:"event_type,type:varchar(255)"`
+	Payload    []byte    `bun:"payload,type:jsonb"`
+	OccurredAt time.Time `bun:"occurred_at"`
+}
+
+type AuditRepository struct {
+	db *bun.DB
+}
+
+func NewAuditRepository(db *bun.DB) *AuditRepository {
+	return &AuditRepository{db: db}
+}
+
+var _ audit.Repository = (*AuditRepository)(nil)
+
+func (r *AuditRepository) Append(ctx context.Context, events ...audit.AuditEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+	rows := make([]auditRow, 0, len(events))
+	for _, e := range events {
+		rows = append(rows, auditRow{
+			ID:         e.ID(),
+			EntityType: e.EntityType(),
+			EntityID:   e.EntityID(),
+			EventType:  e.EventType(),
+			Payload:    e.Payload(),
+			OccurredAt: e.OccurredAt(),
+		})
+	}
+	_, err := r.db.NewInsert().Model(&rows).Exec(ctx)
+	return err
+}
+
+func (r *AuditRepository) ListByEntity(ctx context.Context, entityType, entityID string) ([]audit.AuditEvent, error) {
+	var rows []auditRow
+	err := r.db.NewSelect().
+		Model(&rows).
+		Where("entity_type = ?", entityType).
+		Where("entity_id = ?", entityID).
+		OrderExpr("occurred_at DESC").
+		Scan(ctx)
+	if err != nil && err != sql.ErrNoRows {
+		return nil, err
+	}
+	events := make([]audit.AuditEvent, 0, len(rows))
+	for _, row := range rows {
+		events = append(events, audit.NewAuditEvent(
+			row.ID, row.EntityType, row.EntityID, row.EventType, row.Payload, row.OccurredAt,
+		))
+	}
+	return events, nil
+}

@@ -1,0 +1,9 @@
+package audit
+
+import "context"
+
+// Repository is the port for persisting and querying audit events.
+type Repository interface {
+	Append(ctx context.Context, events ...AuditEvent) error
+	ListByEntity(ctx context.Context, entityType, entityID string) ([]AuditEvent, error)
+}

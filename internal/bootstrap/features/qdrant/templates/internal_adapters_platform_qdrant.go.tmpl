@@ -1,0 +1,130 @@
+package platform
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+
+	"{{.ModulePath}}/internal/ports/platform"
+)
+
+// QdrantClient is the typed HTTP client for the Qdrant vector store.
+type QdrantClient struct{ *Client }
+
+// NewQdrantClient constructs a Qdrant client targeting the given base URL.
+func NewQdrantClient(baseURL string) *QdrantClient {
+	return &QdrantClient{Client: NewClient(baseURL)}
+}
+
+// Compile-time assertion that QdrantClient satisfies the port.
+var _ platform.Qdrant = (*QdrantClient)(nil)
+
+func (c *QdrantClient) Health(ctx context.Context) error {
+	if err := c.Client.Health(ctx, "/readyz"); err == nil {
+		return nil
+	}
+	return c.Client.Health(ctx, "/")
+}
+
+func (c *QdrantClient) CollectionExists(ctx context.Context, name string) (bool, error) {
+	if c == nil || c.BaseURL == "" {
+		return false, fmt.Errorf("qdrant: base url is empty")
+	}
+	resp, err := c.Resty.R().SetContext(ctx).Get("/collections/" + name)
+	if err != nil {
+		return false, err
+	}
+	switch resp.StatusCode() {
+	case http.StatusOK:
+		return true, nil
+	case http.StatusNotFound:
+		return false, nil
+	default:
+		return false, fmt.Errorf("qdrant: %s returned %d", c.BaseURL+"/collections/"+name, resp.StatusCode())
+	}
+}
+
+func (c *QdrantClient) EnsureCollection(ctx context.Context, name string, vectorSize int) error {
+	exists, err := c.CollectionExists(ctx, name)
+	if err != nil {
+		return err
+	}
+	if exists {
+		return nil
+	}
+	body := map[string]any{
+		"vectors": map[string]any{
+			"size":     vectorSize,
+			"distance": "Cosine",
+		},
+	}
+	resp, err := c.Resty.R().SetContext(ctx).SetBody(body).Put("/collections/" + name)
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("qdrant: EnsureCollection %s returned %d: %s", name, resp.StatusCode(), resp.String())
+	}
+	return nil
+}
+
+func (c *QdrantClient) UpsertPoint(ctx context.Context, collection string, pointID string, vector []float32, payload map[string]any) error {
+	req := map[string]any{
+		"points": []map[string]any{
+			{"id": pointID, "vector": vector, "payload": payload},
+		},
+	}
+	resp, err := c.Resty.R().SetContext(ctx).SetBody(req).Put(fmt.Sprintf("/collections/%s/points", collection))
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("qdrant: UpsertPoint returned %d: %s", resp.StatusCode(), resp.String())
+	}
+	return nil
+}
+
+type searchResponse struct {
+	Result []struct {
+		ID      string         `json:"id"`
+		Score   float32        `json:"score"`
+		Payload map[string]any `json:"payload"`
+	} `json:"result"`
+}
+
+func (c *QdrantClient) SearchPoints(ctx context.Context, collection string, vector []float32, limit int) ([]platform.SearchResult, error) {
+	req := map[string]any{
+		"vector":       vector,
+		"limit":        limit,
+		"with_payload": true,
+	}
+	var out searchResponse
+	resp, err := c.Resty.R().SetContext(ctx).SetBody(req).SetResult(&out).Post(fmt.Sprintf("/collections/%s/points/search", collection))
+	if err != nil {
+		return nil, err
+	}
+	if resp.IsError() {
+		return nil, fmt.Errorf("qdrant: SearchPoints returned %d: %s", resp.StatusCode(), resp.String())
+	}
+	results := make([]platform.SearchResult, 0, len(out.Result))
+	for _, r := range out.Result {
+		results = append(results, platform.SearchResult{
+			PointID: r.ID,
+			Score:   r.Score,
+			Payload: r.Payload,
+		})
+	}
+	return results, nil
+}
+
+func (c *QdrantClient) DeletePoint(ctx context.Context, collection string, pointID string) error {
+	req := map[string]any{"points": []string{pointID}}
+	resp, err := c.Resty.R().SetContext(ctx).SetBody(req).Post(fmt.Sprintf("/collections/%s/points/delete", collection))
+	if err != nil {
+		return err
+	}
+	if resp.IsError() {
+		return fmt.Errorf("qdrant: DeletePoint returned %d: %s", resp.StatusCode(), resp.String())
+	}
+	return nil
+}

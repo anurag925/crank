@@ -19,6 +19,9 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/qdrant"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
+	// Phase 4-5: new features
+	_ "github.com/anurag925/crank/internal/bootstrap/features/audit"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/platform"
 	"github.com/anurag925/crank/internal/bootstrap/scaffold"
 )
 
@@ -123,6 +126,8 @@ func TestGlobalRegistry_HasAllFeatures(t *testing.T) {
 		"mongodb":  true,
 		"qdrant":   true,
 		"temporal": true,
+		"platform": true,
+		"audit":    true,
 	}
 	for _, n := range names {
 		delete(want, n)
@@ -1395,15 +1400,24 @@ func TestTemporal_GoMod_Deps(t *testing.T) {
 
 func TestTemporal_Worker_RegistersAndHasMarkers(t *testing.T) {
 	r := generateProject(t, "temporalworker", []string{"temporal"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/temporal/worker.go")
+	dir := r.ProjectDir
+
+	content := readFile(t, dir, "internal/adapters/temporal/worker.go")
 	assertContains(t, content, "// crank:workflow-register", "worker workflow marker")
-	assertContains(t, content, "// crank:activity-register", "worker activity marker")
 	assertContains(t, content, "w.RegisterWorkflow(workflow.GreetingWorkflow)", "worker registers example workflow")
-	assertContains(t, content, "w.RegisterActivity(activity.Greet)", "worker registers example activity")
+	assertNotContains(t, content, "// crank:activity-register", "worker no longer has activity marker")
+	assertNotContains(t, content, "w.RegisterActivity", "worker no longer registers activities directly")
 	assertContains(t, content, "config.TemporalConfig", "worker uses shared config type")
-	// NewClient and NewWorker both live in worker.go in the DDD layout.
 	assertContains(t, content, "func NewClient(", "worker file exposes NewClient")
 	assertContains(t, content, "func NewWorker(", "worker file exposes NewWorker")
+
+	// Activity registration is now in the Activities container.
+	acts := readFile(t, dir, "internal/adapters/temporal/activity/activities.go")
+	assertContains(t, acts, "// crank:activity-register", "activities has activity marker")
+	assertContains(t, acts, "// crank:activity-fields", "activities has activity-fields marker")
+	assertContains(t, acts, "w.RegisterActivity(Greet)", "activities registers example activity")
+	assertContains(t, acts, "type Activities struct", "activities container")
+	assertContains(t, acts, "func (a *Activities) Register", "activities Register method")
 }
 
 func TestTemporal_Config_HasTemporalSection(t *testing.T) {
@@ -1532,6 +1546,19 @@ func TestAll_Features(t *testing.T) {
 	assertFileExists(t, dir, "internal/adapters/temporal/workflow/greeting.go")
 	assertFileExists(t, dir, "internal/adapters/temporal/activity/greeting.go")
 	assertFileExists(t, dir, "cmd/worker/main.go")
+
+	// platform files (new in Phase 4)
+	assertFileExists(t, dir, "internal/adapters/platform/client.go")
+	assertFileExists(t, dir, "internal/ports/platform/types.go")
+
+	// audit files (new in Phase 5)
+	assertFileExists(t, dir, "internal/domain/audit/event.go")
+	assertFileExists(t, dir, "internal/domain/audit/repository.go")
+	assertFileExists(t, dir, "internal/ports/audit.go")
+	assertFileExists(t, dir, "internal/adapters/audit/logger.go")
+	assertFileExists(t, dir, "internal/application/audit/query_handler.go")
+	assertFileExists(t, dir, "internal/adapters/http/web/audit_handler.go")
+	assertFileExists(t, dir, "migrations/000003_add_audit_events.up.sql")
 
 	// Verify deps are returned via Result
 	assertDepsContains(t, r.Dependencies, "golang-jwt", "all features deps")
@@ -1691,4 +1718,225 @@ func TestAdd_TemporalToBaseProject_UpdatesConfig(t *testing.T) {
 
 	// No standalone config.go should exist in temporal package
 	assertFileNotExists(t, r2.ProjectDir, "internal/adapters/temporal/config.go")
+}
+
+// ==========================================================================
+// PHASE 1: Logging ContextHandler
+// ==========================================================================
+
+func TestBase_Logging_ContextHandler(t *testing.T) {
+	t.Run("ContextHandler injected in New()", func(t *testing.T) {
+		project := generateProject(t, "logctx", nil).ProjectDir
+		logger := readFile(t, project, "pkg/logging/logger.go")
+		assertContains(t, logger, "ContextHandler", "logger.go has ContextHandler")
+		assertContains(t, logger, "func (h *ContextHandler) Handle", "logger.go has Handle method")
+		assertNotContains(t, logger, "func L(", "logger.go has no L(ctx)")
+	})
+
+	t.Run("no L(ctx) in middleware", func(t *testing.T) {
+		project := generateProject(t, "logmw", nil).ProjectDir
+		mw := readFile(t, project, "internal/adapters/http/web/middleware/logging.go")
+		assertNotContains(t, mw, "logging.L(", "middleware has no logging.L")
+		assertContains(t, mw, "slog.LogAttrs(ctx", "middleware uses slog.LogAttrs")
+	})
+
+	t.Run("no L(ctx) in main.go error handler", func(t *testing.T) {
+		project := generateProject(t, "logmain", nil).ProjectDir
+		main := readFile(t, project, "cmd/server/main.go")
+		assertNotContains(t, main, "logging.L(", "main has no logging.L")
+		assertContains(t, main, "slog.WarnContext", "main uses slog.WarnContext")
+		assertContains(t, main, "slog.ErrorContext", "main uses slog.ErrorContext")
+	})
+
+	t.Run("ParseLevel exists", func(t *testing.T) {
+		project := generateProject(t, "loglevel", nil).ProjectDir
+		logger := readFile(t, project, "pkg/logging/logger.go")
+		assertContains(t, logger, "func ParseLevel", "logger.go has ParseLevel")
+	})
+
+	t.Run("no parseLevel in main.go", func(t *testing.T) {
+		project := generateProject(t, "lognoparse", nil).ProjectDir
+		main := readFile(t, project, "cmd/server/main.go")
+		assertNotContains(t, main, "func parseLevel", "main has no local parseLevel")
+		assertContains(t, main, "logging.ParseLevel", "main uses logging.ParseLevel")
+	})
+
+	t.Run("no L(ctx) in user_handler.go", func(t *testing.T) {
+		project := generateProject(t, "loguser", nil).ProjectDir
+		handler := readFile(t, project, "internal/adapters/http/web/user_handler.go")
+		assertNotContains(t, handler, "logging.L(", "user handler has no logging.L")
+		assertNotContains(t, handler, "pkg/logging", "user handler imports no logging")
+		assertContains(t, handler, "c.Request().Context()", "user handler uses c.Request().Context()")
+	})
+}
+
+// ==========================================================================
+// PHASE 2: UoW log publish errors
+// ==========================================================================
+
+func TestBase_UoW_LogsPublishErrors(t *testing.T) {
+	project := generateProject(t, "uowlog", nil).ProjectDir
+	uow := readFile(t, project, "internal/adapters/uow/in_memory_uow.go")
+	assertContains(t, uow, "slog.ErrorContext", "uow logs publish errors")
+	assertContains(t, uow, "failed to publish domain events", "uow has error message")
+	assertNotContains(t, uow, "_ = u.bus.Publish", "uow does not silently discard")
+}
+
+// ==========================================================================
+// PHASE 3: Two-process architecture
+// ==========================================================================
+
+func TestTemporal_TwoProcess_WorkerSignature(t *testing.T) {
+	project := generateProject(t, "twoproc", []string{"base", "gorm", "temporal"}).ProjectDir
+
+	worker := readFile(t, project, "internal/adapters/temporal/worker.go")
+	assertContains(t, worker, "acts *activity.Activities", "worker has acts parameter")
+	assertContains(t, worker, "if acts != nil", "worker checks acts for nil")
+	assertContains(t, worker, "acts.Register(w)", "worker calls acts.Register")
+	assertNotContains(t, worker, "func registerActivities", "worker has no registerActivities func")
+
+	activitiesFile := readFile(t, project, "internal/adapters/temporal/activity/activities.go")
+	assertContains(t, activitiesFile, "type Activities struct", "activities has struct")
+	assertContains(t, activitiesFile, "func (a *Activities) Register", "activities has Register method")
+	assertContains(t, activitiesFile, "// crank:activity-register", "activities has activity-register marker")
+	assertContains(t, activitiesFile, "// crank:activity-fields", "activities has activity-fields marker")
+
+	workerMain := readFile(t, project, "cmd/worker/main.go")
+	assertContains(t, workerMain, "activity.NewActivities()", "worker main creates activities")
+	assertContains(t, workerMain, "temporal.NewWorker(c, cfg.Temporal, acts)", "worker main passes acts")
+	assertNotContains(t, workerMain, "func parseLevel", "worker main has no local parseLevel")
+	assertContains(t, workerMain, "logging.ParseLevel", "worker main uses logging.ParseLevel")
+
+	serverMain := readFile(t, project, "cmd/server/main.go")
+	assertContains(t, serverMain, "temporal.NewWorker(tc, cfg.Temporal, nil)", "server passes nil")
+}
+
+func TestTemporal_DockerfileWorker(t *testing.T) {
+	project := generateProject(t, "dockworker", []string{"base", "gorm", "temporal"}).ProjectDir
+	assertFileExists(t, project, "Dockerfile.worker")
+	dockerfile := readFile(t, project, "Dockerfile.worker")
+	assertContains(t, dockerfile, "go build -o /out/worker ./cmd/worker", "worker dockerfile builds worker")
+}
+
+// ==========================================================================
+// PHASE 4: Platform client pattern
+// ==========================================================================
+
+func TestPlatform_FilesExist(t *testing.T) {
+	project := generateProject(t, "plt", []string{"base", "platform"}).ProjectDir
+	assertFileExists(t, project, "internal/adapters/platform/client.go")
+	assertFileExists(t, project, "internal/ports/platform/types.go")
+
+	client := readFile(t, project, "internal/adapters/platform/client.go")
+	assertContains(t, client, "type Client struct", "platform client has struct")
+	assertContains(t, client, "func NewClient(baseURL string) *Client", "platform client has NewClient")
+	assertContains(t, client, "func (c *Client) Health(ctx context.Context, path string) error", "platform client has Health")
+	assertContains(t, client, "func (c *Client) GetJSON(ctx context.Context, path string, out any) error", "platform client has GetJSON")
+	assertContains(t, client, "5 * time.Second", "platform client has 5s timeout")
+}
+
+func TestQdrant_PlatformPattern(t *testing.T) {
+	project := generateProject(t, "pltqdrant", []string{"base", "gorm", "platform", "qdrant"}).ProjectDir
+	assertFileExists(t, project, "internal/ports/platform/qdrant.go")
+	assertFileExists(t, project, "internal/adapters/platform/qdrant.go")
+
+	port := readFile(t, project, "internal/ports/platform/qdrant.go")
+	assertContains(t, port, "type Qdrant interface", "qdrant port is interface")
+	assertContains(t, port, "Health(ctx context.Context) error", "qdrant port has Health")
+	assertContains(t, port, "UpsertPoint", "qdrant port has UpsertPoint")
+	assertContains(t, port, "SearchPoints", "qdrant port has SearchPoints")
+
+	adapter := readFile(t, project, "internal/adapters/platform/qdrant.go")
+	assertContains(t, adapter, "type QdrantClient struct{ *Client }", "qdrant adapter embeds Client")
+	assertContains(t, adapter, "var _ platform.Qdrant = (*QdrantClient)(nil)", "qdrant adapter satisfies port")
+}
+
+func TestRedis_PlatformPattern(t *testing.T) {
+	project := generateProject(t, "pltredis", []string{"base", "gorm", "platform", "redis"}).ProjectDir
+	assertFileExists(t, project, "internal/adapters/platform/redis.go")
+	assertFileExists(t, project, "internal/ports/cache.go")
+
+	adapter := readFile(t, project, "internal/adapters/platform/redis.go")
+	assertContains(t, adapter, "type RedisCache struct", "redis adapter has struct")
+	assertContains(t, adapter, "var _ ports.Cache = (*RedisCache)(nil)", "redis adapter satisfies Cache")
+}
+
+// Old persistence qdrant client still exists alongside the platform adapter.
+func TestQdrant_LegacyClientStillExists(t *testing.T) {
+	project := generateProject(t, "pllegacy", []string{"base", "gorm", "qdrant"}).ProjectDir
+	assertFileExists(t, project, "internal/adapters/persistence/qdrant/client.go")
+}
+
+// ==========================================================================
+// PHASE 5: Audit trail feature
+// ==========================================================================
+
+func TestAudit_FilesExist(t *testing.T) {
+	project := generateProject(t, "audit", []string{"base", "gorm", "audit"}).ProjectDir
+
+	for _, rel := range []string{
+		"internal/domain/audit/event.go",
+		"internal/domain/audit/repository.go",
+		"internal/ports/audit.go",
+		"internal/adapters/persistence/gorm/audit_repository.go",
+		"internal/adapters/audit/logger.go",
+		"internal/application/audit/query_handler.go",
+		"internal/adapters/http/web/audit_handler.go",
+		"migrations/000003_add_audit_events.up.sql",
+		"migrations/000003_add_audit_events.down.sql",
+	} {
+		assertFileExists(t, project, rel)
+	}
+}
+
+func TestAudit_BunRepository(t *testing.T) {
+	project := generateProject(t, "auditbun", []string{"base", "bun", "audit"}).ProjectDir
+	assertFileExists(t, project, "internal/adapters/persistence/bun/audit_repository.go")
+}
+
+func TestAudit_NoORM_Fails(t *testing.T) {
+	_, err := bootstrap.Generate(bootstrap.GlobalRegistry, bootstrap.Options{
+		ProjectName: "auditnoorm",
+		ModulePath:  "github.com/example/auditnoorm",
+		TargetDir:   t.TempDir(),
+		Features:    []string{"base", "audit"},
+	})
+	if err == nil {
+		t.Fatal("expected Generate to refuse audit without an ORM")
+	}
+	if !strings.Contains(err.Error(), "requires a database ORM") {
+		t.Errorf("expected ORM requirement error, got: %v", err)
+	}
+}
+
+func TestAudit_LoggerSubscribes(t *testing.T) {
+	project := generateProject(t, "auditlog", []string{"base", "gorm", "audit"}).ProjectDir
+	logger := readFile(t, project, "internal/adapters/audit/logger.go")
+	assertContains(t, logger, "func (l *Logger) Subscribe", "audit logger has Subscribe")
+	assertContains(t, logger, "bus.Subscribe", "audit logger subscribes to bus")
+}
+
+func TestAudit_MigrationContent(t *testing.T) {
+	project := generateProject(t, "auditmig", []string{"base", "gorm", "audit"}).ProjectDir
+	up := readFile(t, project, "migrations/000003_add_audit_events.up.sql")
+	assertContains(t, up, "CREATE TABLE IF NOT EXISTS audit_events", "audit migration creates table")
+	assertContains(t, up, "entity_type", "audit migration has entity_type")
+	assertContains(t, up, "entity_id", "audit migration has entity_id")
+	assertContains(t, up, "event_type", "audit migration has event_type")
+	assertContains(t, up, "payload", "audit migration has payload")
+	assertContains(t, up, "idx_audit_entity", "audit migration has index")
+}
+
+func TestAudit_MainWiring(t *testing.T) {
+	project := generateProject(t, "auditwire", []string{"base", "gorm", "audit"}).ProjectDir
+	main := readFile(t, project, "cmd/server/main.go")
+	assertContains(t, main, "auditadapter", "main imports audit adapter")
+	assertContains(t, main, "auditLogger.Subscribe(bus)", "main subscribes audit logger")
+	assertContains(t, main, "NewAuditHandler", "main creates audit handler")
+}
+
+func TestAudit_OutboxCoexistence(t *testing.T) {
+	project := generateProject(t, "auditoutbox", []string{"base", "gorm", "audit", "outbox"}).ProjectDir
+	assertFileExists(t, project, "internal/adapters/audit/logger.go")
+	assertFileExists(t, project, "internal/adapters/outbox/worker.go")
 }

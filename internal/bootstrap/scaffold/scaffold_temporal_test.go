@@ -53,17 +53,19 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 		t.Errorf("expected activity to be wired, hint=%q", ares.WireHint)
 	}
 
-	// The worker now registers both, and still parses.
+	// The worker now registers workflows.
 	worker := read(t, dir, "internal/adapters/temporal/worker.go")
-	for _, want := range []string{
-		"w.RegisterWorkflow(workflow.OrderFulfillmentWorkflow)",
-		"w.RegisterActivity(activity.ChargeCardActivity)",
-	} {
-		if !strings.Contains(worker, want) {
-			t.Errorf("worker.go missing %q:\n%s", want, worker)
-		}
+	if !strings.Contains(worker, "w.RegisterWorkflow(workflow.OrderFulfillmentWorkflow)") {
+		t.Errorf("worker.go missing Workflow registration:\n%s", worker)
 	}
 	assertParses(t, dir, "internal/adapters/temporal/worker.go")
+
+	// Activities are registered in the Activities container.
+	acts := read(t, dir, "internal/adapters/temporal/activity/activities.go")
+	if !strings.Contains(acts, "w.RegisterActivity(activity.ChargeCardActivity)") {
+		t.Errorf("activities.go missing Activity registration:\n%s", acts)
+	}
+	assertParses(t, dir, "internal/adapters/temporal/activity/activities.go")
 }
 
 func TestWorkflowGeneratorRequiresTemporalFeature(t *testing.T) {
@@ -98,8 +100,8 @@ func TestTemporalWiringIsIdempotent(t *testing.T) {
 		t.Fatalf("regenerate: %v", err)
 	}
 
-	worker := read(t, dir, "internal/adapters/temporal/worker.go")
-	if n := strings.Count(worker, "w.RegisterActivity(activity.NotifyActivity)"); n != 1 {
-		t.Errorf("expected exactly one Notify registration, got %d:\n%s", n, worker)
+	acts := read(t, dir, "internal/adapters/temporal/activity/activities.go")
+	if n := strings.Count(acts, "w.RegisterActivity(activity.NotifyActivity)"); n != 1 {
+		t.Errorf("expected exactly one Notify registration in activities.go, got %d:\n%s", n, acts)
 	}
 }

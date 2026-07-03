@@ -1,0 +1,67 @@
+package gorm
+
+import (
+	"context"
+	"time"
+
+	"{{.ModulePath}}/internal/domain/audit"
+
+	"gorm.io/gorm"
+)
+
+type auditRow struct {
+	ID         string    `gorm:"column:id;primaryKey;type:varchar(255)"`
+	EntityType string    `gorm:"column:entity_type;type:varchar(128);index"`
+	EntityID   string    `gorm:"column:entity_id;type:varchar(255);index"`
+	EventType  string    `gorm:"column:event_type;type:varchar(255)"`
+	Payload    []byte    `gorm:"column:payload;type:jsonb"`
+	OccurredAt time.Time `gorm:"column:occurred_at"`
+}
+
+func (auditRow) TableName() string { return "audit_events" }
+
+type AuditRepository struct {
+	db *gorm.DB
+}
+
+func NewAuditRepository(db *gorm.DB) *AuditRepository {
+	return &AuditRepository{db: db}
+}
+
+var _ audit.Repository = (*AuditRepository)(nil)
+
+func (r *AuditRepository) Append(ctx context.Context, events ...audit.AuditEvent) error {
+	if len(events) == 0 {
+		return nil
+	}
+	rows := make([]auditRow, 0, len(events))
+	for _, e := range events {
+		rows = append(rows, auditRow{
+			ID:         e.ID(),
+			EntityType: e.EntityType(),
+			EntityID:   e.EntityID(),
+			EventType:  e.EventType(),
+			Payload:    e.Payload(),
+			OccurredAt: e.OccurredAt(),
+		})
+	}
+	return r.db.WithContext(ctx).Create(&rows).Error
+}
+
+func (r *AuditRepository) ListByEntity(ctx context.Context, entityType, entityID string) ([]audit.AuditEvent, error) {
+	var rows []auditRow
+	err := r.db.WithContext(ctx).
+		Where("entity_type = ? AND entity_id = ?", entityType, entityID).
+		Order("occurred_at DESC").
+		Find(&rows).Error
+	if err != nil {
+		return nil, err
+	}
+	events := make([]audit.AuditEvent, 0, len(rows))
+	for _, row := range rows {
+		events = append(events, audit.NewAuditEvent(
+			row.ID, row.EntityType, row.EntityID, row.EventType, row.Payload, row.OccurredAt,
+		))
+	}
+	return events, nil
+}

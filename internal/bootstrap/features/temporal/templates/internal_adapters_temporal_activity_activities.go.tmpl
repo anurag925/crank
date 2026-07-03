@@ -1,0 +1,25 @@
+package activity
+
+import "go.temporal.io/sdk/worker"
+
+// Activities is a container for all activity dependencies and their
+// registrations. The dedicated worker process (cmd/worker/main.go)
+// constructs this with real repository/platform clients; the API server
+// passes nil to run only sample workflows.
+//
+// Add activity fields here and register them in Register(). Activities
+// generated with `crank make activity` are wired at the marker below.
+type Activities struct {
+	// crank:activity-fields (do not remove — `crank make activity` inserts fields here)
+}
+
+// NewActivities constructs an Activities container.
+func NewActivities() *Activities {
+	return &Activities{}
+}
+
+// Register registers all activities with the given worker.
+func (a *Activities) Register(w worker.Worker) {
+	w.RegisterActivity(Greet)
+	// crank:activity-register (do not remove — `crank make activity` inserts registrations here)
+}
