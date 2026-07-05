@@ -426,16 +426,25 @@ func TestE2E_MakeTemporal(t *testing.T) {
 	assertExists(t, projectDir, "internal/adapters/temporal/activity/charge_card.go")
 	assertExists(t, projectDir, "internal/adapters/temporal/activity/charge_card_test.go")
 
-	// Both are wired into the worker aggregator (alongside the shipped examples).
+	// Workflows are wired into worker.go; activities are registered in activities.go.
 	worker := readFile(t, projectDir, "internal/adapters/temporal/worker.go")
 	for _, want := range []string{
 		"w.RegisterWorkflow(workflow.GreetingWorkflow)",
 		"w.RegisterWorkflow(workflow.OrderFulfillmentWorkflow)",
-		"w.RegisterActivity(activity.Greet)",
-		"w.RegisterActivity(activity.ChargeCardActivity)",
 	} {
 		if !strings.Contains(worker, want) {
 			t.Errorf("worker.go missing registration %q", want)
+		}
+	}
+	// Activity registrations are in activities.go (inside package activity),
+	// so the function references are unqualified (no "activity." prefix).
+	activities := readFile(t, projectDir, "internal/adapters/temporal/activity/activities.go")
+	for _, want := range []string{
+		"w.RegisterActivity(Greet)",
+		"w.RegisterActivity(ChargeCardActivity)",
+	} {
+		if !strings.Contains(activities, want) {
+			t.Errorf("activities.go missing registration %q", want)
 		}
 	}
 

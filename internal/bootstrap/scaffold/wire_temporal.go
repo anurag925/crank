@@ -36,7 +36,7 @@ func wireWorkflow(projectDir string, r Resource) (wireResult, error) {
 // wireActivity registers a generated activity with the project's Activities
 // container (internal/adapters/temporal/activity/activities.go).
 func wireActivity(projectDir string, r Resource) (wireResult, error) {
-	reg := fmt.Sprintf("w.RegisterActivity(activity.%sActivity)", r.Pascal)
+	reg := fmt.Sprintf("w.RegisterActivity(%sActivity)", r.Pascal)
 	hint := fmt.Sprintf(`could not auto-register the activity in %s. Add this to Activities.Register():
 
   %s`, activitiesFile, reg)
