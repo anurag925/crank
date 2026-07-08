@@ -139,7 +139,7 @@ func runScaffold(opts scaffold.Options) error {
 
 func makeMigration(projectDir, name string) error {
 	name = sanitizeName(name)
-	dir := filepath.Join(projectDir, "migrations")
+	dir := filepath.Join(projectDir, "db/migrations")
 	if err := utils.EnsureDir(dir); err != nil {
 		return err
 	}

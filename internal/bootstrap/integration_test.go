@@ -19,6 +19,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/qdrant"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
+
 	// Phase 4-5: new features
 	_ "github.com/anurag925/crank/internal/bootstrap/features/audit"
 	"github.com/anurag925/crank/internal/bootstrap/scaffold"
@@ -125,8 +126,8 @@ func TestGlobalRegistry_HasAllFeatures(t *testing.T) {
 		"mongodb":  true,
 		"qdrant":   true,
 		"temporal": true,
-		
-		"audit":    true,
+
+		"audit": true,
 	}
 	for _, n := range names {
 		delete(want, n)
@@ -496,8 +497,8 @@ func TestBun_FilesExist(t *testing.T) {
 		"internal/adapters/persistence/bun/migrate.go",
 		"internal/domain/user/user.go",
 		"internal/adapters/persistence/memory/user_repository.go",
-		"migrations/000001_init.up.sql",
-		"migrations/000001_init.down.sql",
+		"db/migrations/000001_init.up.sql",
+		"db/migrations/000001_init.down.sql",
 	}
 	for _, f := range expectedFiles {
 		assertFileExists(t, dir, f)
@@ -549,7 +550,7 @@ func TestBun_DatabaseMigrate(t *testing.T) {
 
 func TestBun_MigrationUp(t *testing.T) {
 	r := generateProject(t, "pgmigup", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "migrations/000001_init.up.sql")
+	content := readFile(t, r.ProjectDir, "db/migrations/000001_init.up.sql")
 	assertContains(t, content, "CREATE TABLE IF NOT EXISTS users", "migration up creates users table")
 	assertContains(t, content, "UUID PRIMARY KEY", "migration up has uuid pk")
 	assertContains(t, content, "email TEXT NOT NULL UNIQUE", "migration up email unique")
@@ -557,7 +558,7 @@ func TestBun_MigrationUp(t *testing.T) {
 
 func TestBun_MigrationDown(t *testing.T) {
 	r := generateProject(t, "pgmigdown", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "migrations/000001_init.down.sql")
+	content := readFile(t, r.ProjectDir, "db/migrations/000001_init.down.sql")
 	assertContains(t, content, "DROP TABLE IF EXISTS users", "migration down drops users")
 }
 
@@ -660,8 +661,8 @@ func TestGorm_FilesExist(t *testing.T) {
 		"internal/adapters/persistence/gorm/user_repository.go",
 		"internal/domain/user/user.go",
 		"internal/adapters/persistence/memory/user_repository.go",
-		"migrations/000001_init.up.sql",
-		"migrations/000001_init.down.sql",
+		"db/migrations/000001_init.up.sql",
+		"db/migrations/000001_init.down.sql",
 	}
 	for _, f := range expectedFiles {
 		assertFileExists(t, dir, f)
@@ -709,7 +710,7 @@ func TestGorm_DatabaseMigrate(t *testing.T) {
 
 func TestGorm_MigrationUp(t *testing.T) {
 	r := generateProject(t, "gormmigup", []string{"gorm"})
-	content := readFile(t, r.ProjectDir, "migrations/000001_init.up.sql")
+	content := readFile(t, r.ProjectDir, "db/migrations/000001_init.up.sql")
 	assertContains(t, content, "CREATE TABLE IF NOT EXISTS users", "migration up creates users table")
 	assertContains(t, content, "UUID PRIMARY KEY", "migration up has uuid pk")
 	assertContains(t, content, "email TEXT NOT NULL UNIQUE", "migration up email unique")
@@ -808,7 +809,7 @@ func TestGorm_Scaffold_GormRepository(t *testing.T) {
 	assertContains(t, repo, "gorm.ErrRecordNotFound", "gorm repo maps ErrRecordNotFound")
 
 	// A create-table migration was produced.
-	matches, _ := filepath.Glob(filepath.Join(dir, "migrations", "*_create_orders.up.sql"))
+	matches, _ := filepath.Glob(filepath.Join(dir, "db/migrations", "*_create_orders.up.sql"))
 	if len(matches) != 1 {
 		t.Errorf("expected one create_orders migration, got %d", len(matches))
 	}
@@ -843,8 +844,8 @@ func TestGorm_Outbox_FilesExist(t *testing.T) {
 	assertFileExists(t, dir, "internal/adapters/outbox/worker.go")
 
 	// Outbox migrations exist.
-	assertFileExists(t, dir, "migrations/000002_add_outbox_events.up.sql")
-	assertFileExists(t, dir, "migrations/000002_add_outbox_events.down.sql")
+	assertFileExists(t, dir, "db/migrations/000002_add_outbox_events.up.sql")
+	assertFileExists(t, dir, "db/migrations/000002_add_outbox_events.down.sql")
 
 	// Main.go wires the GORM outbox.
 	main := readFile(t, dir, "cmd/server/main.go")
@@ -1057,7 +1058,7 @@ func TestValidator_AuthHandler_RefreshStruct(t *testing.T) {
 
 func TestAuthBun_MigrationUp_HasPassword(t *testing.T) {
 	r := generateProject(t, "authpg", []string{"auth", "bun"})
-	content := readFile(t, r.ProjectDir, "migrations/000001_init.up.sql")
+	content := readFile(t, r.ProjectDir, "db/migrations/000001_init.up.sql")
 	assertContains(t, content, "password TEXT NOT NULL", "migration has password column")
 }
 
@@ -1526,8 +1527,8 @@ func TestAll_Features(t *testing.T) {
 	// bun files
 	assertFileExists(t, dir, "internal/adapters/persistence/bun/db.go")
 	assertFileExists(t, dir, "internal/adapters/persistence/bun/migrate.go")
-	assertFileExists(t, dir, "migrations/000001_init.up.sql")
-	assertFileExists(t, dir, "migrations/000001_init.down.sql")
+	assertFileExists(t, dir, "db/migrations/000001_init.up.sql")
+	assertFileExists(t, dir, "db/migrations/000001_init.down.sql")
 
 	// redis files
 	assertFileExists(t, dir, "internal/adapters/cache/redis/client.go")
@@ -1551,7 +1552,7 @@ func TestAll_Features(t *testing.T) {
 	assertFileExists(t, dir, "internal/adapters/audit/logger.go")
 	assertFileExists(t, dir, "internal/application/audit/query_handler.go")
 	assertFileExists(t, dir, "internal/adapters/http/web/v1/audit_handler.go")
-	assertFileExists(t, dir, "migrations/000003_add_audit_events.up.sql")
+	assertFileExists(t, dir, "db/migrations/000003_add_audit_events.up.sql")
 
 	// Verify deps are returned via Result
 	assertDepsContains(t, r.Dependencies, "golang-jwt", "all features deps")
@@ -1636,7 +1637,7 @@ func TestAdd_BunToBaseProject(t *testing.T) {
 	// bun files should exist
 	assertFileExists(t, r2.ProjectDir, "internal/adapters/persistence/bun/db.go")
 	assertFileExists(t, r2.ProjectDir, "internal/adapters/persistence/bun/migrate.go")
-	assertFileExists(t, r2.ProjectDir, "migrations/000001_init.up.sql")
+	assertFileExists(t, r2.ProjectDir, "db/migrations/000001_init.up.sql")
 
 	// Manifest should include bun
 	manifest := readFile(t, r2.ProjectDir, ".crank.yaml")
@@ -1829,8 +1830,8 @@ func TestAudit_FilesExist(t *testing.T) {
 		"internal/adapters/audit/logger.go",
 		"internal/application/audit/query_handler.go",
 		"internal/adapters/http/web/v1/audit_handler.go",
-		"migrations/000003_add_audit_events.up.sql",
-		"migrations/000003_add_audit_events.down.sql",
+		"db/migrations/000003_add_audit_events.up.sql",
+		"db/migrations/000003_add_audit_events.down.sql",
 	} {
 		assertFileExists(t, project, rel)
 	}
@@ -1865,7 +1866,7 @@ func TestAudit_LoggerSubscribes(t *testing.T) {
 
 func TestAudit_MigrationContent(t *testing.T) {
 	project := generateProject(t, "auditmig", []string{"base", "gorm", "audit"}).ProjectDir
-	up := readFile(t, project, "migrations/000003_add_audit_events.up.sql")
+	up := readFile(t, project, "db/migrations/000003_add_audit_events.up.sql")
 	assertContains(t, up, "CREATE TABLE IF NOT EXISTS audit_events", "audit migration creates table")
 	assertContains(t, up, "entity_type", "audit migration has entity_type")
 	assertContains(t, up, "entity_id", "audit migration has entity_id")

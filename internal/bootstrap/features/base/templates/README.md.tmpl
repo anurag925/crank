@@ -58,7 +58,7 @@ Before running, ensure PostgreSQL is available and run `crank migrate up`.
 │   └── validator           request validation
 ├── pkg/logging             slog helpers
 {{- if or (.Has "bun") (.Has "gorm")}}
-├── migrations              SQL migrations
+├── db/migrations           SQL migrations
 {{- end}}
 ├── .env.example
 ├── .crank.yaml             project manifest (do not delete)

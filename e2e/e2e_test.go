@@ -26,6 +26,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/qdrant"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
+
 	// Phase 4-5: new features
 	_ "github.com/anurag925/crank/internal/bootstrap/features/audit"
 )
@@ -38,7 +39,7 @@ var crankBin string
 var allFeatureNames = []string{"base", "auth", "crypto", "bun", "gorm", "redis", "mongodb", "qdrant", "temporal", "otel", "outbox", "audit"}
 
 // allToolNames lists every tool subcommand the application wraps.
-var allToolNames = []string{"migrate", "swag", "build", "run", "dev", "test", "gofmt", "vet", "tidy"}
+var allToolNames = []string{"migrate", "seed", "swag", "build", "run", "dev", "test", "gofmt", "vet", "tidy"}
 
 // allFeaturesMinusGorm returns every feature except gorm. crank ships two
 // mutually exclusive ORM features (bun and gorm) and the "all features" compile
@@ -318,12 +319,12 @@ func TestE2E_Make(t *testing.T) {
 				assertExists(t, projectDir, "internal/adapters/persistence/bun/ticket_repository.go")
 				// Postgres resources get create-table migrations...
 				for _, name := range []string{"orders", "accounts", "order_items", "categories", "tickets"} {
-					if n := globCount(t, projectDir, "migrations/*_create_"+name+".up.sql"); n != 1 {
+					if n := globCount(t, projectDir, "db/migrations/*_create_"+name+".up.sql"); n != 1 {
 						t.Errorf("expected exactly one create_%s migration, found %d", name, n)
 					}
 				}
 				// ...but an in-memory `service` never produces one.
-				if n := globCount(t, projectDir, "migrations/*_create_carts.up.sql"); n != 0 {
+				if n := globCount(t, projectDir, "db/migrations/*_create_carts.up.sql"); n != 0 {
 					t.Errorf("did not expect a carts migration, found %d", n)
 				}
 			} else {
@@ -331,16 +332,16 @@ func TestE2E_Make(t *testing.T) {
 				assertExists(t, projectDir, "internal/adapters/persistence/memory/account_repository.go")
 				assertExists(t, projectDir, "internal/adapters/persistence/memory/cart_repository.go")
 				// Non-bun scaffolds never emit create-table migrations.
-				if n := globCount(t, projectDir, "migrations/*_create_*.up.sql"); n != 0 {
+				if n := globCount(t, projectDir, "db/migrations/*_create_*.up.sql"); n != 0 {
 					t.Errorf("did not expect create-table migrations for a non-bun project, found %d", n)
 				}
 			}
 
 			// The standalone migration is DB-agnostic and always created as a pair.
-			if n := globCount(t, projectDir, "migrations/*_add_index_to_orders.up.sql"); n != 1 {
+			if n := globCount(t, projectDir, "db/migrations/*_add_index_to_orders.up.sql"); n != 1 {
 				t.Errorf("expected one add_index_to_orders.up.sql migration, found %d", n)
 			}
-			if n := globCount(t, projectDir, "migrations/*_add_index_to_orders.down.sql"); n != 1 {
+			if n := globCount(t, projectDir, "db/migrations/*_add_index_to_orders.down.sql"); n != 1 {
 				t.Errorf("expected one add_index_to_orders.down.sql migration, found %d", n)
 			}
 
@@ -368,7 +369,7 @@ func TestE2E_MakeFlags(t *testing.T) {
 	// --skip-migration suppresses the create-table migration even with bun.
 	runCrank(t, "", "make", "handler", "Promo", "code:string", "--skip-migration", "--project", dir)
 	assertExists(t, dir, "internal/adapters/persistence/bun/promo_repository.go")
-	if n := globCount(t, dir, "migrations/*_create_promos.up.sql"); n != 0 {
+	if n := globCount(t, dir, "db/migrations/*_create_promos.up.sql"); n != 0 {
 		t.Errorf("--skip-migration should not create a migration, found %d", n)
 	}
 
@@ -475,7 +476,7 @@ func TestE2E_Add(t *testing.T) {
 	// Verify new feature files were created.
 	assertExists(t, projectDir, "internal/adapters/persistence/bun/db.go")
 	assertExists(t, projectDir, "internal/adapters/http/web/middleware/auth.go")
-	assertExists(t, projectDir, "migrations/000001_init.up.sql")
+	assertExists(t, projectDir, "db/migrations/000001_init.up.sql")
 
 	// Verify config sections were injected via markers.
 	cfgGo := readFile(t, projectDir, "internal/config/config.go")

@@ -41,7 +41,7 @@ func (feature) Files() []bootstrap.FileMapping {
 		{TemplatePath: "templates/internal_adapters_audit_logger.go.tmpl", OutputPath: "internal/adapters/audit/logger.go"},
 		{TemplatePath: "templates/internal_application_audit_query_handler.go.tmpl", OutputPath: "internal/application/audit/query_handler.go"},
 		{TemplatePath: "templates/internal_adapters_http_web_audit_handler.go.tmpl", OutputPath: "internal/adapters/http/web/v1/audit_handler.go"},
-		{TemplatePath: "templates/migrations_000003_add_audit_events.up.sql.tmpl", OutputPath: "migrations/000003_add_audit_events.up.sql"},
-		{TemplatePath: "templates/migrations_000003_add_audit_events.down.sql.tmpl", OutputPath: "migrations/000003_add_audit_events.down.sql"},
+		{TemplatePath: "templates/migrations_000003_add_audit_events.up.sql.tmpl", OutputPath: "db/migrations/000003_add_audit_events.up.sql"},
+		{TemplatePath: "templates/migrations_000003_add_audit_events.down.sql.tmpl", OutputPath: "db/migrations/000003_add_audit_events.down.sql"},
 	}
 }

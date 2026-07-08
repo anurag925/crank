@@ -120,7 +120,7 @@ func TestE2E_Make_SkipMigration_AllFieldTypes(t *testing.T) {
 	assertExists(t, dir, "internal/domain/product/product.go")
 	assertExists(t, dir, "internal/adapters/persistence/bun/product_repository.go")
 	assertExists(t, dir, "internal/adapters/http/web/product_handler.go")
-	assertGlobCount(t, dir, "migrations/*_create_products.up.sql", 0)
+	assertGlobCount(t, dir, "db/migrations/*_create_products.up.sql", 0)
 	compileProject(t, dir)
 }
 
@@ -131,7 +131,7 @@ func TestE2E_Make_SkipMigration_HandlerKind(t *testing.T) {
 		"--skip-migration", "--project", dir,
 	)
 	assertExists(t, dir, "internal/adapters/http/web/order_item_handler.go")
-	assertGlobCount(t, dir, "migrations/*_create_order_items.up.sql", 0)
+	assertGlobCount(t, dir, "db/migrations/*_create_order_items.up.sql", 0)
 }
 
 // ---------------------------------------------------------------------------
@@ -237,7 +237,7 @@ func TestE2E_Make_Migration_Idempotent(t *testing.T) {
 	// After force, the migration is still expected to exist exactly once
 	// because generateMigration() short-circuits on existing
 	// create_<table>.up.sql files.
-	assertGlobCount(t, dir, "migrations/*_create_items.up.sql", 1)
+	assertGlobCount(t, dir, "db/migrations/*_create_items.up.sql", 1)
 }
 
 // TestE2E_Make_Migration_StandalonePair verifies that `crank make
@@ -246,8 +246,8 @@ func TestE2E_Make_Migration_Idempotent(t *testing.T) {
 func TestE2E_Make_Migration_StandalonePair(t *testing.T) {
 	dir := scaffoldBase(t, "make_mig_standalone")
 	runCrank(t, "", "make", "migration", "add_index_to_things", "--project", dir)
-	assertGlobCount(t, dir, "migrations/*_add_index_to_things.up.sql", 1)
-	assertGlobCount(t, dir, "migrations/*_add_index_to_things.down.sql", 1)
+	assertGlobCount(t, dir, "db/migrations/*_add_index_to_things.up.sql", 1)
+	assertGlobCount(t, dir, "db/migrations/*_add_index_to_things.down.sql", 1)
 }
 
 // TestE2E_Make_Migration_MultipleStandalone verifies that consecutive
@@ -258,8 +258,8 @@ func TestE2E_Make_Migration_MultipleStandalone(t *testing.T) {
 	dir := scaffoldBase(t, "make_mig_multi")
 	runCrank(t, "", "make", "migration", "first_migration", "--project", dir)
 	runCrank(t, "", "make", "migration", "second_migration", "--project", dir)
-	assertGlobCount(t, dir, "migrations/*_first_migration.up.sql", 1)
-	assertGlobCount(t, dir, "migrations/*_second_migration.up.sql", 1)
+	assertGlobCount(t, dir, "db/migrations/*_first_migration.up.sql", 1)
+	assertGlobCount(t, dir, "db/migrations/*_second_migration.up.sql", 1)
 }
 
 // TestE2E_Make_Migration_EmptyName checks that the name-required
@@ -285,7 +285,7 @@ func TestE2E_Make_Migration_InvalidChars(t *testing.T) {
 	// Spaces, dashes, slashes, etc. all collapse to underscores. The
 	// `!` is dropped entirely.
 	runCrank(t, "", "make", "migration", "Add Index To Things!", "--project", dir)
-	assertGlobCount(t, dir, "migrations/*_add_index_to_things.up.sql", 1)
+	assertGlobCount(t, dir, "db/migrations/*_add_index_to_things.up.sql", 1)
 }
 
 // ---------------------------------------------------------------------------

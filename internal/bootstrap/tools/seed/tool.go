@@ -1,4 +1,4 @@
-package migrate
+package seed
 
 import (
 	"fmt"
@@ -22,23 +22,23 @@ type tool struct {
 	steps       int
 }
 
-func (*tool) Name() string               { return "migrate" }
+func (*tool) Name() string               { return "seed" }
 func (*tool) BinaryName() string         { return "migrate" }
-func (*tool) Description() string        { return "Run database migrations via golang-migrate" }
+func (*tool) Description() string        { return "Run seed data migrations via golang-migrate" }
 func (*tool) RequiresFeatures() []string { return []string{"bun", "gorm"} }
 
 func (*tool) LongDescription() string {
-	return `migrate invokes the golang-migrate CLI inside the target project.
-By default it applies all pending up migrations. The database URL is taken
+	return `seed invokes the golang-migrate CLI pointing at db/seeds/ directory.
+By default it applies all pending up seed files. The database URL is taken
 from DATABASE_URL env var or the project's configs/config.yaml.
 
 If --project is not specified, the current directory is used.
 
 Examples:
-  crank migrate up --project ./myapp
-  crank migrate down --steps 1 --project ./myapp
-  crank migrate --project ./myapp              (defaults to "up")
-  cd myapp && crank migrate up                 (uses current directory)`
+  crank seed up --project ./myapp
+  crank seed down --steps 1 --project ./myapp
+  crank seed --project ./myapp              (defaults to "up")
+  cd myapp && crank seed up                 (uses current directory)`
 }
 
 func (*tool) InstallCmd() string {
@@ -51,12 +51,17 @@ func (t *tool) Install() error {
 
 func (t *tool) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&t.databaseURL, "database-url", "", "override the database URL (defaults to DATABASE_URL or config)")
-	cmd.Flags().IntVar(&t.steps, "steps", 0, "limit the number of migration steps (0 = all pending)")
+	cmd.Flags().IntVar(&t.steps, "steps", 0, "limit the number of seed steps (0 = all pending)")
 }
 
 func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*bootstrap.ToolInvocation, error) {
-	if !utils.PathExists(filepath.Join(projectDir, "db/migrations")) {
-		return nil, fmt.Errorf("no db/migrations/ directory found in %s", projectDir)
+	seedsDir := filepath.Join(projectDir, "db/seeds")
+
+	// Create the seeds directory if it doesn't exist (caller is free to
+	// add timestamped SQL files later; an empty directory is a valid
+	// golang-migrate source with zero migrations).
+	if err := utils.EnsureDir(seedsDir); err != nil {
+		return nil, fmt.Errorf("create db/seeds directory: %w", err)
 	}
 
 	databaseURL := t.databaseURL
@@ -81,7 +86,7 @@ func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string
 	}
 
 	argv := []string{
-		"-path", filepath.Join(projectDir, "db/migrations"),
+		"-path", seedsDir,
 		"-database", databaseURL,
 		direction,
 	}

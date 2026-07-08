@@ -61,7 +61,7 @@ func (feature) Files() []bootstrap.FileMapping {
 		{TemplatePath: "templates/internal_adapters_outbox_worker.go.tmpl", OutputPath: "internal/adapters/outbox/worker.go"},
 
 		// Migrations
-		{TemplatePath: "templates/migrations_000002_add_outbox_events.up.sql.tmpl", OutputPath: "migrations/000002_add_outbox_events.up.sql"},
-		{TemplatePath: "templates/migrations_000002_add_outbox_events.down.sql.tmpl", OutputPath: "migrations/000002_add_outbox_events.down.sql"},
+		{TemplatePath: "templates/migrations_000002_add_outbox_events.up.sql.tmpl", OutputPath: "db/migrations/000002_add_outbox_events.up.sql"},
+		{TemplatePath: "templates/migrations_000002_add_outbox_events.down.sql.tmpl", OutputPath: "db/migrations/000002_add_outbox_events.down.sql"},
 	}
 }

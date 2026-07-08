@@ -139,7 +139,7 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 	}
 
 	// A create-table migration was produced.
-	ups, _ := filepath.Glob(filepath.Join(dir, "migrations", "*_create_orders.up.sql"))
+	ups, _ := filepath.Glob(filepath.Join(dir, "db/migrations", "*_create_orders.up.sql"))
 	if len(ups) != 1 {
 		t.Fatalf("expected one create_orders.up.sql migration, found %d", len(ups))
 	}
@@ -209,7 +209,7 @@ func TestGenerateHandlerGorm(t *testing.T) {
 	}
 
 	// A create-table migration was produced.
-	ups, _ := filepath.Glob(filepath.Join(dir, "migrations", "*_create_invoices.up.sql"))
+	ups, _ := filepath.Glob(filepath.Join(dir, "db/migrations", "*_create_invoices.up.sql"))
 	if len(ups) != 1 {
 		t.Fatalf("expected one create_invoices.up.sql migration, found %d", len(ups))
 	}
@@ -259,7 +259,7 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 		t.Error("did not expect a bun adapter without the bun feature")
 	}
 	// No migration without bun.
-	ups, _ := filepath.Glob(filepath.Join(dir, "migrations", "*_create_tickets.up.sql"))
+	ups, _ := filepath.Glob(filepath.Join(dir, "db/migrations", "*_create_tickets.up.sql"))
 	if len(ups) != 0 {
 		t.Errorf("did not expect a migration for a non-bun project, found %d", len(ups))
 	}

@@ -435,7 +435,7 @@ func RenderTemplateForTest(name string, data tmplData) (string, error) {
 // Columns mirror the postgres row DTO emitted by the adapter template:
 // text for primitive strings, UUID for the typed identifier.
 func generateMigration(projectDir string, data tmplData) (created, skipped []string, err error) {
-	dir := filepath.Join(projectDir, "migrations")
+	dir := filepath.Join(projectDir, "db/migrations")
 	name := "create_" + data.R.SnakePlural
 
 	existing, _ := filepath.Glob(filepath.Join(dir, "*_"+name+".up.sql"))
@@ -449,8 +449,8 @@ func generateMigration(projectDir string, data tmplData) (created, skipped []str
 	}
 
 	stamp := time.Now().UTC().Format("20060102150405")
-	upRel := filepath.Join("migrations", fmt.Sprintf("%s_%s.up.sql", stamp, name))
-	downRel := filepath.Join("migrations", fmt.Sprintf("%s_%s.down.sql", stamp, name))
+	upRel := filepath.Join("db/migrations", fmt.Sprintf("%s_%s.up.sql", stamp, name))
+	downRel := filepath.Join("db/migrations", fmt.Sprintf("%s_%s.down.sql", stamp, name))
 
 	up, err := renderTemplate("migration.up.sql.tmpl", data)
 	if err != nil {

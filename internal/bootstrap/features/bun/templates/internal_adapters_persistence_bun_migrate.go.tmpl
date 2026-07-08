@@ -44,7 +44,7 @@ func newMigrator(databaseURL, migrationsDir string) (*migrate.Migrate, error) {
 		return nil, errors.New("database URL is required")
 	}
 	if migrationsDir == "" {
-		migrationsDir = "migrations"
-	}
+			migrationsDir = "db/migrations"
+		}
 	return migrate.New("file://"+migrationsDir, databaseURL)
 }

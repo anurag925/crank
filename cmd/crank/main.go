@@ -10,6 +10,7 @@ import (
 	"github.com/anurag925/crank/internal/bootstrap/commands"
 
 	// Feature packages self-register with the global registry via init().
+	_ "github.com/anurag925/crank/internal/bootstrap/features/audit"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/auth"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
@@ -22,7 +23,6 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/redis"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/views"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/audit"
 
 	// Tool packages self-register with the global tool registry via init().
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/build"
@@ -31,6 +31,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/gofmt"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/migrate"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/run"
+	_ "github.com/anurag925/crank/internal/bootstrap/tools/seed"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/swag"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/test"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/tidy"

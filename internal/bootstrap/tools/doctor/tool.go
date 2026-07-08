@@ -21,7 +21,7 @@ import (
 )
 
 func init() {
-	bootstrap.GlobalToolRegistry.MustRegister(tool{})
+	bootstrap.GlobalToolRegistry.MustRegister(&tool{})
 }
 
 type tool struct{}
@@ -36,7 +36,7 @@ func (tool) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().Bool("fail-fast", false, "stop at the first failing check")
 }
 
-func (tool) LongDescription() string {
+func (*tool) LongDescription() string {
 	return `doctor runs a series of health checks against a crank-generated project:
 
   1. manifest parses       — .crank.yaml is valid YAML with required fields
@@ -45,7 +45,7 @@ func (tool) LongDescription() string {
                              a corresponding field+Register() call in routes.go
   4. services are wired    — every directory in internal/application/ is imported
                              and its NewCommandHandler is called in cmd/server/main.go
-  5. migrations ordered    — files in migrations/ are uniquely timestamped and
+  5. migrations ordered    — files in db/migrations/ are uniquely timestamped and
                              lexically sorted
 
 Each check prints ✔ or ✘ with a one-line detail on failure. Exit 0 when all
@@ -286,11 +286,11 @@ func checkServiceWiring(projectDir string) bootstrap.CheckResult {
 	return bootstrap.CheckResult{OK: true, Summary: "services are wired"}
 }
 
-// checkMigrations verifies that all files in migrations/ are uniquely
+// checkMigrations verifies that all files in db/migrations/ are uniquely
 // timestamp-prefixed and lexically sorted (i.e. will apply in the order the
 // developer intended).
 func checkMigrations(projectDir string) bootstrap.CheckResult {
-	migDir := filepath.Join(projectDir, "migrations")
+	migDir := filepath.Join(projectDir, "db/migrations")
 	entries, err := os.ReadDir(migDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -338,7 +338,7 @@ func checkMigrations(projectDir string) bootstrap.CheckResult {
 	if len(outOfOrder) > 0 {
 		return bootstrap.CheckResult{
 			Summary: "migrations ordered",
-			Detail:  "migrations/ is not lexically sorted by filename: " + strings.Join(outOfOrder, ", ") + " — rename to apply in order",
+			Detail:  "db/migrations/ is not lexically sorted by filename: " + strings.Join(outOfOrder, ", ") + " — rename to apply in order",
 		}
 	}
 	return bootstrap.CheckResult{OK: true, Summary: "migrations ordered"}

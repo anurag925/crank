@@ -223,7 +223,7 @@ func TestAdd_BunToBase(t *testing.T) {
 	for _, f := range []string{
 		"internal/adapters/persistence/bun/db.go",
 		"internal/adapters/persistence/bun/migrate.go",
-		"migrations/000001_init.up.sql",
+		"db/migrations/000001_init.up.sql",
 	} {
 		if _, err := os.Stat(filepath.Join(result2.ProjectDir, f)); os.IsNotExist(err) {
 			t.Errorf("expected %s after Add bun", f)

@@ -314,20 +314,20 @@ func TestE2E_Tool_Migrate_RequiresPostgres(t *testing.T) {
 // precondition in migrate.Prepare.
 func TestE2E_Tool_Migrate_NoMigrationsDir(t *testing.T) {
 	dir := scaffold(t, "tool_migrate_no_dir", []string{"base", "bun"})
-	if err := os.RemoveAll(filepath.Join(dir, "migrations")); err != nil {
-		t.Fatalf("remove migrations: %v", err)
+	if err := os.RemoveAll(filepath.Join(dir, "db/migrations")); err != nil {
+		t.Fatalf("remove db/migrations: %v", err)
 	}
 	out, err := runCrankRaw(t, "", "migrate", "up", "--project", dir)
 	if err == nil {
 		t.Fatalf("expected no-migrations error, got success:\n%s", out)
 	}
-	if !strings.Contains(out, "migrations") {
-		t.Errorf("error should mention migrations directory, got:\n%s", out)
+	if !strings.Contains(out, "db/migrations") {
+		t.Errorf("error should mention db/migrations directory, got:\n%s", out)
 	}
 }
 
 // TestE2E_Tool_Migrate_NoDSN verifies the DSN resolution path. The
-// project has bun enabled and a migrations/ dir, but no
+// project has bun enabled and a db/migrations/ dir, but no
 // DATABASE_URL env var and no config.yaml. Prepare should report it
 // cannot determine a database URL.
 func TestE2E_Tool_Migrate_NoDSN(t *testing.T) {
