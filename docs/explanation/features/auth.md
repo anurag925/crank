@@ -4,7 +4,7 @@ title: Auth Feature
 
 # Auth feature
 
-The `auth` feature adds **JWT-based authentication** with bcrypt password hashing. It provides auth endpoints, a JWT middleware for protecting routes, and value objects for email and password in the domain layer.
+The `auth` feature adds **JWT-based authentication** with bcrypt password hashing and token revocation. It provides auth endpoints (including logout), a JWT middleware for protecting routes, and value objects for email and password in the domain layer.
 
 ## What it provides
 
@@ -13,10 +13,12 @@ The `auth` feature adds **JWT-based authentication** with bcrypt password hashin
 | `internal/domain/user/password.go` | Password value object with bcrypt hashing |
 | `internal/domain/user/email.go` | Email value object with validation |
 | `internal/ports/hasher.go` | Password hashing interface |
-| `internal/ports/tokenservice.go` | Token issue/refresh/validation interface |
-| `internal/adapters/crypto/bcrypt_hasher.go` | BCrypt implementation |
-| `internal/adapters/crypto/jwt_token_service.go` | JWT token management (access + refresh) |
-| `internal/adapters/http/web/auth_handler.go` | `/auth/register`, `/auth/login`, `/auth/refresh`, `/me` |
+| `internal/ports/tokenservice.go` | Token issue/refresh/validation/revocation interface |
+| `internal/ports/tokendenylist.go` | Token revocation denylist port |
+| `pkg/crypto/bcrypt_hasher.go` | BCrypt implementation |
+| `internal/adapters/auth/jwt/token_service.go` | JWT token management (access + refresh + revocation) |
+| `internal/adapters/persistence/gorm/token_denylist.go` | GORM-backed token denylist (when gorm enabled) |
+| `internal/adapters/http/web/auth_handler.go` | `/auth/register`, `/auth/login`, `/auth/refresh`, `/auth/logout`, `/me` |
 | `internal/adapters/http/web/middleware/auth.go` | `JWTAuth()` Echo middleware |
 
 ### Endpoints
@@ -26,26 +28,28 @@ The `auth` feature adds **JWT-based authentication** with bcrypt password hashin
 | POST | `/auth/register` | ❌ | Create account + return tokens |
 | POST | `/auth/login` | ❌ | Authenticate + return tokens |
 | POST | `/auth/refresh` | ❌ | Exchange refresh token for new pair |
+| POST | `/auth/logout` | ✅ Bearer | Revoke refresh token |
 | GET | `/me` | ✅ Bearer | Current user identity from JWT |
+
+### Self-scoped user endpoints
+
+User endpoints (`GET/PUT/DELETE /api/v1/users/:id`) verify that the JWT `user_id` matches the path parameter. A mismatch returns 404 (not 403) for IDOR safety. Users can only access their own record.
+
+## Token revocation
+
+When the `gorm` feature is also enabled, a `revoked_tokens` table stores revoked JWT JTIs. The `Refresh` method checks the denylist before issuing new tokens, and `Logout` adds the refresh token's JTI to the denylist.
 
 ## Tech stack
 
-| Library | Purpose | Documentation |
-|---------|---------|---------------|
-| [golang-jwt/jwt v5](https://github.com/golang-jwt/jwt) | JWT signing and validation | [github.com/golang-jwt/jwt](https://github.com/golang-jwt/jwt) |
-| [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | BCrypt password hashing | [pkg.go.dev/golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) |
-| [google/uuid](https://github.com/google/uuid) | UUID generation for token IDs | [github.com/google/uuid](https://github.com/google/uuid) |
-
-## Learning resources
-
-- **JWT.io** — [jwt.io](https://jwt.io) (debugger, algorithm overview, libraries)
-- **JWT handbook** — [auth0.com/resources/ebooks/jwt-handbook](https://auth0.com/resources/ebooks/jwt-handbook)
-- **BCrypt explained** — [en.wikipedia.org/wiki/Bcrypt](https://en.wikipedia.org/wiki/Bcrypt)
-- **Go JWT guide** — [github.com/golang-jwt/jwt](https://github.com/golang-jwt/jwt) (usage examples, signing methods, validation)
-- **Best practices for JWT** — [datatracker.ietf.org/doc/html/rfc8725](https://datatracker.ietf.org/doc/html/rfc8725)
+| Library | Purpose |
+|---------|---------|
+| [golang-jwt/jwt v5](https://github.com/golang-jwt/jwt) | JWT signing and validation |
+| [golang.org/x/crypto](https://pkg.go.dev/golang.org/x/crypto) | BCrypt password hashing |
+| [google/uuid](https://github.com/google/uuid) | UUID generation for token JTIs |
 
 ## Notes
 
-- Protect custom routes by adding the middleware in Echo: `e.GET("/admin", handler, middleware.JWTAuth(tokenService))`
-- JWT secret should come from environment variables, not `configs/config.yaml`.
-- Token expiration settings are configurable via `configs/config.yaml` under the `jwt` section.
+- Protect custom routes with: `e.GET("/admin", handler, middleware.JWTAuth(tokenService))`
+- JWT secret should come from `.env`, not `configs/config.yaml`.
+- Token expiration settings are configurable under the `jwt` section.
+- `pkg/crypto/` is shared with the `crypto` feature (AES-256-GCM cipher).

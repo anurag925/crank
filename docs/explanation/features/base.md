@@ -12,13 +12,13 @@ The `base` feature is the **foundation of every generated project**. It is alway
 |-------|-------|---------|
 | 🚀 **Composition root** | `cmd/server/main.go` | Single entry point that wires all dependencies |
 | ⚙️ **Configuration** | `internal/config/config.go` | Viper + godotenv + env struct-tag loading |
-| 📝 **Shared model** | `internal/model/model.go` | API response types (`APIError`) |
-| 🧠 **Domain** | `internal/domain/shared/`, `internal/domain/user/` | Aggregate root, typed ID, domain events, sentinel errors, repository port |
-| ⚙️ **Application** | `internal/application/user/` | CQRS command/query handlers for the `User` aggregate |
-| 🔌 **Ports** | `internal/ports/` | Cross-cutting interfaces (`EventBus`, `UnitOfWork`) |
-| 🌐 **HTTP** | `internal/adapters/http/web/` | Echo server, routes, user handler, logging middleware |
+| 📝 **HTTP API** | `internal/adapters/http/web/api/` | JSON error envelope (`api.Error`) |
+| 🧠 **Domain** | `internal/domain/shared/`, `internal/domain/user/` | Aggregate root with `uuid.UUID` ID, domain events, sentinel errors, repository port, `Rehydrate()` |
+| ⚙️ **Application** | `internal/application/user/`, `internal/application/uow/` | CQRS command/query handlers, `UnitOfWork` + `TxRepositories` port |
+| 🔌 **Ports** | `internal/ports/` | Cross-cutting interfaces (`EventBus`) |
+| 🌐 **HTTP** | `internal/adapters/http/web/`, `internal/adapters/http/web/v1/` | Echo server with HTTP error handler, v1 routes, user handler with self-scoping, logging middleware |
 | 💾 **In-memory adapters** | `internal/adapters/persistence/memory/`, `internal/adapters/eventbus/`, `internal/adapters/uow/` | In-memory implementations for testing and local dev |
-| ✅ **Validator** | `internal/validator/` | `go-playground/validator` setup with a custom Echo binder |
+| ✅ **Validator** | `internal/validator/` | `go-playground/validator` setup with exported `EchoBinder` |
 | 📊 **Logging** | `pkg/logging/` | `log/slog` helpers with redaction support |
 | 📄 **Project metadata** | `configs/config.yaml`, `.env.example`, `Makefile`, `.air.toml`, `Dockerfile`, `.gitignore`, `go.mod`, `.crank.yaml`, `AGENTS.md`, `.agents/skills/` | Standard project files |
 | 📖 **Swagger** | `docs/docs.go` | Swagger/OpenAPI plumbing |

@@ -2,7 +2,7 @@
 
 ## Concept & Vision
 
-A modular CLI tool that scaffolds production-ready Golang backend applications with enterprise-grade infrastructure baked in, and wraps common development tools as subcommands so developers never need to leave the CLI. The bootstrapper generates a well-architected project with clean separation of concerns (models, repositories, services, handlers), sensible defaults, and extensibility through plugin-style feature installation. Think "Laravel Forge meets Go" — a tool that handles the boilerplate so developers focus on business logic.
+A modular CLI tool that scaffolds production-ready Go backend applications using DDD patterns and wraps common development tools as subcommands. Generated projects follow a strict layered architecture: domain aggregates (uuid.UUID IDs, private fields, row DTOs), CQRS application handlers, v1 HTTP handlers with self-scoping, and a TxRepositories-based Unit of Work that never leaks ORM types into the application layer.
 
 ## Architecture Overview
 
@@ -10,259 +10,134 @@ A modular CLI tool that scaffolds production-ready Golang backend applications w
 crank/
 ├── cmd/
 │   └── crank/
-│       └── main.go           # CLI entry point
+│       └── main.go                  # CLI entry point, feature/tool imports
 ├── internal/
 │   ├── bootstrap/
-│   │   ├── generator.go      # Core code generation logic
-│   │   ├── tool.go           # Tool interface + ToolRegistry
-│   │   ├── tool_registry.go  # GlobalToolRegistry singleton
-│   │   ├── features/         # Feature modules
-│   │   │   ├── base/         # Core framework (echo, viper, slog)
-│   │   │   ├── auth/         # JWT authentication
-│   │   │   ├── postgres/     # Bun ORM + migrations
-│   │   │   ├── redis/        # Redis integration (future)
-│   │   │   └── mongodb/      # MongoDB integration (future)
-│   │   ├── tools/            # Tool wrappers
-│   │   │   ├── migrate/      # golang-migrate wrapper
-│   │   │   ├── swag/         # swaggo/swag wrapper
-│   │   │   ├── build/        # go build wrapper
-│   │   │   ├── run/          # go run wrapper
-│   │   │   ├── dev/          # air live-reload wrapper
-│   │   │   └── ...           # more tool wrappers
-│   │   └── template/         # Go template files
+│   │   ├── generator.go             # Core code generation (Generate, Add, Update)
+│   │   ├── feature.go               # Feature interface, FileMapping, Registry
+│   │   ├── tool.go                  # Tool interface, InProcessTool, ToolRegistry
+│   │   ├── context.go               # Template context with Has()/Require()
+│   │   ├── manifest.go              # .crank.yaml read/write
+│   │   ├── project.go               # LoadProjectInfo() — public manifest reader
+│   │   ├── commands/                # Cobra commands (init, add, update, update-skill, list, make, tools)
+│   │   ├── scaffold/                # crank make code generators + templates
+│   │   ├── tools/                   # Tool wrappers (build, run, test, dev, swag, migrate, doctor, etc.)
+│   │   └── features/                # Feature modules (self-registering via init())
+│   │       ├── base/                # Foundation: Echo v5, Viper, slog, validator, DDD layout
+│   │       ├── auth/                # JWT + bcrypt + token denylist + revocation
+│   │       ├── crypto/              # AES-256-GCM cipher
+│   │       ├── bun/                 # Bun ORM + migrations
+│   │       ├── gorm/                # GORM (default ORM) + migrations
+│   │       ├── redis/               # Redis cache adapter
+│   │       ├── mongodb/             # MongoDB client
+│   │       ├── qdrant/              # Qdrant vector DB (gRPC + HTTP clients)
+│   │       ├── temporal/            # Temporal workflows, activities, worker
+│   │       ├── otel/                # OpenTelemetry tracing
+│   │       ├── outbox/              # Transactional outbox (requires bun or gorm)
+│   │       ├── views/               # React SPA with Vite
+│   │       └── audit/               # Audit trail (domain event persistence)
 │   └── utils/
-│       ├── fileutil.go       # File operations
-│       └── exec.go           # FindBinary, RunExternal helpers
+│       ├── fileutil.go              # EnsureDir, WriteFile, PathExists
+│       └── exec.go                  # FindBinary, RunExternal
 └── go.mod
 ```
 
-## Feature List
+## Generated Project Architecture
 
-### Core Features (Built-in)
+```
+myapp/
+├── cmd/server/main.go               # Composition root — DDD wiring
+├── configs/config.yaml              # Non-secret defaults
+├── internal/
+│   ├── adapters/
+│   │   ├── eventbus/                # In-memory event bus
+│   │   ├── http/web/
+│   │   │   ├── server.go            # Echo server + EchoBinder + HTTP error handler
+│   │   │   ├── api/error.go         # api.Error envelope
+│   │   │   ├── v1/                  # Versioned handlers at /api/v1
+│   │   │   └── middleware/          # Logging, JWT auth, tracing
+│   │   ├── persistence/
+│   │   │   ├── memory/              # In-memory repos (always generated)
+│   │   │   ├── gorm/                # GORM repos — row DTO pattern
+│   │   │   └── bun/                 # Bun repos — row DTO pattern
+│   │   ├── uow/                     # In-memory UoW with TxRepositories
+│   │   ├── outbox/                  # Transactional UoW + worker
+│   │   ├── auth/jwt/                # JWT token service
+│   │   ├── cache/redis/             # Redis cache adapter
+│   │   ├── audit/                   # Audit logger
+│   │   └── telemetry/               # OpenTelemetry setup
+│   ├── application/
+│   │   ├── user/                    # CQRS command/query handlers
+│   │   └── uow/                     # UnitOfWork + TxRepositories port
+│   ├── config/                      # Viper + caarlos0/env loading
+│   ├── domain/                      # Pure domain (uuid.UUID IDs, private fields)
+│   ├── ports/                       # Cross-cutting interfaces
+│   └── validator/                   # go-playground/validator with EchoBinder
+├── pkg/
+│   ├── logging/                     # slog + redaction + context enrichment
+│   └── crypto/                      # bcrypt hasher + AES-256-GCM cipher
+├── migrations/                      # SQL migration pairs
+├── .crank.yaml                      # Project manifest
+├── .agents/skills/crank-project/    # Agent skill file
+├── AGENTS.md
+├── Dockerfile
+└── Makefile
+```
 
-1. **Base HTTP Server**
-   - Echo v4 framework
-   - Graceful shutdown
-   - Structured logging with slog
-   - Health check endpoint (`/health`)
-   - Configuration via Viper (configs/config.yaml / env vars)
+## Key Design Decisions
 
-2. **JWT Authentication**
-   - JWT middleware for protected routes
-   - Token generation and validation
-   - Refresh token support
-   - Configurable secret and expiration
+| Decision | Implementation |
+|---|---|
+| **ID type** | `uuid.UUID` from `github.com/google/uuid` — all aggregates, no custom types |
+| **Aggregate purity** | Private fields with getters, zero ORM/JSON tags. `Rehydrate()` for persistence |
+| **Row DTO pattern** | Private `{name}Row` struct with `toAggregate()` / `rowFromAggregate()` — ORM tags never touch aggregates |
+| **Unit of Work** | `uow.UnitOfWork` + `uow.TxRepositories` in `application/uow/`. Save closures call `repos.Users().Save(ctx, u)` — zero GORM imports |
+| **HTTP layout** | Versioned `web/v1/` package at `/api/v1`, `api.Error` envelope, self-scoped user endpoints |
+| **Auth** | JWT at `adapters/auth/jwt/`, bcrypt at `pkg/crypto/`, token denylist with revocation |
+| **Graceful degradation** | Optional services (redis, qdrant, temporal) warn + skip if unavailable |
+| **Configuration** | env vars > .env > configs/config.yaml. Secrets tagged `env:"..."` |
 
-3. **Encryption (AES-256-GCM)**
-   - Encrypt/decrypt helpers as a reusable library
-   - Reads secret from `CRYPTO_SECRET` env var via config
-   - Base64-url encoded output, safe for URLs and JSON
-   - Unique nonce per encryption call (deterministic output is impossible)
+## Technical Stack
 
-4. **PostgreSQL + Bun ORM**
-   - Database connection with Bun
-   - Migration support via golang-migrate
-   - Repository pattern implementation
-   - Transaction support
-
-4. **Project Structure**
-   - Clean layered architecture
-   - Models with validation
-   - Repository interfaces
-   - Service layer with dependency injection
-   - HTTP handlers
-   - Middleware chain
-
-5. **Input Validation**
-   - [`go-playground/validator`](https://github.com/go-playground/validator) integration
-   - Custom Echo binder that auto-validates on `Bind()`
-   - Structured JSON error responses with per-field messages
-   - Extensible custom validator registration
-
-6. **Project Structure**
-   - Clean layered architecture
-   - Models with validation
-   - Repository interfaces
-   - Service layer with dependency injection
-   - HTTP handlers
-   - Middleware chain
-
-7. **Development Tools**
-   - .air.toml for live reload (debug mode)
-   - Makefile with common commands
-   - Docker configuration for deployment
-   - .env.example template
-
-### Modular Features (Installable)
-
-6. **Redis Integration**
-   - Session storage
-   - Caching layer
-   - Rate limiting support
-
-7. **MongoDB Integration**
-   - Document storage
-   - Aggregation pipelines
+| Component | Choice |
+|---|---|
+| HTTP Framework | Echo v5 |
+| ORM | GORM (default) or Bun |
+| Config | Viper + caarlos0/env |
+| Validation | go-playground/validator v10 |
+| API Docs | swaggo/swag + echo-swagger v2 |
+| Logging | log/slog with three-layer handler stack |
+| Migrations | golang-migrate v4 |
+| Live Reload | Air |
+| IDs | github.com/google/uuid |
+| JWT | golang-jwt/jwt v5 |
+| Password | golang.org/x/crypto (bcrypt) |
+| Encryption | stdlib crypto/aes, crypto/cipher (AES-256-GCM) |
 
 ## CLI Commands
 
 ```bash
-# Initialize new project (tools are checked/installed automatically)
-./crank init myapp --features=base,auth,postgres
+# Project lifecycle
+crank init myapp --features=base,auth
+crank add redis --project ./myapp
+crank update-skill --project ./myapp    # refresh agent SKILL.md
+crank list
+crank tools
 
-# Add features to existing project
-./crank add redis --project=./myapp
-./crank add mongodb --project=./myapp
+# Code generation
+crank make scaffold Book title:string author:string price:float --tests
+crank make handler Product --only
+crank make migration create_orders
 
-# List available features
-./crank list
-
-# List available tool subcommands
-./crank tools
-
-# Generate migration
-./crank make migration create_users --project=./myapp
-
-# Run migrations (--project optional; defaults to current directory)
-./crank migrate up --project=./myapp
-cd myapp && ./crank migrate up
-
-# Run project
-./crank run --project=./myapp
-cd myapp && ./crank run
-
-# Other tool subcommands (all accept --project or use current directory)
-./crank build --project=./myapp
-./crank test -v --project=./myapp
-./crank swag --project=./myapp
-./crank dev --project=./myapp
-./crank gofmt --project=./myapp
-./crank vet --project=./myapp
-./crank tidy --project=./myapp
+# Tool wrappers
+crank run --project ./myapp
+crank dev --project ./myapp
+crank build --project ./myapp
+crank test -v --project ./myapp
+crank gofmt --project ./myapp
+crank vet --project ./myapp
+crank tidy --project ./myapp
+crank swag --project ./myapp
+crank migrate up --project ./myapp
+crank doctor --project ./myapp
 ```
-
-## Generated Project Structure
-
-```
-myapp/
-├── cmd/
-│   └── server/
-│       └── main.go           # Application entry point
-├── internal/
-│   ├── config/
-│   │   └── config.go         # Viper configuration
-│   ├── handler/
-│   │   ├── handler.go        # Base handler with dependencies
-│   │   └── user.go           # Example handler
-│   ├── middleware/
-│   │   ├── auth.go           # JWT middleware
-│   │   └── logging.go        # Request logging
-│   ├── model/
-│   │   └── user.go           # Domain models
-│   ├── repository/
-│   │   └── user.go           # Data access layer
-│   ├── service/
-│   │   └── user.go           # Business logic
-│   ├── crypto/
-│   │   └── crypto.go         # AES-256-GCM Encrypt/Decrypt (if crypto feature enabled)
-│   └── validator/
-│       ├── validator.go      # Struct validation (go-playground/validator)
-│       └── errors.go         # Validation error types & human-readable messages
-│   └── database/
-│       ├── postgres.go       # DB connection
-│       └── migrate.go        # Migration runner
-├── configs/                  # Configuration files
-│   └── config.yaml           # Application config
-├── migrations/
-│   ├── 000001_init.up.sql
-│   └── 000001_init.down.sql
-├── .env.example              # Environment template
-├── Makefile                  # Build commands
-├── .air.toml                 # Live reload config
-├── Dockerfile                # Container image
-└── go.mod
-```
-
-## Configuration Schema (config.yaml)
-
-```yaml
-app:
-  name: "myapp"
-  host: "0.0.0.0"
-  port: 8080
-  env: "development"
-
-database:
-  host: "localhost"
-  port: 5432
-  user: "postgres"
-  password: "postgres"
-  name: "myapp"
-  sslmode: "disable"
-
-jwt:
-  secret: "your-secret-key-change-in-production"
-  expiration: 24h
-  refresh_expiration: 168h
-
-logging:
-  level: "debug"
-  format: "json"
-```
-
-## Configuration Strategy
-
-This project uses a dual-file configuration approach with Viper handling priority:
-
-### configs/config.yaml — Application Defaults & Structure
-- Database hosts, ports, app name, JWT expiration defaults
-- **Safe to commit** to version control
-- Documents all available configuration options
-- Serves as documentation for developers
-- Follows the [`configs/` directory convention](https://github.com/golang-standards/project-layout#configs)
-
-### .env — Local Secrets & Environment Overrides
-- Database passwords, JWT secrets, API keys
-- **Never committed** (added to .gitignore)
-- Loaded by Viper as environment variables
-
-### Viper Priority Order (highest to lowest)
-1. **Environment variables** (e.g., `APP_PORT=3000 db_password=secret`)
-2. **.env file** (if using dotenv loader)
-3. **configs/config.yaml defaults**
-
-This approach allows:
-- **Production**: Kubernetes secrets/env vars override configs/config.yaml
-- **Local development**: .env file for convenience
-- **CI/CD**: Environment variables set by the pipeline
-
-### crank CLI vs Generated Projects
-
-| File | crank CLI | Generated Projects |
-|------|-----------|-------------------|
-| config.yaml | Not used (CLI doesn't connect to DBs) | `configs/config.yaml` — full application config with all settings |
-| .env | Not needed (CLI doesn't connect to DBs) | `.env` — local secrets (git-ignored) |
-| .env.example | Not applicable | `.env.example` — template showing which env vars to set |
-| .crank.yaml | Not applicable | `.crank.yaml` — tracks project name, module path, features, crank version |
-
-## Technical Decisions
-
-| Component | Choice | Rationale |
-|-----------|--------|-----------|
-| HTTP Framework | Echo v4 | Mature, fast, middleware ecosystem |
-| ORM | Bun | Type-safe, fast, migrates well from GORM |
-| Config | Viper | ENV vars + YAML support, standard in Go |
-| Validation | go-playground/validator | Struct validation with custom rules, human-readable errors |
-| API Docs | swaggo/swag + echo-swagger | Swagger/OpenAPI annotations in handler code, UI at /swagger/* |
-| Logging | slog | Structured, built-in Go 1.21+ |
-| Migrations | golang-migrate | Deterministic, versioned SQL migrations |
-| Live Reload | Air | Battle-tested, minimal config |
-
-## Implementation Phases
-
-1. **Phase 1**: Core CLI scaffold + base feature (Echo + Viper + slog)
-2. **Phase 2**: Auth feature (JWT middleware + token handling)
-3. **Phase 3**: Postgres feature (Bun ORM + migrations)
-4. **Phase 4**: Project generation with Makefile + Air + Dockerfile
-5. **Phase 5**: Redis module (extensible)
-6. **Phase 6**: MongoDB module (extensible)

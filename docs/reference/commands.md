@@ -83,7 +83,15 @@ Each listed tool is available as:
 crank <tool> [args] --project <dir>
 ```
 
-## Code generation
+### `crank update-skill`
+
+Regenerate the agent skill file with the latest conventions:
+
+```bash
+crank update-skill --project ./myapp
+```
+
+This re-renders `.agents/skills/crank-project/SKILL.md` from the template bundled with the current `crank` CLI.
 
 ### `crank make`
 

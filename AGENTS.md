@@ -2,7 +2,144 @@
 
 ## Project Overview
 
-A modular CLI tool that scaffolds production-ready Go backend services and wraps common development tools as subcommands. Given a project name and a list of features, it generates a clean, layered Go service with sensible defaults and optional modules (auth, gorm, bun, redis, mongodb, qdrant, temporal, otel, outbox, views, crypto). GORM is the default ORM; pass `--use-bun` to use Bun instead. All day-to-day development tasks (build, test, migrate, swag, etc.) are accessible through the `crank` CLI so developers never need to leave it.
+A modular CLI tool that scaffolds production-ready Go backend services using DDD patterns and wraps common development tools as subcommands. Generated projects use `uuid.UUID` domain aggregates with private fields, CQRS application handlers, v1 Echo handlers with self-scoping, and a `TxRepositories`-based Unit of Work that never leaks ORM types into the application layer.
+
+## Tech Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Language | Go 1.26 |
+| CLI Framework | Cobra |
+| HTTP (generated) | Echo v5 |
+| Config (generated) | Viper + caarlos0/env |
+| ORM (generated) | GORM (default) or Bun |
+| IDs | google/uuid |
+| Logging (generated) | log/slog with redaction + context enrichment |
+| Migrations | golang-migrate |
+| Templating | text/template + embed.FS |
+
+## Quick Commands
+
+```bash
+# Project lifecycle
+crank init myapp --features=base,auth            # GORM (default)
+crank init myapp --features=base,auth --use-bun   # Bun
+crank add redis --project ./myapp
+crank update-skill --project ./myapp             # refresh agent SKILL.md
+crank list
+crank tools
+
+# Code generation
+crank make scaffold Order customer:string total:float --tests
+crank make model Book --project ./myapp
+crank make repository Book --project ./myapp
+crank make service Book --project ./myapp
+crank make handler Book --only --project ./myapp
+crank make workflow OrderFulfillment --project ./myapp
+crank make activity ChargeCard --project ./myapp
+crank make migration create_orders --project ./myapp
+
+# Tool wrappers
+crank run --project ./myapp
+crank build --project ./myapp
+crank test -v --project ./myapp
+crank dev --project ./myapp
+crank migrate up --project ./myapp
+crank swag --project ./myapp
+crank doctor --project ./myapp
+crank gofmt --project ./myapp
+crank vet --project ./myapp
+crank tidy --project ./myapp
+```
+
+## Architecture
+
+```
+crank/
+├── cmd/crank/main.go                # CLI entry
+├── internal/
+│   ├── bootstrap/
+│   │   ├── feature.go               # Feature interface + Registry
+│   │   ├── tool.go                  # Tool interface + ToolRegistry
+│   │   ├── generator.go             # Generate(), Add(), Update()
+│   │   ├── context.go               # Template context
+│   │   ├── manifest.go              # .crank.yaml I/O
+│   │   ├── project.go               # LoadProjectInfo()
+│   │   ├── commands/                # Cobra commands
+│   │   ├── scaffold/                # crank make generators + templates
+│   │   ├── tools/                   # Tool wrappers
+│   │   └── features/                # Feature modules
+│   └── utils/
+```
+
+## Key Abstractions
+
+### Feature Interface
+```go
+type Feature interface {
+    Name() string
+    Description() string
+    Files() []FileMapping
+    Templates() embed.FS
+    Dependencies() []string
+    Requirements() []string
+}
+```
+Features self-register via `init()`. Added with blank import in `cmd/crank/main.go`.
+
+### Tool Interface
+```go
+type Tool interface {
+    Name() string; BinaryName() string
+    Prepare(...) (*ToolInvocation, error)
+    Install() error
+    RequiresFeatures() []string
+}
+```
+Tools self-register via `init()`. In-process tools (doctor) implement `InProcessTool`.
+
+### Generator (`crank make`)
+Scaffolds DDD-layered code: domain aggregates (uuid.UUID), CQRS handlers, v1 HTTP handlers, row DTO repos. Auto-wires handlers into `web/v1/routes.go` and repos into `TxRepositories` interfaces. All idempotent via marker comments.
+
+## Generated Project Architecture
+
+```
+myapp/
+├── cmd/server/main.go               # Composition root
+├── internal/
+│   ├── adapters/
+│   │   ├── http/web/v1/             # Versioned handlers
+│   │   ├── persistence/gorm/        # Row DTO repos
+│   │   ├── outbox/                  # Transactional UoW
+│   │   └── auth/jwt/                # JWT service
+│   ├── application/
+│   │   ├── user/                    # CQRS handlers
+│   │   └── uow/                     # TxRepositories + UnitOfWork
+│   ├── domain/user/                 # uuid.UUID aggregate
+│   ├── ports/                       # Interfaces
+│   └── config/                      # Viper loading
+├── pkg/
+│   ├── logging/                     # slog + redaction
+│   └── crypto/                      # bcrypt + AES-256-GCM
+├── .crank.yaml                      # Project manifest
+└── .agents/skills/crank-project/    # Agent skill file
+```
+
+## Key Patterns
+
+- **uuid.UUID IDs** — all aggregates, private fields with getters
+- **Row DTO** — private `{name}Row` with `toAggregate()`/`rowFromAggregate()`, zero ORM tags on aggregates
+- **TxRepositories** — save closure receives `repos.Users().Save(ctx, u)`, zero GORM imports
+- **v1 handlers** — `api.Error` envelope, self-scoped user endpoints
+- **Graceful degradation** — optional services warn + skip if unavailable
+- **Token revocation** — `ports.TokenDenylist` with GORM adapter, `/auth/logout`
+
+## Testing
+
+Three layers: unit (fast), integration (renders every feature combo), e2e (builds binary + compiles generated projects, build tag `e2e`).
+
+Run: `go test ./internal/...` for fast suite, `go test -tags e2e ./e2e/` for full.
+
 
 ## Tech Stack
 

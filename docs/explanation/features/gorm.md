@@ -4,7 +4,7 @@ title: GORM Feature
 
 # GORM feature
 
-The `gorm` feature adds PostgreSQL persistence using the **GORM** ORM. This is the default ORM — if you don't specify `--use-bun`, GORM is added automatically.
+The `gorm` feature adds PostgreSQL persistence using **GORM**. This is the default ORM — if you don't specify `--use-bun`, GORM is added automatically.
 
 ## What it provides
 
@@ -12,27 +12,31 @@ The `gorm` feature adds PostgreSQL persistence using the **GORM** ORM. This is t
 |------|---------|
 | `internal/adapters/persistence/gorm/db.go` | PostgreSQL connection factory via GORM |
 | `internal/adapters/persistence/gorm/migrate.go` | Migration runner using golang-migrate |
-| `internal/adapters/persistence/gorm/user_repository.go` | GORM-backed `UserRepository` |
+| `internal/adapters/persistence/gorm/user_repository.go` | GORM-backed `UserRepository` with row DTO pattern |
 | `migrations/000001_init.up.sql` | Initial database schema |
 | `migrations/000001_init.down.sql` | Initial schema rollback |
 
-## Tech stack
+### Row DTO pattern
 
-| Library | Purpose | Documentation |
-|---------|---------|---------------|
-| [GORM v2](https://gorm.io) | Go ORM with rich feature set | [gorm.io/docs](https://gorm.io/docs) |
-| [GORM PostgreSQL driver](https://gorm.io/docs/connecting_to_the_database.html) | PostgreSQL connectivity | [gorm.io/docs](https://gorm.io/docs/connecting_to_the_database.html) |
-| [golang-migrate](https://github.com/golang-migrate/migrate) | Database migration tool | [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate) |
-| PostgreSQL | Relational database | [postgresql.org/docs](https://www.postgresql.org/docs/) |
+Repositories use a private `userRow` struct with GORM tags. The domain aggregate has zero ORM tags:
 
-## Learning resources
+```go
+type userRow struct {
+    ID        uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
+    Name      string    `gorm:"column:name;not null"`
+    Email     string    `gorm:"column:email;not null;uniqueIndex"`
+    CreatedAt time.Time `gorm:"column:created_at;not null;autoCreateTime"`
+    UpdatedAt time.Time `gorm:"column:updated_at;not null;autoUpdateTime"`
+}
 
-- **GORM documentation** — [gorm.io/docs](https://gorm.io/docs) (associations, hooks, preloading, raw SQL)
-- **GORM tutorials** — [gorm.io/docs](https://gorm.io/docs/) (getting started, CRUD, querying)
-- **golang-migrate** — [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate) (migration files, CLI usage)
-- **PostgreSQL documentation** — [postgresql.org/docs](https://www.postgresql.org/docs/)
+func (row *userRow) toAggregate() *user.User {
+    return user.Rehydrate(row.ID, row.Name, row.Email, "", row.CreatedAt, row.UpdatedAt)
+}
+```
+
+The repository saves the row DTO via `db.Save(rowFromAggregate(u))` and scans into the row via `db.First(&row, "id = ?", id)`. Domain aggregates stay pure — no `gorm` tags, no `TableName()` method.
 
 ## Notes
 
-- GORM and Bun are **mutually exclusive** — a project cannot have both.
-- Running `crank make scaffold` with GORM enabled generates a migration for the new resource (unless `--skip-migration` is passed).
+- GORM and Bun are **mutually exclusive**.
+- `crank make scaffold` generates a GORM-backed repository with the row DTO pattern plus an in-memory adapter.
