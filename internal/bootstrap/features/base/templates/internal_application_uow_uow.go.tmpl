@@ -1,0 +1,54 @@
+// Package uow defines the Unit of Work abstraction used by the application's
+// command handlers to persist an aggregate and publish the events it recorded
+// as a single atomic operation.
+//
+// These interfaces live in the application layer (rather than internal/ports)
+// because they are expressed in terms of domain repositories and domain
+// events. In a layered/DDD design the application layer legitimately depends
+// on the domain, so this is the natural home for a port that hands out
+// transaction-scoped domain repositories.
+package uow
+
+//go:generate mockgen -destination=../../mocks/mock_uow.go -package=mocks {{.ModulePath}}/internal/application/uow UnitOfWork
+//go:generate mockgen -destination=../../mocks/mock_tx_repositories.go -package=mocks {{.ModulePath}}/internal/application/uow TxRepositories
+
+import (
+	"context"
+
+	"{{.ModulePath}}/internal/domain/shared"
+	"{{.ModulePath}}/internal/domain/user"
+	// crank:tx-repo-imports (do not remove — `crank make scaffold` splices new domain imports here)
+)
+
+// TxRepositories provides transaction-scoped domain repositories to the
+// closure passed to UnitOfWork.SaveAndPublish. Each accessor returns a
+// repository bound to the active transaction, so every write performed
+// through it participates in the same atomic unit as the outbox append.
+//
+// Command handlers obtain repositories from this port instead of
+// constructing concrete adapters, so the application layer no longer needs
+// to import the persistence adapter or *gorm.DB directly.
+type TxRepositories interface {
+	Users() user.Repository
+	// crank:tx-repositories (do not remove — `crank make scaffold` splices new repo accessors here)
+}
+
+// UnitOfWork abstracts the atomicity boundary between persisting an
+// aggregate and publishing the events it recorded. Implementations decide
+// whether the operations are wrapped in a database transaction (the outbox
+// pattern) or run sequentially.
+//
+// Command handlers use this port instead of calling repo.Save and
+// bus.Publish directly so the same code can run against either backend
+// without modification.
+type UnitOfWork interface {
+	// SaveAndPublish persists the aggregate (via the supplied closure) and
+	// then publishes the recorded events. The closure receives a
+	// TxRepositories that hands out repositories bound to the active
+	// transaction, so the application layer never touches the persistence
+	// adapter or *gorm.DB directly. The closure runs first; the returned
+	// error short-circuits the publish step. The events slice is consumed
+	// even on error paths so the caller does not need to reset the
+	// aggregate's internal buffer.
+	SaveAndPublish(ctx context.Context, save func(ctx context.Context, repos TxRepositories) error, events []shared.DomainEvent) error
+}

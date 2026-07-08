@@ -1,10 +1,11 @@
-package web
+package v1
 
 import (
 	"net/http"
 
 	"github.com/labstack/echo/v5"
 
+	"{{.ModulePath}}/internal/adapters/http/web/api"
 	auditapp "{{.ModulePath}}/internal/application/audit"
 )
 
@@ -24,11 +25,11 @@ func (h *AuditHandler) ListByEntity(c *echo.Context) error {
 	entityType := c.QueryParam("entity_type")
 	entityID := c.QueryParam("entity_id")
 	if entityType == "" || entityID == "" {
-		return echo.NewHTTPError(http.StatusBadRequest, "entity_type and entity_id query params are required")
+		return c.JSON(http.StatusBadRequest, api.Error{Error: "entity_type and entity_id query params are required"})
 	}
 	events, err := h.qry.ListByEntity(c.Request().Context(), entityType, entityID)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		return c.JSON(http.StatusInternalServerError, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusOK, events)
 }

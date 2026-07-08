@@ -1,6 +1,7 @@
 package {{.R.Snake}}
 
 import (
+	"github.com/google/uuid"
 	"time"
 
 	"{{.Module}}/internal/domain/shared"
@@ -13,7 +14,7 @@ import (
 // method remain the only sanctioned way to mutate them in the application
 // layer.
 type {{.R.Pascal}} struct {
-	id        {{.R.Pascal}}ID
+	id        uuid.UUID
 {{- range .Fields}}
 	{{.Camel}} {{.GoType}}
 {{- end}}
@@ -26,8 +27,8 @@ type {{.R.Pascal}} struct {
 // invariants, and records a {{.R.Pascal}}Created event. Callers must persist
 // the aggregate (via Repository.Save) and then call PullEvents to dispatch
 // the recorded event through the application's event bus.
-func New{{.R.Pascal}}(id {{.R.Pascal}}ID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end}}) (*{{.R.Pascal}}, error) {
-	if id.IsZero() {
+func New{{.R.Pascal}}(id uuid.UUID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end}}) (*{{.R.Pascal}}, error) {
+	if id == uuid.Nil {
 		return nil, ErrInvalid{{.R.Pascal}}ID
 	}
 {{- range .Fields}}
@@ -47,14 +48,14 @@ func New{{.R.Pascal}}(id {{.R.Pascal}}ID{{range .Fields}}, {{.Camel}} {{.GoType}
 		updatedAt: now,
 	}
 	o.recordEvent({{.R.Pascal}}Created{
-		{{.R.Pascal}}ID: id,
-		occurredAt:     now,
+		ID:         id,
+		occurredAt: now,
 	})
 	return o, nil
 }
 
-// ID returns the aggregate's typed identifier.
-func (o *{{.R.Pascal}}) ID() {{.R.Pascal}}ID { return o.id }
+// ID returns the aggregate's identifier.
+func (o *{{.R.Pascal}}) ID() uuid.UUID { return o.id }
 
 // CreatedAt returns the time the aggregate was first persisted.
 func (o *{{.R.Pascal}}) CreatedAt() time.Time { return o.createdAt }
@@ -75,8 +76,8 @@ func (o *{{.R.Pascal}}) Update({{range .Fields}}{{.Camel}} {{.GoType}}, {{end}})
 {{- end}}
 	o.updatedAt = now
 	o.recordEvent({{.R.Pascal}}Updated{
-		{{.R.Pascal}}ID: o.id,
-		occurredAt:     now,
+		ID:         o.id,
+		occurredAt: now,
 	})
 }
 
@@ -90,8 +91,8 @@ func (o *{{.R.Pascal}}) SetTimestamps(created, updated time.Time) {
 
 // Rehydrate reconstructs an aggregate from a persistence row, bypassing the
 // validation done by New{{.R.Pascal}}. It is intended for use by the postgres
-// and in-memory adapters only. Callers must guarantee that id is non-empty.
-func Rehydrate(id {{.R.Pascal}}ID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end}}, created, updated time.Time) *{{.R.Pascal}} {
+// and in-memory adapters only. Callers must guarantee that id is non-zero.
+func Rehydrate(id uuid.UUID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end}}, created, updated time.Time) *{{.R.Pascal}} {
 	return &{{.R.Pascal}}{
 		id:        id,
 {{- range .Fields}}
@@ -107,8 +108,8 @@ func Rehydrate(id {{.R.Pascal}}ID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end}
 // and then publishing the pulled events.
 func (o *{{.R.Pascal}}) MarkDeleted() {
 	o.recordEvent({{.R.Pascal}}Deleted{
-		{{.R.Pascal}}ID: o.id,
-		occurredAt:     time.Now().UTC(),
+		ID:         o.id,
+		occurredAt: time.Now().UTC(),
 	})
 }
 

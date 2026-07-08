@@ -73,7 +73,7 @@ func dddHandlerLayers() []string {
 		"internal/application/order/query_handler.go",
 		"internal/adapters/persistence/memory/order_repository.go",
 		"internal/adapters/persistence/bun/order_repository.go",
-		"internal/adapters/http/web/order_handler.go",
+		"internal/adapters/http/web/v1/order_handler.go",
 	}
 }
 
@@ -114,7 +114,7 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 	repo := read(t, dir, "internal/adapters/persistence/bun/order_repository.go")
 	for _, want := range []string{
 		"type orderRow struct",
-		"func NewOrderRepository(db *bun.DB)",
+		"func NewOrderRepository(db bun.IDB)",
 		"func (r *OrderRepository) Save(",
 		"func (r *OrderRepository) Delete(",
 		"ErrOrderNotFound",
@@ -126,7 +126,7 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 
 	// HTTP handler depends only on the application layer and exposes a
 	// Register method.
-	handler := read(t, dir, "internal/adapters/http/web/order_handler.go")
+	handler := read(t, dir, "internal/adapters/http/web/v1/order_handler.go")
 	for _, want := range []string{
 		"func NewOrderHandler(",
 		"func (h *OrderHandler) Register(g *echo.Group)",
@@ -155,13 +155,13 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 	if !res.Wired {
 		t.Errorf("expected handler to be wired, hint=%q", res.WireHint)
 	}
-	hub := read(t, dir, "internal/adapters/http/web/routes.go")
+	hub := read(t, dir, "internal/adapters/http/web/v1/routes.go")
 	for _, want := range []string{"*OrderHandler", `e.Group("/orders")`, "cfg.OrderHandler.Register("} {
 		if !strings.Contains(hub, want) {
 			t.Errorf("routes.go not wired with %q:\n%s", want, hub)
 		}
 	}
-	assertParses(t, dir, "internal/adapters/http/web/routes.go")
+	assertParses(t, dir, "internal/adapters/http/web/v1/routes.go")
 }
 
 func TestGenerateHandlerGorm(t *testing.T) {
@@ -222,13 +222,13 @@ func TestGenerateHandlerGorm(t *testing.T) {
 	if !res.Wired {
 		t.Errorf("expected handler to be wired, hint=%q", res.WireHint)
 	}
-	hub := read(t, dir, "internal/adapters/http/web/routes.go")
+	hub := read(t, dir, "internal/adapters/http/web/v1/routes.go")
 	for _, want := range []string{"*InvoiceHandler", `e.Group("/invoices")`, "cfg.InvoiceHandler.Register("} {
 		if !strings.Contains(hub, want) {
 			t.Errorf("routes.go not wired with %q: %s", want, hub)
 		}
 	}
-	assertParses(t, dir, "internal/adapters/http/web/routes.go")
+	assertParses(t, dir, "internal/adapters/http/web/v1/routes.go")
 }
 
 func TestGenerateHandlerInMemory(t *testing.T) {
@@ -249,7 +249,7 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 		"internal/domain/ticket/ticket.go",
 		"internal/application/ticket/command_handler.go",
 		"internal/adapters/persistence/memory/ticket_repository.go",
-		"internal/adapters/http/web/ticket_handler.go",
+		"internal/adapters/http/web/v1/ticket_handler.go",
 	} {
 		if !exists(dir, rel) {
 			t.Errorf("expected %s", rel)
@@ -290,7 +290,7 @@ func TestGenerateModelOnly(t *testing.T) {
 		t.Error("expected domain/tag/tag.go")
 	}
 	if exists(dir, "internal/adapters/persistence/memory/tag_repository.go") ||
-		exists(dir, "internal/adapters/http/web/tag_handler.go") {
+		exists(dir, "internal/adapters/http/web/v1tag_handler.go") {
 		t.Error("model generation should not produce adapters")
 	}
 }
@@ -308,8 +308,8 @@ func TestHandlerOnlySkipsDependencies(t *testing.T) {
 		t.Fatalf("Generate handler --only: %v", err)
 	}
 
-	if !exists(dir, "internal/adapters/http/web/coupon_handler.go") {
-		t.Error("expected adapter/http/web/coupon_handler.go")
+	if !exists(dir, "internal/adapters/http/web/v1/coupon_handler.go") {
+		t.Error("expected adapter/http/web/v1/coupon_handler.go")
 	}
 	if exists(dir, "internal/domain/coupon/coupon.go") ||
 		exists(dir, "internal/adapters/persistence/memory/coupon_repository.go") {
@@ -348,7 +348,7 @@ func TestWiringIsIdempotent(t *testing.T) {
 		t.Fatalf("regenerate: %v", err)
 	}
 
-	hub := read(t, dir, "internal/adapters/http/web/routes.go")
+	hub := read(t, dir, "internal/adapters/http/web/v1/routes.go")
 	if n := strings.Count(hub, "cfg.ReviewHandler.Register("); n != 1 {
 		t.Errorf("expected exactly one review registration, got %d:\n%s", n, hub)
 	}
@@ -385,7 +385,7 @@ func TestGenerateWithTests(t *testing.T) {
 				"internal/application/order/queries_test.go",
 				"internal/application/order/query_handler_test.go",
 				"internal/adapters/persistence/memory/order_repository_test.go",
-				"internal/adapters/http/web/order_handler_test.go",
+				"internal/adapters/http/web/v1/order_handler_test.go",
 			}
 			if tc.features != nil {
 				want = append(want, "internal/adapters/persistence/bun/order_repository_test.go")
@@ -403,7 +403,7 @@ func TestGenerateWithTests(t *testing.T) {
 
 			// The time field must be exercised by the in-memory handler test.
 			if tc.features == nil {
-				handlerTest := read(t, dir, "internal/adapters/http/web/order_handler_test.go")
+				handlerTest := read(t, dir, "internal/adapters/http/web/v1/order_handler_test.go")
 				if !strings.Contains(handlerTest, "time.Now()") {
 					t.Errorf("expected time.Now() sample in handler test:\n%s", handlerTest)
 				}

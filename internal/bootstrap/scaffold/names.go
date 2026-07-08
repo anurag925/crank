@@ -213,7 +213,7 @@ func (r Resource) DDDMemoryAdapterPath() string {
 
 // DDDHTTPHandlerPath returns the project-relative path of the HTTP adapter.
 func (r Resource) DDDHTTPHandlerPath() string {
-	return "internal/adapters/http/web/" + r.Snake + "_handler.go"
+	return "internal/adapters/http/web/v1/" + r.Snake + "_handler.go"
 }
 
 // DDDWorkflowPath returns the project-relative path of the temporal workflow

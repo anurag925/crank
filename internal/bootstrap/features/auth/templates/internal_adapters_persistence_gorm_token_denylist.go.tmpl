@@ -1,0 +1,50 @@
+package gorm
+
+import (
+	"context"
+	"time"
+
+	"gorm.io/gorm"
+
+	"{{.ModulePath}}/internal/ports"
+)
+
+// revokedTokenRow is the row DTO for the revoked_tokens table.
+type revokedTokenRow struct {
+	JTI       string    `gorm:"column:jti;primaryKey"`
+	ExpiresAt time.Time `gorm:"column:expires_at;not null"`
+}
+
+func (revokedTokenRow) TableName() string { return "revoked_tokens" }
+
+// TokenDenylist is the GORM-backed implementation of ports.TokenDenylist.
+type TokenDenylist struct {
+	db *gorm.DB
+}
+
+// NewTokenDenylist constructs a GORM-backed TokenDenylist.
+func NewTokenDenylist(db *gorm.DB) *TokenDenylist {
+	return &TokenDenylist{db: db}
+}
+
+var _ ports.TokenDenylist = (*TokenDenylist)(nil)
+
+// Add stores a revoked JTI with its expiration time.
+func (r *TokenDenylist) Add(ctx context.Context, jti string, expiresAt time.Time) error {
+	return r.db.WithContext(ctx).Create(&revokedTokenRow{
+		JTI:       jti,
+		ExpiresAt: expiresAt,
+	}).Error
+}
+
+// Exists reports whether the given JTI has been revoked and has not yet
+// expired. Expired JTIs are treated as non-existent (pruning is done by a
+// periodic cleanup migration).
+func (r *TokenDenylist) Exists(ctx context.Context, jti string) (bool, error) {
+	var count int64
+	err := r.db.WithContext(ctx).
+		Model(&revokedTokenRow{}).
+		Where("jti = ? AND expires_at > ?", jti, time.Now()).
+		Count(&count).Error
+	return count > 0, err
+}

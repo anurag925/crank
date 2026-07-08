@@ -1,6 +1,7 @@
 package user
 
 import (
+	"github.com/google/uuid"
 	"time"
 
 	"{{.ModulePath}}/internal/domain/shared"
@@ -12,7 +13,7 @@ import (
 // and authentication behavior. No JSON, DB, or validation tags live on the
 // aggregate — HTTP and persistence adapters own their own DTOs.
 type User struct {
-	id        UserID
+	id        uuid.UUID
 	name      string
 	email     string
 	password  string // bcrypt hash; populated only by the auth feature
@@ -24,8 +25,8 @@ type User struct {
 // NewUser constructs a new User aggregate, validates its invariants, and
 // records a UserCreated event. Callers must persist the aggregate via
 // Repository.Save and then publish the events pulled from PullEvents.
-func NewUser(id UserID, name, email string) (*User, error) {
-	if id.IsZero() {
+func NewUser(id uuid.UUID, name, email string) (*User, error) {
+	if id == uuid.Nil {
 		return nil, ErrInvalidUserID
 	}
 	if name == "" {
@@ -42,12 +43,12 @@ func NewUser(id UserID, name, email string) (*User, error) {
 		createdAt: now,
 		updatedAt: now,
 	}
-	u.recordEvent(UserCreated{UserID: id, occurredAt: now})
+	u.recordEvent(UserCreated{ID: id, occurredAt: now})
 	return u, nil
 }
 
-// ID returns the aggregate's typed identifier.
-func (u *User) ID() UserID { return u.id }
+// ID returns the aggregate's identifier.
+func (u *User) ID() uuid.UUID { return u.id }
 
 // Name returns the user's display name.
 func (u *User) Name() string { return u.name }
@@ -84,14 +85,28 @@ func (u *User) Update(name, email string) {
 	u.name = name
 	u.email = email
 	u.updatedAt = now
-	u.recordEvent(UserUpdated{UserID: u.id, occurredAt: now})
+	u.recordEvent(UserUpdated{ID: u.id, occurredAt: now})
 }
 
 // MarkDeleted records a UserDeleted event. The application service is
 // responsible for calling Repository.Delete afterwards and publishing the
 // pulled events.
 func (u *User) MarkDeleted() {
-	u.recordEvent(UserDeleted{UserID: u.id, occurredAt: time.Now().UTC()})
+	u.recordEvent(UserDeleted{ID: u.id, occurredAt: time.Now().UTC()})
+}
+
+// Rehydrate reconstructs an aggregate from a persistence row, bypassing the
+// validation done by NewUser. It is intended for use by the postgres and
+// in-memory adapters only. Callers must guarantee that id is non-zero.
+func Rehydrate(id uuid.UUID, name, email, password string, created, updated time.Time) *User {
+	return &User{
+		id:        id,
+		name:      name,
+		email:     email,
+		password:  password,
+		createdAt: created,
+		updatedAt: updated,
+	}
 }
 
 // PullEvents returns the events recorded on the aggregate since the last

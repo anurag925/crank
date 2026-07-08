@@ -1,6 +1,10 @@
 package {{.R.Snake}}
 
-import "context"
+import (
+	"context"
+
+	"github.com/google/uuid"
+)
 
 // Repository is the persistence port for {{.R.SnakePlural}}. Adapters in
 // internal/adapters/persistence/{postgres,memory} implement it; application
@@ -10,10 +14,10 @@ type Repository interface {
 	Save(ctx context.Context, x *{{.R.Pascal}}) error
 	// Get returns a {{.R.Snake}} aggregate by id. Returns Err{{.R.Pascal}}NotFound
 	// when no aggregate with that id is stored.
-	Get(ctx context.Context, id {{.R.Pascal}}ID) (*{{.R.Pascal}}, error)
+	Get(ctx context.Context, id uuid.UUID) (*{{.R.Pascal}}, error)
 	// List returns every {{.R.Snake}} aggregate, in unspecified order.
 	List(ctx context.Context) ([]*{{.R.Pascal}}, error)
 	// Delete removes a {{.R.Snake}} aggregate by id. Returns
 	// Err{{.R.Pascal}}NotFound when no aggregate with that id is stored.
-	Delete(ctx context.Context, id {{.R.Pascal}}ID) error
+	Delete(ctx context.Context, id uuid.UUID) error
 }

@@ -17,4 +17,7 @@ type TokenService interface {
 	// Subject returns the subject claim encoded in a valid access token.
 	// Returns an error if the token is invalid or expired.
 	Subject(accessToken string) (string, error)
+	// Revoke denylists a refresh token to prevent its reuse. The token is
+	// parsed to extract its JTI, which is stored in the TokenDenylist.
+	Revoke(refreshToken string) error
 }

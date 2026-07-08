@@ -11,33 +11,55 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
+	"{{.ModulePath}}/internal/application/uow"
+	gormadapter "{{.ModulePath}}/internal/adapters/persistence/gorm"
 	"{{.ModulePath}}/internal/domain/outbox"
 	"{{.ModulePath}}/internal/domain/shared"
+	"{{.ModulePath}}/internal/domain/user"
+	// crank:tx-repo-imports (do not remove — `crank make scaffold` splices new domain imports here)
 )
+
+// txRepositories implements uow.TxRepositories by constructing
+// GORM-backed adapters from the active transaction. Every accessor
+// returns a repository that participates in the same database
+// transaction, so all writes in the save closure plus the outbox
+// append are committed (or rolled back) atomically.
+type txRepositories struct {
+	tx *gorm.DB
+}
+
+var _ uow.TxRepositories = (*txRepositories)(nil)
+
+func (r *txRepositories) Users() user.Repository {
+	return gormadapter.NewUserRepository(r.tx)
+}
+
+// crank:tx-repo-methods (do not remove — `crank make scaffold` splices new repo accessor methods here)
 
 // GormUoW is a transactional UnitOfWork backed by the outbox_events
 // table. SaveAndPublish runs the supplied save closure in a GORM-managed
-// transaction; on success it appends one outbox row per event and the
-// transaction commits, atomically recording the aggregate write and the
-// events it produced. The event bus is *not* invoked here — the worker
-// drains the outbox and publishes to the bus asynchronously.
+// transaction via TxRepositories; on success it appends one outbox row per
+// event and the transaction commits, atomically recording the aggregate
+// write and the events it produced. The event bus is *not* invoked here —
+// the worker drains the outbox and publishes to the bus asynchronously.
 type GormUoW struct {
-	db   *gorm.DB
-	repo outbox.Repository
+	db *gorm.DB
 }
 
-// NewGormUoW constructs a GormUoW that writes to the given
-// repository inside a transaction on the supplied *gorm.DB.
-func NewGormUoW(db *gorm.DB, repo outbox.Repository) *GormUoW {
-	return &GormUoW{db: db, repo: repo}
+// NewGormUoW constructs a GormUoW that runs the save closure in a
+// transaction on the supplied *gorm.DB.
+func NewGormUoW(db *gorm.DB) *GormUoW {
+	return &GormUoW{db: db}
 }
 
-// SaveAndPublish runs save(ctx) in a transaction; on success it appends
-// one outbox row per event. Any error from save or from the append
-// causes the transaction to roll back.
-func (u *GormUoW) SaveAndPublish(ctx context.Context, save func(ctx context.Context) error, events []shared.DomainEvent) error {
+var _ uow.UnitOfWork = (*GormUoW)(nil)
+
+// SaveAndPublish runs save(ctx, repos) in a transaction through
+// TxRepositories; on success it appends one outbox row per event. Any
+// error from save or from the append causes the transaction to roll back.
+func (u *GormUoW) SaveAndPublish(ctx context.Context, save func(ctx context.Context, repos uow.TxRepositories) error, events []shared.DomainEvent) error {
 	return u.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := save(ctx); err != nil {
+		if err := save(ctx, &txRepositories{tx: tx}); err != nil {
 			return err
 		}
 		for _, ev := range events {
@@ -51,7 +73,8 @@ func (u *GormUoW) SaveAndPublish(ctx context.Context, save func(ctx context.Cont
 				EventType:   ev.EventName(),
 				Payload:     payload,
 			}
-			if err := u.repo.Append(ctx, row); err != nil {
+			outboxRepo := gormadapter.NewOutboxRepository(tx)
+			if err := outboxRepo.Append(ctx, row); err != nil {
 				return fmt.Errorf("append outbox event: %w", err)
 			}
 		}

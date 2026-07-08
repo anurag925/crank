@@ -21,7 +21,6 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 	// Phase 4-5: new features
 	_ "github.com/anurag925/crank/internal/bootstrap/features/audit"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/platform"
 	"github.com/anurag925/crank/internal/bootstrap/scaffold"
 )
 
@@ -126,7 +125,7 @@ func TestGlobalRegistry_HasAllFeatures(t *testing.T) {
 		"mongodb":  true,
 		"qdrant":   true,
 		"temporal": true,
-		"platform": true,
+		
 		"audit":    true,
 	}
 	for _, n := range names {
@@ -164,8 +163,8 @@ func TestBase_FilesExist_BaseOnly(t *testing.T) {
 		"cmd/server/main.go",
 		"docs/docs.go",
 		"internal/config/config.go",
-		"internal/adapters/http/web/routes.go",
-		"internal/adapters/http/web/user_handler.go",
+		"internal/adapters/http/web/v1/routes.go",
+		"internal/adapters/http/web/v1/user_handler.go",
 		"internal/adapters/http/web/middleware/logging.go",
 		"internal/validator/validator.go",
 		"internal/validator/errors.go",
@@ -199,7 +198,7 @@ func TestBase_AgentGuidance_UsesSystemCrank(t *testing.T) {
 
 	skill := readFile(t, r.ProjectDir, ".agents/skills/crank-project/SKILL.md")
 	assertContains(t, skill, "name: crank-project", "crank-project skill")
-	assertContains(t, skill, "A project is considered a Crank-generated project if it has a `.crank.yaml` file", "crank-project skill")
+	assertContains(t, skill, "A project is a Crank-generated project if it has a `.crank.yaml` file", "crank-project skill")
 	assertContains(t, skill, "Use the system-installed `crank` binary", "crank-project skill")
 	assertContains(t, skill, "Do not use `./crank`", "crank-project skill")
 }
@@ -265,14 +264,14 @@ func TestBase_MainGo_NoDatabaseImport(t *testing.T) {
 func TestBase_MainGo_NoAuthImport(t *testing.T) {
 	r := generateProject(t, "noauthmain", nil)
 	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
-	assertNotContains(t, content, "crypto.NewJWTTokenService", "main.go no jwt init")
+	assertNotContains(t, content, "jwt.NewTokenService", "main.go no jwt init")
 }
 
 func TestBase_HandlerHandler_NoDeps(t *testing.T) {
 	// The DDD aggregator (routes.go) only depends on the MountConfig struct
 	// of per-resource handlers. It has no DB or JWT dependencies of its own.
 	r := generateProject(t, "nodeps", nil)
-	content := readFile(t, r.ProjectDir, "internal/adapters/http/web/routes.go")
+	content := readFile(t, r.ProjectDir, "internal/adapters/http/web/v1/routes.go")
 	assertNotContains(t, content, "*bun.DB", "routes.go no bun dep")
 	assertNotContains(t, content, "JWTTokenService", "routes.go no jwt dep")
 }
@@ -281,10 +280,10 @@ func TestBase_HandlerUser_UsesService(t *testing.T) {
 	// The HTTP adapter depends on the application command/query handlers,
 	// not on a monolithic service.
 	r := generateProject(t, "usesvc", nil)
-	content := readFile(t, r.ProjectDir, "internal/adapters/http/web/user_handler.go")
+	content := readFile(t, r.ProjectDir, "internal/adapters/http/web/v1/user_handler.go")
 	assertContains(t, content, "cmd *appuser.CommandHandler", "user handler uses command handler")
 	assertContains(t, content, "qry *appuser.QueryHandler", "user handler uses query handler")
-	assertContains(t, content, "h.qry.HandleList(", "user handler delegates list to query handler")
+	assertContains(t, content, "h.qry.HandleGet(", "user handler delegates get to query handler")
 }
 
 func TestBase_UserModel_NoPassword(t *testing.T) {
@@ -308,10 +307,9 @@ func TestBase_MiddlewareLogging(t *testing.T) {
 func TestBase_MainGo_HasValidatorImport(t *testing.T) {
 	r := generateProject(t, "valmain", nil)
 	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
-	assertContains(t, content, `"github.com/example/valmain/internal/validator"`, "main.go validator import")
-	assertContains(t, content, "validator.ValidationError", "main.go checks ValidationError")
-	assertContains(t, content, "model.APIError", "main.go returns APIError responses")
-	assertContains(t, content, "HTTPErrorHandler", "main.go sets custom error handler")
+	assertNotContains(t, content, `"github.com/example/valmain/internal/validator"`, "main.go no longer imports validator (moved to server.go)")
+	assertNotContains(t, content, "model.APIError", "main.go no longer imports model")
+	assertNotContains(t, content, "HTTPErrorHandler", "main.go no longer sets error handler (moved to server.go)")
 }
 
 func TestBase_Dockerfile(t *testing.T) {
@@ -380,8 +378,8 @@ func TestAuth_FilesExist(t *testing.T) {
 
 	expectedFiles := []string{
 		"internal/adapters/http/web/middleware/auth.go",
-		"internal/adapters/crypto/bcrypt_hasher.go",
-		"internal/adapters/crypto/jwt_token_service.go",
+		"pkg/crypto/bcrypt_hasher.go",
+		"internal/adapters/auth/jwt/token_service.go",
 		"internal/adapters/http/web/auth_handler.go",
 		"internal/domain/user/user.go",
 		"internal/ports/hasher.go",
@@ -430,8 +428,8 @@ func TestAuth_JWTTokenService(t *testing.T) {
 	// The auth feature ships a ports.TokenService adapter in the crypto
 	// package — that is where JWT issue/parse lives in the DDD layout.
 	r := generateProject(t, "authsvc", []string{"auth"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/crypto/jwt_token_service.go")
-	assertContains(t, content, "JWTTokenService", "JWT token service struct")
+	content := readFile(t, r.ProjectDir, "internal/adapters/auth/jwt/token_service.go")
+	assertContains(t, content, "TokenService", "JWT token service struct")
 	assertContains(t, content, "TokenPair", "JWT token service returns TokenPair")
 	assertContains(t, content, "jwt.ParseWithClaims", "JWT token service parses with claims")
 }
@@ -463,9 +461,9 @@ func TestAuth_UserModel_HasPassword(t *testing.T) {
 func TestAuth_MainGo_ImportsService(t *testing.T) {
 	r := generateProject(t, "authmain", []string{"auth"})
 	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
-	assertContains(t, content, "crypto.NewJWTTokenService", "main.go creates JWTTokenService")
+	assertContains(t, content, "jwt.NewTokenService", "main.go creates JWTTokenService")
 	assertContains(t, content, "web.NewAuthHandler", "main.go creates AuthHandler")
-	assertContains(t, content, "validator", "main.go still imports validator")
+	assertNotContains(t, content, "validator", "main.go no longer imports validator (moved to server.go)")
 }
 
 func TestAuth_HandlerHandler_HasJWTDep(t *testing.T) {
@@ -473,7 +471,7 @@ func TestAuth_HandlerHandler_HasJWTDep(t *testing.T) {
 	// handler is mounted on its own group. Verify the auth handler carries
 	// the token service instead.
 	r := generateProject(t, "authdeps", []string{"auth"})
-	routes := readFile(t, r.ProjectDir, "internal/adapters/http/web/routes.go")
+	routes := readFile(t, r.ProjectDir, "internal/adapters/http/web/v1/routes.go")
 	assertNotContains(t, routes, "JWTTokenService", "routes.go has no JWT dep")
 	auth := readFile(t, r.ProjectDir, "internal/adapters/http/web/auth_handler.go")
 	assertContains(t, auth, "tokens ports.TokenService", "auth handler has TokenService dep")
@@ -584,8 +582,8 @@ func TestBun_UserModel_NoAuth_NoPassword(t *testing.T) {
 func TestBun_RepositoryUser_BunBacked(t *testing.T) {
 	r := generateProject(t, "pgrepo", []string{"bun"})
 	content := readFile(t, r.ProjectDir, "internal/adapters/persistence/bun/user_repository.go")
-	assertContains(t, content, "*bun.DB", "repo uses bun.DB")
-	assertContains(t, content, "func NewUserRepository(db *bun.DB)", "repo constructor takes bun.DB")
+	assertContains(t, content, "bun.IDB", "repo uses bun.IDB")
+	assertContains(t, content, "func NewUserRepository(db bun.IDB)", "repo constructor takes bun.IDB")
 	assertContains(t, content, "GetByEmail", "repo has GetByEmail method")
 }
 
@@ -594,7 +592,7 @@ func TestBun_HandlerUser_UsesRepo(t *testing.T) {
 	// delegates to the application command/query handlers. The composition
 	// root wires the repository into the application layer.
 	r := generateProject(t, "pghandler", []string{"bun"})
-	handler := readFile(t, r.ProjectDir, "internal/adapters/http/web/user_handler.go")
+	handler := readFile(t, r.ProjectDir, "internal/adapters/http/web/v1/user_handler.go")
 	assertNotContains(t, handler, "repo *repository.UserRepository", "handler has no repo dep")
 	assertContains(t, handler, "h.cmd.HandleCreate(", "handler delegates to command handler")
 	main := readFile(t, r.ProjectDir, "cmd/server/main.go")
@@ -605,7 +603,7 @@ func TestBun_HandlerHandler_HasDBDep(t *testing.T) {
 	// Routes.go is DB-agnostic. The DB dependency lives in main.go where the
 	// bun connection is opened and passed to the bun adapter.
 	r := generateProject(t, "pghandlerdep", []string{"bun"})
-	routes := readFile(t, r.ProjectDir, "internal/adapters/http/web/routes.go")
+	routes := readFile(t, r.ProjectDir, "internal/adapters/http/web/v1/routes.go")
 	assertNotContains(t, routes, "*bun.DB", "routes.go has no DB dep")
 	main := readFile(t, r.ProjectDir, "cmd/server/main.go")
 	assertContains(t, main, "bun.NewDB", "main opens the bun DB")
@@ -1007,15 +1005,14 @@ func TestValidator_HandlerBinder_Integration(t *testing.T) {
 	// struct tags). The custom binder is no longer needed because each
 	// handler's input DTO self-validates when c.Bind is called.
 	r := generateProject(t, "valbinder", nil)
-	dto := readFile(t, r.ProjectDir, "internal/adapters/http/web/user_handler.go")
+	dto := readFile(t, r.ProjectDir, "internal/adapters/http/web/v1/user_handler.go")
 	assertContains(t, dto, `validate:"required,email"`, "userDTO has email validate tag")
 	assertContains(t, dto, `validate:"required,min=2,max=100"`, "userDTO has name validate tag")
 }
 
 func TestValidator_MainGo_ErrorHandler(t *testing.T) {
 	r := generateProject(t, "valmaineh", nil)
-	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
-	assertContains(t, content, "e.HTTPErrorHandler", "sets custom HTTP error handler")
+	content := readFile(t, r.ProjectDir, "internal/adapters/http/web/server.go")
 	assertContains(t, content, `err.(*validator.ValidationError)`, "checks for ValidationError type")
 	assertContains(t, content, `err.(*echo.HTTPError)`, "checks for Echo HTTPError type")
 	assertContains(t, content, "internal server error", "fallback error message")
@@ -1023,7 +1020,7 @@ func TestValidator_MainGo_ErrorHandler(t *testing.T) {
 
 func TestValidator_UserHandler_CreateDelegatesToBind(t *testing.T) {
 	r := generateProject(t, "valuserh", nil)
-	content := readFile(t, r.ProjectDir, "internal/adapters/http/web/user_handler.go")
+	content := readFile(t, r.ProjectDir, "internal/adapters/http/web/v1/user_handler.go")
 	// Create handler relies on the custom binder for validation
 	assertContains(t, content, "c.Bind(&in)", "Create uses Bind (which validates)")
 }
@@ -1080,7 +1077,7 @@ func TestAuthBun_MainGo_HasBothDeps(t *testing.T) {
 	r := generateProject(t, "authpgmain", []string{"auth", "bun"})
 	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
 	assertContains(t, content, "bun.NewDB", "main.go creates bun db")
-	assertContains(t, content, "crypto.NewJWTTokenService", "main.go creates jwt")
+	assertContains(t, content, "jwt.NewTokenService", "main.go creates jwt")
 	assertContains(t, content, "web.NewAuthHandler", "main.go creates auth handler")
 }
 
@@ -1162,12 +1159,12 @@ func TestRedis_BootstrapManifest(t *testing.T) {
 
 func TestCrypto_FilesExist(t *testing.T) {
 	r := generateProject(t, "cryptotest", []string{"crypto"})
-	assertFileExists(t, r.ProjectDir, "internal/adapters/crypto/aesgcm_cipher.go")
+	assertFileExists(t, r.ProjectDir, "pkg/crypto/aesgcm_cipher.go")
 }
 
 func TestCrypto_CryptoGo_PackageAndType(t *testing.T) {
 	r := generateProject(t, "cryptopkg", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/crypto/aesgcm_cipher.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/aesgcm_cipher.go")
 	assertContains(t, content, "package crypto", "crypto package")
 	assertContains(t, content, "type AESGCMCipher struct", "Crypto struct")
 	assertContains(t, content, "aead cipher.AEAD", "Crypto has AEAD field")
@@ -1175,7 +1172,7 @@ func TestCrypto_CryptoGo_PackageAndType(t *testing.T) {
 
 func TestCrypto_CryptoGo_NewFunction(t *testing.T) {
 	r := generateProject(t, "cryptonew", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/crypto/aesgcm_cipher.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/aesgcm_cipher.go")
 	assertContains(t, content, "func NewAESGCMCipher(secret string) (*AESGCMCipher, error)", "NewAESGCMCipher function signature")
 	assertContains(t, content, "secret must not be empty", "New rejects empty secret")
 	assertContains(t, content, "sha256.Sum256", "New derives key via SHA-256")
@@ -1185,7 +1182,7 @@ func TestCrypto_CryptoGo_NewFunction(t *testing.T) {
 
 func TestCrypto_CryptoGo_EncryptFunction(t *testing.T) {
 	r := generateProject(t, "cryptoenc", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/crypto/aesgcm_cipher.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/aesgcm_cipher.go")
 	assertContains(t, content, "func (c *AESGCMCipher) Encrypt(plaintext string) (string, error)", "AESGCMCipher Encrypt signature")
 	assertContains(t, content, "c.aead.NonceSize()", "Encrypt uses nonce")
 	assertContains(t, content, "rand.Reader", "Encrypt uses crypto/rand")
@@ -1195,7 +1192,7 @@ func TestCrypto_CryptoGo_EncryptFunction(t *testing.T) {
 
 func TestCrypto_CryptoGo_DecryptFunction(t *testing.T) {
 	r := generateProject(t, "cryptodec", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/crypto/aesgcm_cipher.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/aesgcm_cipher.go")
 	assertContains(t, content, "func (c *AESGCMCipher) Decrypt(encoded string) (string, error)", "AESGCMCipher Decrypt signature")
 	assertContains(t, content, "base64.RawURLEncoding.DecodeString", "Decrypt decodes base64-url")
 	assertContains(t, content, "ciphertext too short", "Decrypt rejects short ciphertext")
@@ -1204,7 +1201,7 @@ func TestCrypto_CryptoGo_DecryptFunction(t *testing.T) {
 
 func TestCrypto_CryptoGo_Imports(t *testing.T) {
 	r := generateProject(t, "cryptoimports", []string{"crypto"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/crypto/aesgcm_cipher.go")
+	content := readFile(t, r.ProjectDir, "pkg/crypto/aesgcm_cipher.go")
 	assertContains(t, content, "crypto/aes", "imports crypto/aes")
 	assertContains(t, content, "crypto/cipher", "imports crypto/cipher")
 	assertContains(t, content, "crypto/rand", "imports crypto/rand")
@@ -1280,7 +1277,7 @@ func TestCrypto_BunCombined_AllSections(t *testing.T) {
 	cfg := readFile(t, r.ProjectDir, "configs/config.yaml")
 	assertContains(t, cfg, "crypto:", "config has crypto section")
 	assertContains(t, cfg, "database:", "config has database section")
-	assertFileExists(t, r.ProjectDir, "internal/adapters/crypto/aesgcm_cipher.go")
+	assertFileExists(t, r.ProjectDir, "pkg/crypto/aesgcm_cipher.go")
 	assertFileExists(t, r.ProjectDir, "internal/adapters/persistence/bun/db.go")
 }
 
@@ -1518,12 +1515,12 @@ func TestAll_Features(t *testing.T) {
 	assertFileExists(t, dir, "internal/validator/errors.go")
 
 	// crypto files
-	assertFileExists(t, dir, "internal/adapters/crypto/aesgcm_cipher.go")
+	assertFileExists(t, dir, "pkg/crypto/aesgcm_cipher.go")
 
 	// auth files
 	assertFileExists(t, dir, "internal/adapters/http/web/middleware/auth.go")
-	assertFileExists(t, dir, "internal/adapters/crypto/bcrypt_hasher.go")
-	assertFileExists(t, dir, "internal/adapters/crypto/jwt_token_service.go")
+	assertFileExists(t, dir, "pkg/crypto/bcrypt_hasher.go")
+	assertFileExists(t, dir, "internal/adapters/auth/jwt/token_service.go")
 	assertFileExists(t, dir, "internal/adapters/http/web/auth_handler.go")
 
 	// bun files
@@ -1547,17 +1544,13 @@ func TestAll_Features(t *testing.T) {
 	assertFileExists(t, dir, "internal/adapters/temporal/activity/greeting.go")
 	assertFileExists(t, dir, "cmd/worker/main.go")
 
-	// platform files (new in Phase 4)
-	assertFileExists(t, dir, "internal/adapters/platform/client.go")
-	assertFileExists(t, dir, "internal/ports/platform/types.go")
-
-	// audit files (new in Phase 5)
+	// audit files
 	assertFileExists(t, dir, "internal/domain/audit/event.go")
 	assertFileExists(t, dir, "internal/domain/audit/repository.go")
 	assertFileExists(t, dir, "internal/ports/audit.go")
 	assertFileExists(t, dir, "internal/adapters/audit/logger.go")
 	assertFileExists(t, dir, "internal/application/audit/query_handler.go")
-	assertFileExists(t, dir, "internal/adapters/http/web/audit_handler.go")
+	assertFileExists(t, dir, "internal/adapters/http/web/v1/audit_handler.go")
 	assertFileExists(t, dir, "migrations/000003_add_audit_events.up.sql")
 
 	// Verify deps are returned via Result
@@ -1602,7 +1595,7 @@ func TestAdd_AuthToBaseProject(t *testing.T) {
 
 	// Verify auth files don't exist yet
 	assertFileNotExists(t, r.ProjectDir, "internal/adapters/http/web/middleware/auth.go")
-	assertFileNotExists(t, r.ProjectDir, "internal/adapters/crypto/bcrypt_hasher.go")
+	assertFileNotExists(t, r.ProjectDir, "pkg/crypto/bcrypt_hasher.go")
 
 	// Add auth
 	r2, err := bootstrap.Add(bootstrap.GlobalRegistry, r.ProjectDir, "auth")
@@ -1612,7 +1605,7 @@ func TestAdd_AuthToBaseProject(t *testing.T) {
 
 	// Now auth files should exist
 	assertFileExists(t, r2.ProjectDir, "internal/adapters/http/web/middleware/auth.go")
-	assertFileExists(t, r2.ProjectDir, "internal/adapters/crypto/bcrypt_hasher.go")
+	assertFileExists(t, r2.ProjectDir, "pkg/crypto/bcrypt_hasher.go")
 	assertFileExists(t, r2.ProjectDir, "internal/adapters/http/web/auth_handler.go")
 
 	// Manifest should include auth
@@ -1742,10 +1735,9 @@ func TestBase_Logging_ContextHandler(t *testing.T) {
 
 	t.Run("no L(ctx) in main.go error handler", func(t *testing.T) {
 		project := generateProject(t, "logmain", nil).ProjectDir
-		main := readFile(t, project, "cmd/server/main.go")
-		assertNotContains(t, main, "logging.L(", "main has no logging.L")
-		assertContains(t, main, "slog.WarnContext", "main uses slog.WarnContext")
-		assertContains(t, main, "slog.ErrorContext", "main uses slog.ErrorContext")
+		main := readFile(t, project, "internal/adapters/http/web/server.go")
+		assertContains(t, main, "logger.WarnContext", "server.go uses logger.WarnContext")
+		assertContains(t, main, "logger.ErrorContext", "server.go uses logger.ErrorContext")
 	})
 
 	t.Run("ParseLevel exists", func(t *testing.T) {
@@ -1763,7 +1755,7 @@ func TestBase_Logging_ContextHandler(t *testing.T) {
 
 	t.Run("no L(ctx) in user_handler.go", func(t *testing.T) {
 		project := generateProject(t, "loguser", nil).ProjectDir
-		handler := readFile(t, project, "internal/adapters/http/web/user_handler.go")
+		handler := readFile(t, project, "internal/adapters/http/web/v1/user_handler.go")
 		assertNotContains(t, handler, "logging.L(", "user handler has no logging.L")
 		assertNotContains(t, handler, "pkg/logging", "user handler imports no logging")
 		assertContains(t, handler, "c.Request().Context()", "user handler uses c.Request().Context()")
@@ -1822,51 +1814,6 @@ func TestTemporal_DockerfileWorker(t *testing.T) {
 // PHASE 4: Platform client pattern
 // ==========================================================================
 
-func TestPlatform_FilesExist(t *testing.T) {
-	project := generateProject(t, "plt", []string{"base", "platform"}).ProjectDir
-	assertFileExists(t, project, "internal/adapters/platform/client.go")
-	assertFileExists(t, project, "internal/ports/platform/types.go")
-
-	client := readFile(t, project, "internal/adapters/platform/client.go")
-	assertContains(t, client, "type Client struct", "platform client has struct")
-	assertContains(t, client, "func NewClient(baseURL string) *Client", "platform client has NewClient")
-	assertContains(t, client, "func (c *Client) Health(ctx context.Context, path string) error", "platform client has Health")
-	assertContains(t, client, "func (c *Client) GetJSON(ctx context.Context, path string, out any) error", "platform client has GetJSON")
-	assertContains(t, client, "5 * time.Second", "platform client has 5s timeout")
-}
-
-func TestQdrant_PlatformPattern(t *testing.T) {
-	project := generateProject(t, "pltqdrant", []string{"base", "gorm", "platform", "qdrant"}).ProjectDir
-	assertFileExists(t, project, "internal/ports/platform/qdrant.go")
-	assertFileExists(t, project, "internal/adapters/platform/qdrant.go")
-
-	port := readFile(t, project, "internal/ports/platform/qdrant.go")
-	assertContains(t, port, "type Qdrant interface", "qdrant port is interface")
-	assertContains(t, port, "Health(ctx context.Context) error", "qdrant port has Health")
-	assertContains(t, port, "UpsertPoint", "qdrant port has UpsertPoint")
-	assertContains(t, port, "SearchPoints", "qdrant port has SearchPoints")
-
-	adapter := readFile(t, project, "internal/adapters/platform/qdrant.go")
-	assertContains(t, adapter, "type QdrantClient struct{ *Client }", "qdrant adapter embeds Client")
-	assertContains(t, adapter, "var _ platform.Qdrant = (*QdrantClient)(nil)", "qdrant adapter satisfies port")
-}
-
-func TestRedis_PlatformPattern(t *testing.T) {
-	project := generateProject(t, "pltredis", []string{"base", "gorm", "platform", "redis"}).ProjectDir
-	assertFileExists(t, project, "internal/adapters/platform/redis.go")
-	assertFileExists(t, project, "internal/ports/cache.go")
-
-	adapter := readFile(t, project, "internal/adapters/platform/redis.go")
-	assertContains(t, adapter, "type RedisCache struct", "redis adapter has struct")
-	assertContains(t, adapter, "var _ ports.Cache = (*RedisCache)(nil)", "redis adapter satisfies Cache")
-}
-
-// Old persistence qdrant client still exists alongside the platform adapter.
-func TestQdrant_LegacyClientStillExists(t *testing.T) {
-	project := generateProject(t, "pllegacy", []string{"base", "gorm", "qdrant"}).ProjectDir
-	assertFileExists(t, project, "internal/adapters/persistence/qdrant/client.go")
-}
-
 // ==========================================================================
 // PHASE 5: Audit trail feature
 // ==========================================================================
@@ -1881,7 +1828,7 @@ func TestAudit_FilesExist(t *testing.T) {
 		"internal/adapters/persistence/gorm/audit_repository.go",
 		"internal/adapters/audit/logger.go",
 		"internal/application/audit/query_handler.go",
-		"internal/adapters/http/web/audit_handler.go",
+		"internal/adapters/http/web/v1/audit_handler.go",
 		"migrations/000003_add_audit_events.up.sql",
 		"migrations/000003_add_audit_events.down.sql",
 	} {

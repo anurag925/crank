@@ -28,7 +28,6 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 	// Phase 4-5: new features
 	_ "github.com/anurag925/crank/internal/bootstrap/features/audit"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/platform"
 )
 
 // crankBin is the path to the crank binary built once in TestMain.
@@ -36,7 +35,7 @@ var crankBin string
 
 // allFeatureNames lists every feature the application ships, used to validate
 // the `crank list` output and to drive the "all features" compile test.
-var allFeatureNames = []string{"base", "auth", "crypto", "bun", "gorm", "redis", "mongodb", "qdrant", "temporal", "otel", "outbox", "platform", "audit"}
+var allFeatureNames = []string{"base", "auth", "crypto", "bun", "gorm", "redis", "mongodb", "qdrant", "temporal", "otel", "outbox", "audit"}
 
 // allToolNames lists every tool subcommand the application wraps.
 var allToolNames = []string{"migrate", "swag", "build", "run", "dev", "test", "gofmt", "vet", "tidy"}
@@ -204,9 +203,7 @@ var compileCases = []struct {
 	{"crypto", []string{"crypto"}},
 	{"temporal", []string{"temporal"}},
 	{"auth_bun_crypto", []string{"auth", "bun", "crypto"}},
-	{"platform", []string{"platform"}},
-	{"platform_qdrant", []string{"platform", "qdrant"}},
-	{"platform_redis", []string{"platform", "redis"}},
+	{"redis_cache", []string{"redis"}},
 	{"audit_gorm", []string{"gorm", "audit"}},
 	{"audit_bun", []string{"bun", "audit"}},
 	// "all" is a curated matrix; bun and gorm are mutually exclusive, so the

@@ -9,3 +9,6 @@ var ErrUserNotFound = errors.New("user not found")
 // ErrInvalidUser is returned by the aggregate constructor when one of its
 // invariants is violated (e.g. an empty name or email).
 var ErrInvalidUser = errors.New("invalid user")
+
+// ErrInvalidUserID is returned when a nil uuid.UUID is passed as a user id.
+var ErrInvalidUserID = errors.New("invalid user id")

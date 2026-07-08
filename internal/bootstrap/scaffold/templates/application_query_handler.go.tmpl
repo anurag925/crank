@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"{{.Module}}/internal/domain/{{.R.Snake}}"
 )
 
@@ -21,7 +23,7 @@ func NewQueryHandler(repo {{.R.Snake}}.Repository) *QueryHandler {
 
 // HandleGet fetches a single {{.R.Snake}} aggregate by id.
 func (h *QueryHandler) HandleGet(ctx context.Context, q Get{{.R.Pascal}}Query) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
-	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID(q.ID)
+	id, err := uuid.Parse(q.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get {{.R.Snake}}: %w", err)
 	}

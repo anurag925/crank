@@ -1,11 +1,14 @@
 package user
 
-import "time"
+import (
+	"github.com/google/uuid"
+	"time"
+)
 
 // UserCreated is emitted when a new user aggregate is first persisted.
 type UserCreated struct {
-	UserID      UserID
-	occurredAt  time.Time
+	ID         uuid.UUID
+	occurredAt time.Time
 }
 
 // EventName returns the dotted event identifier.
@@ -16,8 +19,8 @@ func (e UserCreated) OccurredAt() time.Time { return e.occurredAt }
 
 // UserUpdated is emitted when an existing user aggregate's state changes.
 type UserUpdated struct {
-	UserID      UserID
-	occurredAt  time.Time
+	ID         uuid.UUID
+	occurredAt time.Time
 }
 
 // EventName returns the dotted event identifier.
@@ -28,8 +31,8 @@ func (e UserUpdated) OccurredAt() time.Time { return e.occurredAt }
 
 // UserDeleted is emitted when a user aggregate is removed.
 type UserDeleted struct {
-	UserID      UserID
-	occurredAt  time.Time
+	ID         uuid.UUID
+	occurredAt time.Time
 }
 
 // EventName returns the dotted event identifier.

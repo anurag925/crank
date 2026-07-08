@@ -13,20 +13,17 @@ import (
 
 // AESGCMCipher is a ports.Cipher implementation backed by AES-256-GCM.
 // The 32-byte key is derived from a human-readable secret via SHA-256 so
-// callers only need to supply a sufficiently long passphrase (stored in
-// .env as CRYPTO_SECRET).
+// callers only need to supply a sufficiently long passphrase.
 type AESGCMCipher struct {
 	aead cipher.AEAD
 }
 
 // NewAESGCMCipher constructs a cipher from the supplied secret. The secret
-// is hashed with SHA-256 to produce a 32-byte AES key, so any non-empty
-// string works. For production use, supply at least 32 bytes of entropy.
+// is hashed with SHA-256 to produce a 32-byte AES key.
 func NewAESGCMCipher(secret string) (*AESGCMCipher, error) {
 	if secret == "" {
 		return nil, errors.New("crypto: secret must not be empty")
 	}
-
 	key := sha256.Sum256([]byte(secret))
 	block, err := aes.NewCipher(key[:])
 	if err != nil {
@@ -39,10 +36,8 @@ func NewAESGCMCipher(secret string) (*AESGCMCipher, error) {
 	return &AESGCMCipher{aead: aead}, nil
 }
 
-// Encrypt serialises plaintext into a base64-url string containing the
-// random nonce prepended to the AES-256-GCM ciphertext. The nonce is
-// unique per call so the same plaintext produces different ciphertext
-// each time.
+// Encrypt encrypts plaintext and returns a base64-url string containing the
+// random nonce prepended to the ciphertext.
 func (c *AESGCMCipher) Encrypt(plaintext string) (string, error) {
 	nonce := make([]byte, c.aead.NonceSize())
 	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
@@ -53,8 +48,7 @@ func (c *AESGCMCipher) Encrypt(plaintext string) (string, error) {
 }
 
 // Decrypt decodes a base64-url string produced by Encrypt and returns the
-// original plaintext. Returns an error if the ciphertext is tampered with
-// or the wrong secret was used.
+// original plaintext.
 func (c *AESGCMCipher) Decrypt(encoded string) (string, error) {
 	payload, err := base64.RawURLEncoding.DecodeString(encoded)
 	if err != nil {

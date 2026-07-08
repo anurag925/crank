@@ -22,10 +22,10 @@ type auditRow struct {
 }
 
 type AuditRepository struct {
-	db *bun.DB
+	db bun.IDB
 }
 
-func NewAuditRepository(db *bun.DB) *AuditRepository {
+func NewAuditRepository(db bun.IDB) *AuditRepository {
 	return &AuditRepository{db: db}
 }
 

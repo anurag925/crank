@@ -1,4 +1,4 @@
-package web
+package v1
 
 import (
 	"errors"
@@ -6,15 +6,15 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"{{.ModulePath}}/internal/adapters/http/web/api"
 	appuser "{{.ModulePath}}/internal/application/user"
 	"{{.ModulePath}}/internal/domain/user"
-	"{{.ModulePath}}/internal/model"
 )
 
 // userDTO is the input/output DTO for user HTTP endpoints. The HTTP layer
 // owns validation tags; the domain aggregate stays tag-free.
 type userDTO struct {
-	ID    string `json:"id"    validate:"required"`
+	ID    string `json:"id"    validate:"omitempty"`
 	Name  string `json:"name"  validate:"required,min=2,max=100"`
 	Email string `json:"email" validate:"required,email"`
 }
@@ -50,7 +50,6 @@ func NewUserHandler(cmd *appuser.CommandHandler, qry *appuser.QueryHandler) *Use
 func (h *UserHandler) Register(g *echo.Group) {
 	g.POST("", h.Create)
 	g.GET("/:id", h.Get)
-	g.GET("", h.List)
 	g.PUT("/:id", h.Update)
 	g.DELETE("/:id", h.Delete)
 }
@@ -64,20 +63,20 @@ func (h *UserHandler) Register(g *echo.Group) {
 //	@Produce      json
 //	@Param        user  body      userDTO  true  "User payload"
 //	@Success      201   {object}  userDTO
-//	@Failure      422   {object}  model.APIError
-//	@Router       /users [post]
-func (h *UserHandler) Create(	c *echo.Context) error {
+//	@Failure      422   {object}  api.Error
+//	@Router       /v1/users [post]
+func (h *UserHandler) Create(c *echo.Context) error {
 	ctx := c.Request().Context()
 	var in userDTO
 	if err := c.Bind(&in); err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 	}
 	out, err := h.cmd.HandleCreate(ctx, in.toCreateCommand())
 	if errors.Is(err, user.ErrUserNotFound) {
-		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
+		return c.JSON(http.StatusNotFound, api.Error{Error: "user not found"})
 	}
 	if err != nil {
-		return c.JSON(http.StatusUnprocessableEntity, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusUnprocessableEntity, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusCreated, toUserDTO(out))
 }
@@ -85,71 +84,64 @@ func (h *UserHandler) Create(	c *echo.Context) error {
 // Get godoc
 //
 //	@Summary      Get a user
-//	@Description  Returns a single user by ID.
+//	@Description  Returns a single user by ID. Users may only access their own record.
 //	@Tags         users
 //	@Produce      json
 //	@Param        id   path      string  true  "User ID"
 //	@Success      200  {object}  userDTO
-//	@Failure      404  {object}  model.APIError
-//	@Router       /users/{id} [get]
-func (h *UserHandler) Get(	c *echo.Context) error {
+//	@Failure      404  {object}  api.Error
+//	@Router       /v1/users/{id} [get]
+func (h *UserHandler) Get(c *echo.Context) error {
+	userID, ok := c.Get("user_id").(string)
+	if !ok || userID == "" {
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: "unauthenticated"})
+	}
+	if c.Param("id") != userID {
+		return c.JSON(http.StatusNotFound, api.Error{Error: "user not found"})
+	}
 	ctx := c.Request().Context()
 	out, err := h.qry.HandleGet(ctx, appuser.GetUserQuery{ID: c.Param("id")})
 	if errors.Is(err, user.ErrUserNotFound) {
-		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
+		return c.JSON(http.StatusNotFound, api.Error{Error: "user not found"})
 	}
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusOK, toUserDTO(out))
-}
-
-// List godoc
-//
-//	@Summary      List users
-//	@Description  Returns all users.
-//	@Tags         users
-//	@Produce      json
-//	@Success      200  {array}   userDTO
-//	@Router       /users [get]
-func (h *UserHandler) List(	c *echo.Context) error {
-	ctx := c.Request().Context()
-	items, err := h.qry.HandleList(ctx, appuser.ListUsersQuery{})
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
-	}
-	out := make([]userDTO, 0, len(items))
-	for _, u := range items {
-		out = append(out, toUserDTO(u))
-	}
-	return c.JSON(http.StatusOK, out)
 }
 
 // Update godoc
 //
 //	@Summary      Update a user
-//	@Description  Updates an existing user by ID.
+//	@Description  Updates an existing user by ID. Users may only modify their own record.
 //	@Tags         users
 //	@Accept       json
 //	@Produce      json
 //	@Param        id   path      string  true  "User ID"
 //	@Param        user body      userDTO true  "User payload"
 //	@Success      200  {object}  userDTO
-//	@Failure      404  {object}  model.APIError
-//	@Router       /users/{id} [put]
-func (h *UserHandler) Update(	c *echo.Context) error {
+//	@Failure      404  {object}  api.Error
+//	@Router       /v1/users/{id} [put]
+func (h *UserHandler) Update(c *echo.Context) error {
+	userID, ok := c.Get("user_id").(string)
+	if !ok || userID == "" {
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: "unauthenticated"})
+	}
+	if c.Param("id") != userID {
+		return c.JSON(http.StatusNotFound, api.Error{Error: "user not found"})
+	}
 	ctx := c.Request().Context()
 	var in userDTO
 	if err := c.Bind(&in); err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 	}
 	in.ID = c.Param("id")
 	out, err := h.cmd.HandleUpdate(ctx, in.toUpdateCommand())
 	if errors.Is(err, user.ErrUserNotFound) {
-		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
+		return c.JSON(http.StatusNotFound, api.Error{Error: "user not found"})
 	}
 	if err != nil {
-		return c.JSON(http.StatusUnprocessableEntity, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusUnprocessableEntity, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusOK, toUserDTO(out))
 }
@@ -157,21 +149,28 @@ func (h *UserHandler) Update(	c *echo.Context) error {
 // Delete godoc
 //
 //	@Summary      Delete a user
-//	@Description  Deletes a user by ID.
+//	@Description  Deletes a user by ID. Users may only delete their own record.
 //	@Tags         users
 //	@Produce      json
 //	@Param        id   path      string  true  "User ID"
 //	@Success      204
-//	@Failure      404  {object}  model.APIError
-//	@Router       /users/{id} [delete]
-func (h *UserHandler) Delete(	c *echo.Context) error {
+//	@Failure      404  {object}  api.Error
+//	@Router       /v1/users/{id} [delete]
+func (h *UserHandler) Delete(c *echo.Context) error {
+	userID, ok := c.Get("user_id").(string)
+	if !ok || userID == "" {
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: "unauthenticated"})
+	}
+	if c.Param("id") != userID {
+		return c.JSON(http.StatusNotFound, api.Error{Error: "user not found"})
+	}
 	ctx := c.Request().Context()
 	err := h.cmd.HandleDelete(ctx, appuser.DeleteUserCommand{ID: c.Param("id")})
 	if errors.Is(err, user.ErrUserNotFound) {
-		return c.JSON(http.StatusNotFound, model.APIError{Error: "user not found"})
+		return c.JSON(http.StatusNotFound, api.Error{Error: "user not found"})
 	}
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 	}
 	return c.NoContent(http.StatusNoContent)
 }

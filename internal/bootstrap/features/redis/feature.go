@@ -35,6 +35,6 @@ func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_ports_cache.go.tmpl", OutputPath: "internal/ports/cache.go"},
 		{TemplatePath: "templates/internal_adapters_cache_redis_client.go.tmpl", OutputPath: "internal/adapters/cache/redis/client.go"},
-		{TemplatePath: "templates/internal_adapters_platform_redis.go.tmpl", OutputPath: "internal/adapters/platform/redis.go"},
+		{TemplatePath: "templates/internal_adapters_platform_redis.go.tmpl", OutputPath: "internal/adapters/cache/redis/cache.go"},
 	}
 }

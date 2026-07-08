@@ -8,31 +8,43 @@ import (
 	"context"
 	"log/slog"
 
+	"{{.ModulePath}}/internal/application/uow"
 	"{{.ModulePath}}/internal/domain/shared"
+	"{{.ModulePath}}/internal/domain/user"
 	"{{.ModulePath}}/internal/ports"
 )
+
+// inMemoryTxRepositories implements uow.TxRepositories by returning the
+// in-memory repositories passed at construction time. There is no real
+// transaction — the repos are just shared references.
+type inMemoryTxRepositories struct {
+	userRepo user.Repository
+	// crank:tx-repo-fields (do not remove — `crank make scaffold` splices new repo fields here)
+}
+
+func (r *inMemoryTxRepositories) Users() user.Repository { return r.userRepo }
+
+// crank:tx-repo-methods (do not remove — `crank make scaffold` splices new repo accessor methods here)
 
 // InMemoryUoW is a non-transactional UnitOfWork. It calls the save closure
 // first; if that succeeds it publishes the events. A failure in save
 // short-circuits the publish step. A failure in publish is logged but does
-// not unwind the save — the same behaviour as calling repo.Save and
-// bus.Publish directly.
+// not unwind the save.
 type InMemoryUoW struct {
-	bus ports.EventBus
+	bus      ports.EventBus
+	userRepo user.Repository
+	// crank:inmem-repo-fields (do not remove — `crank make scaffold` splices new repo fields here)
 }
 
-// NewInMemoryUoW returns a UnitOfWork that publishes via the given bus.
-func NewInMemoryUoW(bus ports.EventBus) *InMemoryUoW {
-	return &InMemoryUoW{bus: bus}
+// NewInMemoryUoW returns a UnitOfWork backed by in-memory repositories.
+func NewInMemoryUoW(bus ports.EventBus, userRepo user.Repository) *InMemoryUoW {
+	return &InMemoryUoW{bus: bus, userRepo: userRepo}
 }
 
-// SaveAndPublish runs the save closure, then publishes events if save
-// succeeded. The save closure decides which repository to use; the
-// UnitOfWork itself does not touch the database. If the publish step
-// fails the error is logged but the save is not unwound — consistent
-// with the behaviour of calling repo.Save and bus.Publish separately.
-func (u *InMemoryUoW) SaveAndPublish(ctx context.Context, save func(ctx context.Context) error, events []shared.DomainEvent) error {
-	if err := save(ctx); err != nil {
+// SaveAndPublish runs the save closure with an inMemoryTxRepositories that
+// hands out the in-memory repos, then publishes events if save succeeded.
+func (u *InMemoryUoW) SaveAndPublish(ctx context.Context, save func(ctx context.Context, repos uow.TxRepositories) error, events []shared.DomainEvent) error {
+	if err := save(ctx, &inMemoryTxRepositories{userRepo: u.userRepo}); err != nil {
 		return err
 	}
 	if u.bus != nil && len(events) > 0 {
@@ -42,3 +54,6 @@ func (u *InMemoryUoW) SaveAndPublish(ctx context.Context, save func(ctx context.
 	}
 	return nil
 }
+
+// Compile-time assertion that InMemoryUoW satisfies the UnitOfWork port.
+var _ uow.UnitOfWork = (*InMemoryUoW)(nil)

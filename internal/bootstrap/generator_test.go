@@ -189,7 +189,7 @@ func TestAdd_AuthToBase(t *testing.T) {
 	// auth files should now exist
 	for _, f := range []string{
 		"internal/adapters/http/web/middleware/auth.go",
-		"internal/adapters/crypto/bcrypt_hasher.go",
+		"pkg/crypto/bcrypt_hasher.go",
 		"internal/adapters/http/web/auth_handler.go",
 	} {
 		if _, err := os.Stat(filepath.Join(result2.ProjectDir, f)); os.IsNotExist(err) {

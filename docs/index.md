@@ -12,16 +12,18 @@ Instead of stitching together routing, configuration, validation, persistence, m
 
 A generated `crank` project gives you:
 
-- A Go 1.21 backend service using Echo v4.
+- A Go 1.26 backend service using Echo v5.
 - A Domain-Driven layout with domain, application, adapter, and composition-root layers.
 - Configuration through `configs/config.yaml`, `.env`, and environment variables.
-- Structured logging with `log/slog`.
-- Request validation with `go-playground/validator`.
+- Structured logging with `log/slog` including redaction and context-aware enrichment.
+- Request validation with `go-playground/validator` via automatic binder validation.
 - Swagger/OpenAPI generation with `swaggo/swag`.
-- Optional PostgreSQL persistence through GORM or Bun.
-- Optional modules for auth, Redis, MongoDB, Qdrant, Temporal, OpenTelemetry, React views, crypto helpers, and transactional outbox support.
+- Optional PostgreSQL persistence through GORM or Bun with the row DTO pattern.
+- Optional modules for auth (JWT with token revocation), Redis, MongoDB, Qdrant, Temporal, OpenTelemetry, React views, crypto helpers, transactional outbox, and audit trailing.
+- `TxRepositories` — transaction-scoped domain repos so application handlers never import persistence adapters.
+- Versioned HTTP handlers at `/api/v1` with self-scoped user endpoints.
 - One CLI surface for build, run, test, format, vet, migrations, Swagger, live reload, health checks, and code generation.
-- Agent-friendly project metadata through `.crank.yaml`, `AGENTS.md`, and a project-local Zed skill.
+- Agent-friendly project metadata through `.crank.yaml`, `AGENTS.md`, and a project-local agent skill.
 
 ## Quick example
 

@@ -1,23 +1,20 @@
-package web
+package v1
 
 import (
 	"errors"
 	"net/http"
-{{- if .HasTime}}
-	"time"
-{{- end}}
-
+	"github.com/google/uuid"
 	"github.com/labstack/echo/v5"
 
+	"{{.Module}}/internal/adapters/http/web/api"
 	app{{.R.Pascal}} "{{.Module}}/internal/application/{{.R.Snake}}"
 	"{{.Module}}/internal/domain/{{.R.Snake}}"
-	"{{.Module}}/internal/model"
 )
 
 // {{.R.Snake}}DTO is the input/output DTO for {{.R.Snake}} HTTP endpoints. The
 // HTTP layer owns validation tags; the domain aggregate stays tag-free.
 type {{.R.Snake}}DTO struct {
-	ID string `json:"id" validate:"required,uuid"`
+	ID string `json:"id" validate:"omitempty,uuid"`
 {{- range .Fields}}
 	{{.GoName}} {{.GoType}} `json:"{{.Name}}"{{if .Validate}} validate:"{{.Validate}}"{{end}}`
 {{- end}}
@@ -67,9 +64,7 @@ func New{{.R.Pascal}}Handler(cmd *app{{.R.Pascal}}.CommandHandler, qry *app{{.R.
 	return &{{.R.Pascal}}Handler{cmd: cmd, qry: qry}
 }
 
-// Register attaches {{.R.Snake}} routes to the supplied Echo group. The group
-// prefix is owned by the caller (the central routes aggregator mounts the
-// resource under /{{.R.KebabPlural}}).
+// Register attaches {{.R.Snake}} routes to the supplied Echo group.
 func (h *{{.R.Pascal}}Handler) Register(g *echo.Group) {
 	g.POST("", h.Create)
 	g.GET("/:id", h.Get)
@@ -87,19 +82,19 @@ func (h *{{.R.Pascal}}Handler) Register(g *echo.Group) {
 //	@Produce      json
 //	@Param        {{.R.Snake}}  body      {{.R.Snake}}DTO  true  "{{.R.Pascal}} payload"
 //	@Success      201   {object}  {{.R.Snake}}DTO
-//	@Failure      422   {object}  model.APIError
-//	@Router       /{{.R.KebabPlural}} [post]
-func (h *{{.R.Pascal}}Handler) Create(	c *echo.Context) error {
+//	@Failure      422   {object}  api.Error
+//	@Router       /v1/{{.R.KebabPlural}} [post]
+func (h *{{.R.Pascal}}Handler) Create(c *echo.Context) error {
 	var in {{.R.Snake}}DTO
 	if err := c.Bind(&in); err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 	}
 	out, err := h.cmd.HandleCreate(c.Request().Context(), in.toCreateCommand())
 	if errors.Is(err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound) {
-		return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+		return c.JSON(http.StatusNotFound, api.Error{Error: "{{.R.Snake}} not found"})
 	}
 	if err != nil {
-		return c.JSON(http.StatusUnprocessableEntity, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusUnprocessableEntity, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusCreated, to{{.R.Pascal}}DTO(out))
 }
@@ -112,16 +107,15 @@ func (h *{{.R.Pascal}}Handler) Create(	c *echo.Context) error {
 //	@Produce      json
 //	@Param        id   path      string  true  "{{.R.Pascal}} ID"
 //	@Success      200  {object}  {{.R.Snake}}DTO
-//	@Failure      400  {object}  model.APIError
-//	@Failure      404  {object}  model.APIError
-//	@Router       /{{.R.KebabPlural}}/{id} [get]
-func (h *{{.R.Pascal}}Handler) Get(	c *echo.Context) error {
+//	@Failure      404  {object}  api.Error
+//	@Router       /v1/{{.R.KebabPlural}}/{id} [get]
+func (h *{{.R.Pascal}}Handler) Get(c *echo.Context) error {
 	out, err := h.qry.HandleGet(c.Request().Context(), app{{.R.Pascal}}.Get{{.R.Pascal}}Query{ID: c.Param("id")})
 	if errors.Is(err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound) {
-		return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+		return c.JSON(http.StatusNotFound, api.Error{Error: "{{.R.Snake}} not found"})
 	}
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusOK, to{{.R.Pascal}}DTO(out))
 }
@@ -133,12 +127,12 @@ func (h *{{.R.Pascal}}Handler) Get(	c *echo.Context) error {
 //	@Tags         {{.R.SnakePlural}}
 //	@Produce      json
 //	@Success      200  {array}   {{.R.Snake}}DTO
-//	@Failure      500  {object}  model.APIError
-//	@Router       /{{.R.KebabPlural}} [get]
-func (h *{{.R.Pascal}}Handler) List(	c *echo.Context) error {
+//	@Failure      500  {object}  api.Error
+//	@Router       /v1/{{.R.KebabPlural}} [get]
+func (h *{{.R.Pascal}}Handler) List(c *echo.Context) error {
 	items, err := h.qry.HandleList(c.Request().Context(), app{{.R.Pascal}}.List{{.R.PascalPlural}}Query{})
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusInternalServerError, api.Error{Error: err.Error()})
 	}
 	out := make([]{{.R.Snake}}DTO, 0, len(items))
 	for _, x := range items {
@@ -157,21 +151,21 @@ func (h *{{.R.Pascal}}Handler) List(	c *echo.Context) error {
 //	@Param        id        path      string         true  "{{.R.Pascal}} ID"
 //	@Param        {{.R.Snake}}  body      {{.R.Snake}}DTO  true  "{{.R.Pascal}} payload"
 //	@Success      200  {object}  {{.R.Snake}}DTO
-//	@Failure      404  {object}  model.APIError
-//	@Failure      422  {object}  model.APIError
-//	@Router       /{{.R.KebabPlural}}/{id} [put]
-func (h *{{.R.Pascal}}Handler) Update(	c *echo.Context) error {
+//	@Failure      404  {object}  api.Error
+//	@Failure      422  {object}  api.Error
+//	@Router       /v1/{{.R.KebabPlural}}/{id} [put]
+func (h *{{.R.Pascal}}Handler) Update(c *echo.Context) error {
 	var in {{.R.Snake}}DTO
 	if err := c.Bind(&in); err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 	}
 	in.ID = c.Param("id")
 	out, err := h.cmd.HandleUpdate(c.Request().Context(), in.toUpdateCommand())
 	if errors.Is(err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound) {
-		return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+		return c.JSON(http.StatusNotFound, api.Error{Error: "{{.R.Snake}} not found"})
 	}
 	if err != nil {
-		return c.JSON(http.StatusUnprocessableEntity, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusUnprocessableEntity, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusOK, to{{.R.Pascal}}DTO(out))
 }
@@ -184,15 +178,15 @@ func (h *{{.R.Pascal}}Handler) Update(	c *echo.Context) error {
 //	@Produce      json
 //	@Param        id   path      string  true  "{{.R.Pascal}} ID"
 //	@Success      204  "No Content"
-//	@Failure      404  {object}  model.APIError
-//	@Router       /{{.R.KebabPlural}}/{id} [delete]
-func (h *{{.R.Pascal}}Handler) Delete(	c *echo.Context) error {
+//	@Failure      404  {object}  api.Error
+//	@Router       /v1/{{.R.KebabPlural}}/{id} [delete]
+func (h *{{.R.Pascal}}Handler) Delete(c *echo.Context) error {
 	err := h.cmd.HandleDelete(c.Request().Context(), app{{.R.Pascal}}.Delete{{.R.Pascal}}Command{ID: c.Param("id")})
 	if errors.Is(err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound) {
-		return c.JSON(http.StatusNotFound, model.APIError{Error: "{{.R.Snake}} not found"})
+		return c.JSON(http.StatusNotFound, api.Error{Error: "{{.R.Snake}} not found"})
 	}
 	if err != nil {
-		return c.JSON(http.StatusBadRequest, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
 	}
 	return c.NoContent(http.StatusNoContent)
 }

@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+
 	"{{.ModulePath}}/internal/domain/user"
 )
 
@@ -20,7 +22,7 @@ func NewQueryHandler(repo user.Repository) *QueryHandler {
 
 // HandleGet fetches a single user aggregate by id.
 func (h *QueryHandler) HandleGet(ctx context.Context, q GetUserQuery) (*user.User, error) {
-	id, err := user.NewUserID(q.ID)
+	id, err := uuid.Parse(q.ID)
 	if err != nil {
 		return nil, fmt.Errorf("get user: %w", err)
 	}

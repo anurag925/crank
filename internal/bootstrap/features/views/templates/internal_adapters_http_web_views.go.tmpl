@@ -39,14 +39,12 @@ func ServeViews(e *echo.Echo, cfg config.ViewsConfig, logger *slog.Logger) {
 		return
 	}
 
-	httpFS := http.FS(dist)
-
 	// Serve the embedded SPA with index.html fallback for client-side routing.
 	e.Use(echomw.StaticWithConfig(echomw.StaticConfig{
 		Root:       ".",
 		Index:      "index.html",
 		HTML5:      true,
-		Filesystem: httpFS,
+		Filesystem: dist,
 	}))
 
 	logger.Info("views: serving embedded SPA")

@@ -9,3 +9,7 @@ var Err{{.R.Pascal}}NotFound = errors.New("{{.R.Snake}} not found")
 // ErrInvalid{{.R.Pascal}} is returned by the aggregate constructor when one of
 // its invariants is violated (e.g. an empty string for a required field).
 var ErrInvalid{{.R.Pascal}} = errors.New("invalid {{.R.Snake}}")
+
+// ErrInvalid{{.R.Pascal}}ID is returned when a nil uuid.UUID is passed as a
+// {{.R.Snake}} id.
+var ErrInvalid{{.R.Pascal}}ID = errors.New("invalid {{.R.Snake}} id")

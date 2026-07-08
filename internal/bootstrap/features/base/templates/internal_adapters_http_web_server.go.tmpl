@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v5"
 
+	"{{.ModulePath}}/internal/adapters/http/web/api"
 	"{{.ModulePath}}/internal/validator"
 )
 
@@ -21,7 +22,27 @@ func NewServer(logger *slog.Logger) *echo.Echo {
 		logger = slog.Default()
 	}
 	e := echo.New()
-	e.Binder = &echoBinder{defaultBinder: new(echo.DefaultBinder), logger: logger}
+	e.Binder = &EchoBinder{DefaultBinder: new(echo.DefaultBinder), Logger: logger}
+
+	e.HTTPErrorHandler = func(c *echo.Context, err error) {
+		if resp, _ := echo.UnwrapResponse(c.Response()); resp != nil && resp.Committed {
+			return
+		}
+		ctx := c.Request().Context()
+
+		if ve, ok := err.(*validator.ValidationError); ok {
+			logger.WarnContext(ctx, "validation failed", "errors", ve.Errors)
+			_ = c.JSON(ve.HTTPStatus, api.Error{Error: ve.Message, Details: ve.Errors})
+			return
+		}
+		if he, ok := err.(*echo.HTTPError); ok {
+			_ = c.JSON(he.Code, api.Error{Error: he.Message})
+			return
+		}
+		logger.ErrorContext(ctx, "unhandled error", "error", err)
+		_ = c.JSON(http.StatusInternalServerError, api.Error{Error: "internal server error"})
+	}
+
 	return e
 }
 
@@ -34,17 +55,17 @@ func Health(c *echo.Context) error {
 	})
 }
 
-// echoBinder wraps the default Echo binder so that struct validation is
+// EchoBinder wraps the default Echo binder so that struct validation is
 // applied automatically on every Bind() call. Handlers no longer need to
 // call the validator manually — if Bind() returns nil the input is
 // guaranteed valid.
-type echoBinder struct {
-	defaultBinder *echo.DefaultBinder
-	logger        *slog.Logger
+type EchoBinder struct {
+	DefaultBinder *echo.DefaultBinder
+	Logger        *slog.Logger
 }
 
-func (b *echoBinder) Bind(c *echo.Context, target any) error {
-	if err := b.defaultBinder.Bind(c, target); err != nil {
+func (b *EchoBinder) Bind(c *echo.Context, target any) error {
+	if err := b.DefaultBinder.Bind(c, target); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
 	}
 	if err := validator.Struct(target); err != nil {

@@ -4,29 +4,34 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
+
+	"{{.ModulePath}}/internal/application/uow"
 	"{{.ModulePath}}/internal/domain/user"
-	"{{.ModulePath}}/internal/ports"
 )
 
 // CommandHandler is the application service that mutates user aggregates in
 // response to Create/Update/Delete commands. It depends only on the domain
-// Repository port and a UnitOfWork that wraps the save+publish atomicity
-// boundary.
+// Repository port (for reads) and a UnitOfWork that wraps the save+publish
+// atomicity boundary and provides transaction-scoped repositories for writes.
 type CommandHandler struct {
 	repo user.Repository
-	uow  ports.UnitOfWork
+	uow  uow.UnitOfWork
 }
 
 // NewCommandHandler wires a CommandHandler against the given repository and
 // unit of work.
-func NewCommandHandler(repo user.Repository, uow ports.UnitOfWork) *CommandHandler {
+func NewCommandHandler(repo user.Repository, uow uow.UnitOfWork) *CommandHandler {
 	return &CommandHandler{repo: repo, uow: uow}
 }
 
 // HandleCreate creates a new user aggregate, persists it through the unit of
 // work, and the UoW publishes the events it recorded during construction.
 func (h *CommandHandler) HandleCreate(ctx context.Context, cmd CreateUserCommand) (*user.User, error) {
-	id, err := user.NewUserID(cmd.ID)
+	if cmd.ID == "" {
+		cmd.ID = uuid.New().String()
+	}
+	id, err := uuid.Parse(cmd.ID)
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
@@ -34,7 +39,9 @@ func (h *CommandHandler) HandleCreate(ctx context.Context, cmd CreateUserCommand
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
-	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context) error { return h.repo.Save(ctx, u) }, u.PullEvents()); err != nil {
+	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context, repos uow.TxRepositories) error {
+		return repos.Users().Save(ctx, u)
+	}, u.PullEvents()); err != nil {
 		return nil, fmt.Errorf("save user: %w", err)
 	}
 	return u, nil
@@ -44,7 +51,7 @@ func (h *CommandHandler) HandleCreate(ctx context.Context, cmd CreateUserCommand
 // domain's Update method, and routes the save+publish through the unit of
 // work so the write and recorded event are committed atomically.
 func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd UpdateUserCommand) (*user.User, error) {
-	id, err := user.NewUserID(cmd.ID)
+	id, err := uuid.Parse(cmd.ID)
 	if err != nil {
 		return nil, fmt.Errorf("update user: %w", err)
 	}
@@ -53,7 +60,9 @@ func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd UpdateUserCommand
 		return nil, err
 	}
 	u.Update(cmd.Name, cmd.Email)
-	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context) error { return h.repo.Save(ctx, u) }, u.PullEvents()); err != nil {
+	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context, repos uow.TxRepositories) error {
+		return repos.Users().Save(ctx, u)
+	}, u.PullEvents()); err != nil {
 		return nil, fmt.Errorf("save user: %w", err)
 	}
 	return u, nil
@@ -63,7 +72,7 @@ func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd UpdateUserCommand
 // unit of work so the deletion and its recorded event are committed
 // atomically.
 func (h *CommandHandler) HandleDelete(ctx context.Context, cmd DeleteUserCommand) error {
-	id, err := user.NewUserID(cmd.ID)
+	id, err := uuid.Parse(cmd.ID)
 	if err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
@@ -72,7 +81,9 @@ func (h *CommandHandler) HandleDelete(ctx context.Context, cmd DeleteUserCommand
 		return err
 	}
 	u.MarkDeleted()
-	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context) error { return h.repo.Delete(ctx, id) }, u.PullEvents()); err != nil {
+	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context, repos uow.TxRepositories) error {
+		return repos.Users().Delete(ctx, id)
+	}, u.PullEvents()); err != nil {
 		return fmt.Errorf("delete user: %w", err)
 	}
 	return nil

@@ -34,8 +34,8 @@ func (feature) Requirements() []string { return nil }
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
+		{TemplatePath: "templates/internal_ports_qdrant.go.tmpl", OutputPath: "internal/ports/qdrant.go"},
 		{TemplatePath: "templates/internal_adapters_persistence_qdrant_client.go.tmpl", OutputPath: "internal/adapters/persistence/qdrant/client.go"},
-		{TemplatePath: "templates/internal_ports_platform_qdrant.go.tmpl", OutputPath: "internal/ports/platform/qdrant.go"},
-		{TemplatePath: "templates/internal_adapters_platform_qdrant.go.tmpl", OutputPath: "internal/adapters/platform/qdrant.go"},
+		{TemplatePath: "templates/internal_adapters_platform_qdrant.go.tmpl", OutputPath: "internal/adapters/persistence/qdrant/http_client.go"},
 	}
 }

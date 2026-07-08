@@ -27,6 +27,7 @@ import (
 	"{{.ModulePath}}/internal/adapters/eventbus"
 	"{{.ModulePath}}/internal/adapters/http/web"
 	"{{.ModulePath}}/internal/adapters/http/web/middleware"
+	v1 "{{.ModulePath}}/internal/adapters/http/web/v1"
 {{- if and (not (.Has "bun")) (not (.Has "gorm"))}}
 	"{{.ModulePath}}/internal/adapters/persistence/memory"
 {{- end}}
@@ -36,11 +37,10 @@ import (
 	userapp "{{.ModulePath}}/internal/application/user"
 	"{{.ModulePath}}/internal/config"
 	"{{.ModulePath}}/internal/domain/user"
-	"{{.ModulePath}}/internal/model"
-	"{{.ModulePath}}/internal/validator"
 	"{{.ModulePath}}/pkg/logging"
 {{- if .Has "auth"}}
-	"{{.ModulePath}}/internal/adapters/crypto"
+	"{{.ModulePath}}/internal/adapters/auth/jwt"
+	"{{.ModulePath}}/pkg/crypto"
 {{- end}}
 {{- if .Has "redis"}}
 	redisclient "{{.ModulePath}}/internal/adapters/cache/redis"
@@ -132,40 +132,48 @@ func main() {
 {{if .Has "redis"}}
 	rdb, err := redisclient.NewClient(cfg.Redis)
 	if err != nil {
-		logger.Error("failed to connect to redis", "error", err)
-		os.Exit(1)
+		logger.Warn("redis unavailable, continuing without it", "error", err)
+		rdb = nil
 	}
-	defer func() { _ = rdb.Close() }()
+	if rdb != nil {
+		defer func() { _ = rdb.Close() }()
+	}
 {{end}}
 {{if .Has "mongodb"}}
 	mdb, err := mongodb.NewClient(context.Background(), cfg.MongoDB)
 	if err != nil {
-		logger.Error("failed to connect to mongodb", "error", err)
-		os.Exit(1)
+		logger.Warn("mongodb unavailable, continuing without it", "error", err)
+		mdb = nil
 	}
-	defer func() { _ = mdb.Client().Disconnect(context.Background()) }()
+	if mdb != nil {
+		defer func() { _ = mdb.Client().Disconnect(context.Background()) }()
+	}
 {{end}}
 {{if .Has "qdrant"}}
 	qc, err := qdrantclient.NewClient(context.Background(), cfg.Qdrant)
 	if err != nil {
-		logger.Error("failed to connect to qdrant", "error", err)
-		os.Exit(1)
+		logger.Warn("qdrant unavailable, continuing without it", "error", err)
+		qc = nil
 	}
-	defer func() { _ = qc.Close() }()
+	if qc != nil {
+		defer func() { _ = qc.Close() }()
+	}
 {{end}}
 {{if .Has "temporal"}}
 	tc, err := temporal.NewClient(cfg.Temporal, logger)
 	if err != nil {
-		logger.Error("failed to connect to temporal", "error", err)
-		os.Exit(1)
+		logger.Warn("temporal unavailable, continuing without it", "error", err)
+		tc = nil
 	}
-	defer tc.Close()
-	go func() {
-		w := temporal.NewWorker(tc, cfg.Temporal, nil)
-		if err := w.Run(worker.InterruptCh()); err != nil {
-			logger.Error("temporal worker stopped with error", "error", err)
-		}
-	}()
+	if tc != nil {
+		defer tc.Close()
+		go func() {
+			w := temporal.NewWorker(tc, cfg.Temporal, nil)
+			if err := w.Run(worker.InterruptCh()); err != nil {
+				logger.Error("temporal worker stopped with error", "error", err)
+			}
+		}()
+	}
 {{end}}
 
 	// ---- Composition root: explicit DDD wiring ----
@@ -180,22 +188,29 @@ func main() {
 {{if .Has "outbox"}}
 {{if .Has "bun"}}
 	outboxRepo := bun.NewOutboxRepository(db)
-	uow := outboxadapter.NewBunUoW(db, outboxRepo)
+	uow := outboxadapter.NewBunUoW(db)
 {{end}}
 {{if .Has "gorm"}}
 	outboxRepo := gorm.NewOutboxRepository(gormDB)
-	uow := outboxadapter.NewGormUoW(gormDB, outboxRepo)
+	uow := outboxadapter.NewGormUoW(gormDB)
 {{end}}
 	outboxWorker := outboxadapter.NewWorker(outboxRepo, bus, logger, outboxadapter.Config{
 		Interval:  cfg.Outbox.PollInterval,
 		BatchSize: cfg.Outbox.BatchSize,
 	})
 {{else}}
-	uow := uow.NewInMemoryUoW(bus)
+	uow := uow.NewInMemoryUoW(bus, userRepo)
 {{end}}
 {{if .Has "auth"}}
 	hasher := crypto.NewBCryptHasher()
-	tokens := crypto.NewJWTTokenService(cfg.JWT)
+{{if .Has "gorm"}}
+	denylist := gorm.NewTokenDenylist(gormDB)
+	tokens := jwt.NewTokenService(cfg.JWT, denylist)
+{{else if .Has "bun"}}
+	tokens := jwt.NewTokenService(cfg.JWT, nil)
+{{else}}
+	tokens := jwt.NewTokenService(cfg.JWT, nil)
+{{end}}
 	_ = hasher
 {{end}}
 {{if .Has "audit"}}
@@ -207,15 +222,23 @@ func main() {
 	auditLogger := auditadapter.NewLogger(auditRepo)
 	auditLogger.Subscribe(bus)
 	auditQry := auditapp.NewQueryHandler(auditRepo)
-	auditHandler := web.NewAuditHandler(auditQry)
+	auditHandler := v1.NewAuditHandler(auditQry)
 {{end}}
 	userCmd := userapp.NewCommandHandler(userRepo, uow)
 	userQry := userapp.NewQueryHandler(userRepo)
-	userHandler := web.NewUserHandler(userCmd, userQry)
+	userHandler := v1.NewUserHandler(userCmd, userQry)
 
 	e := web.NewServer(logger)
 	e.Use(echomw.Recover())
 	e.Use(middleware.RequestLogger())
+
+	e.Use(echomw.CORSWithConfig(echomw.CORSConfig{
+		AllowOrigins:     cfg.App.CORSOrigins,
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodOptions},
+		AllowHeaders:     []string{echo.HeaderOrigin, echo.HeaderContentType, echo.HeaderAccept, echo.HeaderAuthorization},
+		AllowCredentials: true,
+		MaxAge:           300,
+	}))
 {{if .Has "otel"}}
 	e.Use(middleware.Tracing(cfg.Telemetry.ServiceName))
 {{end}}
@@ -223,26 +246,7 @@ func main() {
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 	e.GET("/health", web.Health)
 
-	e.HTTPErrorHandler = func(c *echo.Context, err error) {
-		if resp, _ := echo.UnwrapResponse(c.Response()); resp != nil && resp.Committed {
-			return
-		}
-		ctx := c.Request().Context()
-
-		if ve, ok := err.(*validator.ValidationError); ok {
-			slog.WarnContext(ctx, "validation failed", "errors", ve.Errors)
-			_ = c.JSON(ve.HTTPStatus, model.APIError{Error: ve.Message, Details: ve.Errors})
-			return
-		}
-		if he, ok := err.(*echo.HTTPError); ok {
-			_ = c.JSON(he.Code, model.APIError{Error: he.Message})
-			return
-		}
-		slog.ErrorContext(ctx, "unhandled error", "error", err)
-		_ = c.JSON(http.StatusInternalServerError, model.APIError{Error: "internal server error"})
-	}
-
-	web.Mount(e, web.MountConfig{UserHandler: userHandler})
+	v1.Mount(e, v1.MountConfig{UserHandler: userHandler})
 {{if .Has "auth"}}
 	authHandler := web.NewAuthHandler(userCmd, userQry, tokens)
 	authHandler.Register(e)

@@ -239,7 +239,6 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 	// when --tests is set. The templates are parameterised by Resource, so
 	// the same file produces the right output for any resource name.
 	aggregate := artifact{out: r.DDDDomainPath() + "/" + r.Snake + ".go", tmpl: "domain_aggregate.go.tmpl", testTmpl: "domain_aggregate_test.go.tmpl", goFile: true}
-	idVO := artifact{out: r.DDDDomainPath() + "/" + r.Snake + "_id.go", tmpl: "domain_id.go.tmpl", testTmpl: "domain_id_test.go.tmpl", goFile: true}
 	events := artifact{out: r.DDDDomainPath() + "/events.go", tmpl: "domain_events.go.tmpl", testTmpl: "domain_events_test.go.tmpl", goFile: true}
 	derrors := artifact{out: r.DDDDomainPath() + "/errors.go", tmpl: "domain_errors.go.tmpl", goFile: true}
 	repoPort := artifact{out: r.DDDDomainPath() + "/repository.go", tmpl: "domain_repository.go.tmpl", goFile: true}
@@ -263,7 +262,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 	switch opts.Kind {
 	case KindModel:
 		aggregate.primary = true
-		plan = []artifact{aggregate, idVO, events, derrors, repoPort}
+		plan = []artifact{aggregate, events, derrors, repoPort}
 		wantMigration = migration
 
 	case KindRepository:
@@ -282,7 +281,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 			plan = []artifact{memAdapter, repoPort}
 		}
 		if !opts.Only {
-			plan = append(plan, aggregate, idVO, events, derrors)
+			plan = append(plan, aggregate, events, derrors)
 		}
 		wantMigration = migration
 
@@ -290,7 +289,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 		commands.primary = true
 		plan = []artifact{commands, cmdHandler, queries, qryHandler, memAdapter}
 		if !opts.Only {
-			plan = append(plan, aggregate, idVO, events, derrors, repoPort)
+			plan = append(plan, aggregate, events, derrors, repoPort)
 		}
 		// Application layer has no migration of its own.
 		wantMigration = false
@@ -301,7 +300,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 		httpAdapter.primary = true
 		plan = []artifact{httpAdapter}
 		if !only {
-			plan = append(plan, aggregate, idVO, events, derrors, repoPort,
+			plan = append(plan, aggregate, events, derrors, repoPort,
 				commands, cmdHandler, queries, qryHandler,
 				memAdapter)
 			if data.Bun {
@@ -316,7 +315,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 	case KindScaffold:
 		httpAdapter.primary = true
 		plan = []artifact{httpAdapter,
-			aggregate, idVO, events, derrors, repoPort,
+			aggregate, events, derrors, repoPort,
 			commands, cmdHandler, queries, qryHandler,
 			memAdapter}
 		if data.Bun {

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/uptrace/bun"
 
 	"{{.ModulePath}}/internal/domain/user"
@@ -14,7 +15,7 @@ import (
 // userRow is the postgres row DTO for user aggregates. It is intentionally
 // private to this package: the domain aggregate is the only public contract.
 type userRow struct {
-	ID        string    `bun:"id,pk,type:uuid"`
+	ID        uuid.UUID `bun:"id,pk,type:uuid"`
 	Name      string    `bun:"name,notnull"`
 	Email     string    `bun:"email,notnull,unique"`
 {{- if .Has "auth"}}
@@ -24,27 +25,26 @@ type userRow struct {
 	UpdatedAt time.Time `bun:"updated_at,nullzero,notnull,default:current_timestamp"`
 }
 
-// toAggregate converts a row to a domain aggregate. The error from
-// NewUserID is ignored because the column type guarantees the value is a
-// non-empty uuid at the database level.
+// toAggregate converts a row to a domain aggregate via Rehydrate.
 func (row *userRow) toAggregate() *user.User {
-	id, _ := user.NewUserID(row.ID)
-	u, _ := user.NewUser(id, row.Name, row.Email)
 {{- if .Has "auth"}}
-	u.SetPasswordHash(row.Password)
+	return user.Rehydrate(row.ID, row.Name, row.Email, row.Password, row.CreatedAt, row.UpdatedAt)
+{{- else}}
+	return user.Rehydrate(row.ID, row.Name, row.Email, "", row.CreatedAt, row.UpdatedAt)
 {{- end}}
-	u.SetTimestamps(row.CreatedAt, row.UpdatedAt)
-	return u
 }
 
 // UserRepository is the postgres-backed implementation of
 // domain/user.Repository.
 type UserRepository struct {
-	db *bun.DB
+	db bun.IDB
 }
 
-// NewUserRepository constructs a Bun-backed UserRepository.
-func NewUserRepository(db *bun.DB) *UserRepository {
+// NewUserRepository constructs a Bun-backed UserRepository. It accepts
+// bun.IDB (the interface satisfied by both *bun.DB and bun.Tx) so the
+// same constructor can be used at the composition root and inside a
+// RunInTx transaction.
+func NewUserRepository(db bun.IDB) *UserRepository {
 	return &UserRepository{db: db}
 }
 
@@ -61,7 +61,7 @@ func onConflictClause() string {
 // Save inserts a new row or updates an existing one keyed by id.
 func (r *UserRepository) Save(ctx context.Context, u *user.User) error {
 	row := &userRow{
-		ID:        u.ID().String(),
+		ID:        u.ID(),
 		Name:      u.Name(),
 		Email:     u.Email(),
 {{- if .Has "auth"}}
@@ -79,9 +79,9 @@ func (r *UserRepository) Save(ctx context.Context, u *user.User) error {
 
 // Get returns a user aggregate by id, mapping sql.ErrNoRows to
 // domain/user.ErrUserNotFound.
-func (r *UserRepository) Get(ctx context.Context, id user.UserID) (*user.User, error) {
+func (r *UserRepository) Get(ctx context.Context, id uuid.UUID) (*user.User, error) {
 	row := new(userRow)
-	err := r.db.NewSelect().Model(row).Where("id = ?", id.String()).Scan(ctx)
+	err := r.db.NewSelect().Model(row).Where("id = ?", id).Scan(ctx)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, user.ErrUserNotFound
 	}
@@ -120,8 +120,8 @@ func (r *UserRepository) List(ctx context.Context) ([]*user.User, error) {
 
 // Delete removes a user row by id, mapping zero affected rows to
 // domain/user.ErrUserNotFound.
-func (r *UserRepository) Delete(ctx context.Context, id user.UserID) error {
-	res, err := r.db.NewDelete().Model((*userRow)(nil)).Where("id = ?", id.String()).Exec(ctx)
+func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	res, err := r.db.NewDelete().Model((*userRow)(nil)).Where("id = ?", id).Exec(ctx)
 	if err != nil {
 		return err
 	}

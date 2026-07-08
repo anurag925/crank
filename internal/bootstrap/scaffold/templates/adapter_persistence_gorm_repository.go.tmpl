@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"{{.Module}}/internal/domain/{{.R.Snake}}"
@@ -14,7 +15,7 @@ import (
 // intentionally private to this package: the domain aggregate is the only
 // public contract.
 type {{.R.Snake}}Row struct {
-	ID        string    `gorm:"column:id;primaryKey;type:uuid"`
+	ID        uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
 {{- range .Fields}}
 	{{.GoName}} {{.GoType}} `gorm:"column:{{.Name}};not null;type:{{.SQLType}}"`
 {{- end}}
@@ -27,13 +28,10 @@ func ({{.R.Snake}}Row) TableName() string {
 	return "{{.R.SnakePlural}}"
 }
 
-// toAggregate converts a row to a domain aggregate, ignoring the error from
-// New{{.R.Pascal}}ID because the column type guarantees the value is a
-// non-empty uuid at the database level.
+// toAggregate converts a row to a domain aggregate via Rehydrate.
 func (row *{{.R.Snake}}Row) toAggregate() *{{.R.Snake}}.{{.R.Pascal}} {
-	id, _ := {{.R.Snake}}.New{{.R.Pascal}}ID(row.ID)
 	return {{.R.Snake}}.Rehydrate(
-		id,
+		row.ID,
 {{- range .Fields}}
 		row.{{.GoName}},
 {{- end}}
@@ -43,11 +41,9 @@ func (row *{{.R.Snake}}Row) toAggregate() *{{.R.Snake}}.{{.R.Pascal}} {
 }
 
 // {{.R.Snake}}RowFromAggregate returns the row representation of an aggregate.
-// Only the fields the user declared plus the typed id and timestamps are
-// projected.
 func {{.R.Snake}}RowFromAggregate(x *{{.R.Snake}}.{{.R.Pascal}}) *{{.R.Snake}}Row {
 	return &{{.R.Snake}}Row{
-		ID: x.ID().String(),
+		ID: x.ID(),
 {{- range .Fields}}
 		{{.GoName}}: x.{{.GoName}}(),
 {{- end}}
@@ -75,9 +71,9 @@ func (r *{{.R.Pascal}}Repository) Save(ctx context.Context, x *{{.R.Snake}}.{{.R
 
 // Get returns a {{.R.Snake}} aggregate by id, mapping gorm.ErrRecordNotFound to
 // domain/{{.R.Snake}}.Err{{.R.Pascal}}NotFound.
-func (r *{{.R.Pascal}}Repository) Get(ctx context.Context, id {{.R.Snake}}.{{.R.Pascal}}ID) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
+func (r *{{.R.Pascal}}Repository) Get(ctx context.Context, id uuid.UUID) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
 	row := new({{.R.Snake}}Row)
-	err := r.db.WithContext(ctx).Where("id = ?", id.String()).First(row).Error
+	err := r.db.WithContext(ctx).Where("id = ?", id).First(row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, {{.R.Snake}}.Err{{.R.Pascal}}NotFound
 	}
@@ -102,8 +98,8 @@ func (r *{{.R.Pascal}}Repository) List(ctx context.Context) ([]*{{.R.Snake}}.{{.
 
 // Delete removes a {{.R.Snake}} row by id, mapping zero affected rows to
 // domain/{{.R.Snake}}.Err{{.R.Pascal}}NotFound.
-func (r *{{.R.Pascal}}Repository) Delete(ctx context.Context, id {{.R.Snake}}.{{.R.Pascal}}ID) error {
-	res := r.db.WithContext(ctx).Where("id = ?", id.String()).Delete(&{{.R.Snake}}Row{})
+func (r *{{.R.Pascal}}Repository) Delete(ctx context.Context, id uuid.UUID) error {
+	res := r.db.WithContext(ctx).Where("id = ?", id).Delete(&{{.R.Snake}}Row{})
 	if res.Error != nil {
 		return res.Error
 	}

@@ -1,4 +1,4 @@
-package platform
+package redis
 
 import (
 	"context"
@@ -10,21 +10,21 @@ import (
 	"{{.ModulePath}}/internal/ports"
 )
 
-// RedisCache implements ports.Cache using go-redis. It is nil-safe: a nil
+// CacheAdapter implements ports.Cache using go-redis. It is nil-safe: a nil
 // receiver returns ("", false, nil) from Get and nil from Set/Del.
-type RedisCache struct {
+type CacheAdapter struct {
 	client *redis.Client
 }
 
-// NewRedisCache wraps a *redis.Client as a ports.Cache implementation.
-func NewRedisCache(client *redis.Client) *RedisCache {
-	return &RedisCache{client: client}
+// NewCacheAdapter wraps a *redis.Client as a ports.Cache implementation.
+func NewCacheAdapter(client *redis.Client) *CacheAdapter {
+	return &CacheAdapter{client: client}
 }
 
 // Compile-time assertion.
-var _ ports.Cache = (*RedisCache)(nil)
+var _ ports.Cache = (*CacheAdapter)(nil)
 
-func (c *RedisCache) Get(ctx context.Context, key string) (string, bool, error) {
+func (c *CacheAdapter) Get(ctx context.Context, key string) (string, bool, error) {
 	if c == nil || c.client == nil {
 		return "", false, nil
 	}
@@ -38,7 +38,7 @@ func (c *RedisCache) Get(ctx context.Context, key string) (string, bool, error) 
 	return val, true, nil
 }
 
-func (c *RedisCache) Set(ctx context.Context, key, value string, ttl time.Duration) error {
+func (c *CacheAdapter) Set(ctx context.Context, key, value string, ttl time.Duration) error {
 	if c == nil || c.client == nil {
 		return nil
 	}
@@ -48,7 +48,7 @@ func (c *RedisCache) Set(ctx context.Context, key, value string, ttl time.Durati
 	return nil
 }
 
-func (c *RedisCache) Del(ctx context.Context, keys ...string) (int64, error) {
+func (c *CacheAdapter) Del(ctx context.Context, keys ...string) (int64, error) {
 	if c == nil || c.client == nil {
 		return 0, nil
 	}
@@ -58,3 +58,4 @@ func (c *RedisCache) Del(ctx context.Context, keys ...string) (int64, error) {
 	}
 	return n, nil
 }
+

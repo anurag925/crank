@@ -1,0 +1,19 @@
+package ports
+
+//go:generate mockgen -destination=../mocks/mock_tokendenylist.go -package=mocks {{.ModulePath}}/internal/ports TokenDenylist
+
+import (
+	"context"
+	"time"
+)
+
+// TokenDenylist stores revoked JWT JTIs so a compromised refresh token
+// cannot be reused. The auth feature's TokenService consults the denylist
+// on Refresh() and writes to it on Revoke().
+type TokenDenylist interface {
+	// Add stores a revoked JTI with its original expiration time. Once
+	// the expiration has passed the JTI may be pruned by cleanup.
+	Add(ctx context.Context, jti string, expiresAt time.Time) error
+	// Exists reports whether the given JTI has been revoked.
+	Exists(ctx context.Context, jti string) (bool, error)
+}

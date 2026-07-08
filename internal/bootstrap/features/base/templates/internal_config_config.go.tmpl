@@ -23,10 +23,11 @@ type Config struct {
 
 // AppConfig holds settings for the HTTP server itself.
 type AppConfig struct {
-	Name string `mapstructure:"name"`
-	Host string `mapstructure:"host"`
-	Port int    `mapstructure:"port"`
-	Env  string `mapstructure:"env"`
+	Name        string   `mapstructure:"name"`
+	Host        string   `mapstructure:"host"`
+	Port        int      `mapstructure:"port"`
+	Env         string   `mapstructure:"env"`
+	CORSOrigins []string `mapstructure:"cors_origins"`
 }
 // crank:config-structs
 // LoggingConfig controls slog output.
@@ -77,6 +78,7 @@ func setDefaults(v *viper.Viper) {
 	v.SetDefault("app.host", "0.0.0.0")
 	v.SetDefault("app.port", 8080)
 	v.SetDefault("app.env", "development")
+	v.SetDefault("app.cors_origins", []string{"*"})
 	// crank:config-defaults
 	v.SetDefault("logging.level", "info")
 	v.SetDefault("logging.format", "text")

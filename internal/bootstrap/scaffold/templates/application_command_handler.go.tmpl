@@ -4,26 +4,29 @@ import (
 	"context"
 	"fmt"
 
+	"{{.Module}}/internal/application/uow"
 	"{{.Module}}/internal/domain/{{.R.Snake}}"
-	"{{.Module}}/internal/ports"
 )
 
 // CommandHandler is the application service that mutates {{.R.Snake}} aggregates
 // in response to Create/Update/Delete commands. It depends only on the
-// domain Repository port and the EventBus port.
+// domain Repository port (for reads) and a UnitOfWork that wraps the
+// save+publish atomicity boundary and provides transaction-scoped
+// repositories for writes.
 type CommandHandler struct {
-	repo   {{.R.Snake}}.Repository
-	events ports.EventBus
+	repo {{.R.Snake}}.Repository
+	uow  uow.UnitOfWork
 }
 
 // NewCommandHandler wires a CommandHandler against the given repository and
-// event bus.
-func NewCommandHandler(repo {{.R.Snake}}.Repository, events ports.EventBus) *CommandHandler {
-	return &CommandHandler{repo: repo, events: events}
+// unit of work.
+func NewCommandHandler(repo {{.R.Snake}}.Repository, uow uow.UnitOfWork) *CommandHandler {
+	return &CommandHandler{repo: repo, uow: uow}
 }
 
-// HandleCreate creates a new {{.R.Snake}} aggregate, persists it, and
-// publishes the events it recorded during construction.
+// HandleCreate creates a new {{.R.Snake}} aggregate, persists it through the
+// unit of work, and the UoW publishes the events it recorded during
+// construction.
 func (h *CommandHandler) HandleCreate(ctx context.Context, cmd Create{{.R.Pascal}}Command) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
 	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID(cmd.ID)
 	if err != nil {
@@ -33,18 +36,17 @@ func (h *CommandHandler) HandleCreate(ctx context.Context, cmd Create{{.R.Pascal
 	if err != nil {
 		return nil, fmt.Errorf("create {{.R.Snake}}: %w", err)
 	}
-	if err := h.repo.Save(ctx, x); err != nil {
+	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context, repos uow.TxRepositories) error {
+		return repos.{{.R.PascalPlural}}().Save(ctx, x)
+	}, x.PullEvents()); err != nil {
 		return nil, fmt.Errorf("save {{.R.Snake}}: %w", err)
-	}
-	if h.events != nil {
-		_ = h.events.Publish(ctx, x.PullEvents()...)
 	}
 	return x, nil
 }
 
 // HandleUpdate loads an existing {{.R.Snake}} aggregate, mutates it through
-// the domain's Update method, persists the result, and publishes the
-// recorded event.
+// the domain's Update method, and routes the save+publish through the unit
+// of work so the write and recorded event are committed atomically.
 func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd Update{{.R.Pascal}}Command) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
 	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID(cmd.ID)
 	if err != nil {
@@ -55,18 +57,17 @@ func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd Update{{.R.Pascal
 		return nil, err
 	}
 	x.Update({{range .Fields}}cmd.{{.GoName}}, {{end}})
-	if err := h.repo.Save(ctx, x); err != nil {
+	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context, repos uow.TxRepositories) error {
+		return repos.{{.R.PascalPlural}}().Save(ctx, x)
+	}, x.PullEvents()); err != nil {
 		return nil, fmt.Errorf("save {{.R.Snake}}: %w", err)
-	}
-	if h.events != nil {
-		_ = h.events.Publish(ctx, x.PullEvents()...)
 	}
 	return x, nil
 }
 
-// HandleDelete removes a {{.R.Snake}} aggregate. A Deleted event is published
-// for any downstream consumers; the event is constructed directly here
-// because the aggregate itself is discarded by Delete.
+// HandleDelete removes a {{.R.Snake}} aggregate. The delete is routed through
+// the unit of work so the deletion and its recorded event are committed
+// atomically.
 func (h *CommandHandler) HandleDelete(ctx context.Context, cmd Delete{{.R.Pascal}}Command) error {
 	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID(cmd.ID)
 	if err != nil {
@@ -77,11 +78,10 @@ func (h *CommandHandler) HandleDelete(ctx context.Context, cmd Delete{{.R.Pascal
 		return err
 	}
 	x.MarkDeleted()
-	if err := h.repo.Delete(ctx, id); err != nil {
+	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context, repos uow.TxRepositories) error {
+		return repos.{{.R.PascalPlural}}().Delete(ctx, id)
+	}, x.PullEvents()); err != nil {
 		return fmt.Errorf("delete {{.R.Snake}}: %w", err)
-	}
-	if h.events != nil {
-		_ = h.events.Publish(ctx, x.PullEvents()...)
 	}
 	return nil
 }

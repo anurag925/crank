@@ -53,11 +53,13 @@ func {{.R.Snake}}RowFromAggregate(x *{{.R.Snake}}.{{.R.Pascal}}) *{{.R.Snake}}Ro
 // {{.R.Pascal}}Repository is the postgres-backed implementation of
 // domain/{{.R.Snake}}.Repository.
 type {{.R.Pascal}}Repository struct {
-	db *bun.DB
+	db bun.IDB
 }
 
 // New{{.R.Pascal}}Repository constructs a Bun-backed {{.R.Pascal}}Repository.
-func New{{.R.Pascal}}Repository(db *bun.DB) *{{.R.Pascal}}Repository {
+// It accepts bun.IDB so the same constructor works at the composition root
+// and inside a RunInTx transaction.
+func New{{.R.Pascal}}Repository(db bun.IDB) *{{.R.Pascal}}Repository {
 	return &{{.R.Pascal}}Repository{db: db}
 }
 

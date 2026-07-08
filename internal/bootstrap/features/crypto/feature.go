@@ -30,6 +30,6 @@ func (feature) Requirements() []string { return nil }
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_ports_cipher.go.tmpl", OutputPath: "internal/ports/cipher.go"},
-		{TemplatePath: "templates/internal_adapters_crypto_aesgcm_cipher.go.tmpl", OutputPath: "internal/adapters/crypto/aesgcm_cipher.go"},
+		{TemplatePath: "templates/pkg_crypto_aesgcm_cipher.go.tmpl", OutputPath: "pkg/crypto/aesgcm_cipher.go"},
 	}
 }

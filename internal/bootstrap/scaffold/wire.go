@@ -6,12 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/anurag925/crank/internal/bootstrap"
 )
 
 // routesFile is the path (relative to the project root) of the central HTTP
 // adapter aggregator that wires per-resource handlers into the Echo router.
-// The file lives under the DDD-shaped web package.
-const routesFile = "internal/adapters/http/web/routes.go"
+// The file lives under the DDD-shaped web/v1 package.
+const routesFile = "internal/adapters/http/web/v1/routes.go"
 
 // legacyHandlerFile is the pre-DDD wiring target. It is consulted only as a
 // defensive fallback: it lets `crank make handler` work against projects
@@ -20,11 +22,15 @@ const routesFile = "internal/adapters/http/web/routes.go"
 const legacyHandlerFile = "internal/handler/handler.go"
 
 // Marker comments emitted by the base feature's routes.go template. New
-// handlers are spliced in at these anchors. The DDD layout dropped the init
-// marker — wiring is done explicitly in cmd/server/main.go.
+// handlers are spliced in at these anchors.
 const (
 	markerHTTPFields   = "// crank:http-fields"
 	markerHTTPRegister = "// crank:http-register"
+	markerTxRepoImports  = "// crank:tx-repo-imports"
+	markerTxRepositories = "// crank:tx-repositories"
+	markerTxRepoMethods  = "// crank:tx-repo-methods"
+	markerTxRepoFields   = "// crank:tx-repo-fields"
+	markerInMemRepoFields = "// crank:inmem-repo-fields"
 )
 
 // wireResult reports the outcome of attempting to register a handler in the
@@ -179,4 +185,158 @@ func manualWireHint(r Resource, target string) string {
 		target,
 		r.Pascal, r.Pascal,
 		r.KebabPlural, r.Pascal)
+}
+
+// --- TxRepositories splicing -------------------------------------------------
+
+// uowFile is the path to the UnitOfWork + TxRepositories interface.
+const uowFile = "internal/application/uow/uow.go"
+
+// inMemUoWFile is the path to the in-memory UoW adapter.
+const inMemUoWFile = "internal/adapters/uow/in_memory_uow.go"
+
+// gormUoWFile is the path to the GORM-backed outbox UoW adapter.
+const gormUoWFile = "internal/adapters/outbox/gorm_uow.go"
+
+// bunUoWFile is the path to the Bun-backed outbox UoW adapter.
+const bunUoWFile = "internal/adapters/outbox/bun_uow.go"
+
+// wireTxRepositories splices a new repository accessor into every TxRepositories
+// implementation in the project. It updates:
+//
+//   1. uow/uow.go — TxRepositories interface + imports
+//   2. adapters/outbox/gorm_uow.go — txRepositories struct + accessor method
+//   3. adapters/outbox/bun_uow.go — txRepositories struct + accessor method (if bun)
+//   4. adapters/uow/in_memory_uow.go — inMemoryTxRepositories struct + accessor
+//
+// It is idempotent; if the accessor already exists no file is modified.
+func wireTxRepositories(projectDir string, r Resource) error {
+	accessorName := r.PascalPlural
+	interfaceMethod := fmt.Sprintf("\t%s() %s.Repository\n", accessorName, r.Snake)
+	importLine := fmt.Sprintf("\t\"%s/internal/domain/%s\"\n", modulePathFromProject(projectDir), r.Snake)
+
+	// 1. uow/uow.go — TxRepositories interface + imports
+	spliceUoWInterface(projectDir, accessorName, interfaceMethod, importLine)
+
+	// 2. in-memory UoW
+	spliceInMemTxRepos(projectDir, r, accessorName)
+
+	// 3. GORM outbox UoW
+	spliceGormTxRepos(projectDir, r, accessorName)
+
+	// 4. Bun outbox UoW
+	spliceBunTxRepos(projectDir, r, accessorName)
+
+	return nil
+}
+
+func modulePathFromProject(projectDir string) string {
+	info, err := bootstrap.LoadProjectInfo(projectDir)
+	if err != nil {
+		return "example.com/app"
+	}
+	return info.ModulePath
+}
+
+func spliceUoWInterface(projectDir, accessorName, interfaceMethod, importLine string) {
+	path := filepath.Join(projectDir, uowFile)
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	s := string(content)
+	if strings.Contains(s, accessorName+"()") {
+		return // already wired
+	}
+
+	// Add domain import
+	if !strings.Contains(s, importLine) {
+		s = strings.Replace(s, markerTxRepoImports, importLine+"\t"+markerTxRepoImports, 1)
+	}
+	// Add accessor to interface
+	s = strings.Replace(s, markerTxRepositories, interfaceMethod+"\t"+markerTxRepositories, 1)
+
+	formatted, err := format.Source([]byte(s))
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, formatted, 0o644)
+}
+
+func spliceInMemTxRepos(projectDir string, r Resource, accessorName string) {
+	path := filepath.Join(projectDir, inMemUoWFile)
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	s := string(content)
+	if strings.Contains(s, accessorName+"()") {
+		return
+	}
+
+	fieldLine := fmt.Sprintf("\t%sRepo %s.Repository\n", r.Camel, r.Snake)
+	methodLine := fmt.Sprintf("func (r *inMemoryTxRepositories) %s() %s.Repository { return r.%sRepo }\n", accessorName, r.Snake, r.Camel)
+	constructorField := fmt.Sprintf("\t%sRepo %s.Repository\n", r.Camel, r.Snake)
+
+	s = strings.Replace(s, markerTxRepoFields, fieldLine+"\t"+markerTxRepoFields, 1)
+	s = strings.Replace(s, markerTxRepoMethods, "\n"+methodLine+"\t"+markerTxRepoMethods, 1)
+	s = strings.Replace(s, markerInMemRepoFields, constructorField+"\t"+markerInMemRepoFields, 1)
+
+	formatted, err := format.Source([]byte(s))
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, formatted, 0o644)
+}
+
+func spliceGormTxRepos(projectDir string, r Resource, accessorName string) {
+	path := filepath.Join(projectDir, gormUoWFile)
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	s := string(content)
+	if strings.Contains(s, accessorName+"()") {
+		return
+	}
+
+	importLine := fmt.Sprintf("\t\"%s/internal/domain/%s\"\n", modulePathFromProject(projectDir), r.Snake)
+	methodLine := fmt.Sprintf("func (r *txRepositories) %s() %s.Repository {\n\t\treturn gorm.New%sRepository(r.tx)\n\t}\n", accessorName, r.Snake, r.Pascal)
+
+	if !strings.Contains(s, importLine) {
+		s = strings.Replace(s, markerTxRepoImports, importLine+"\t"+markerTxRepoImports, 1)
+	}
+	s = strings.Replace(s, markerTxRepoMethods, "\n"+methodLine+"\t"+markerTxRepoMethods, 1)
+
+	formatted, err := format.Source([]byte(s))
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, formatted, 0o644)
+}
+
+func spliceBunTxRepos(projectDir string, r Resource, accessorName string) {
+	path := filepath.Join(projectDir, bunUoWFile)
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return
+	}
+	s := string(content)
+	if strings.Contains(s, accessorName+"()") {
+		return
+	}
+
+	importLine := fmt.Sprintf("\t\"%s/internal/domain/%s\"\n", modulePathFromProject(projectDir), r.Snake)
+	methodLine := fmt.Sprintf("func (r *txRepositories) %s() %s.Repository {\n\t\treturn bun.New%sRepository(r.tx)\n\t}\n", accessorName, r.Snake, r.Pascal)
+
+	if !strings.Contains(s, importLine) {
+		s = strings.Replace(s, markerTxRepoImports, importLine+"\t"+markerTxRepoImports, 1)
+	}
+	s = strings.Replace(s, markerTxRepoMethods, "\n"+methodLine+"\t"+markerTxRepoMethods, 1)
+
+	formatted, err := format.Source([]byte(s))
+	if err != nil {
+		return
+	}
+	_ = os.WriteFile(path, formatted, 0o644)
 }

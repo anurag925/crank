@@ -7,9 +7,9 @@ import (
 
 	"github.com/labstack/echo/v5"
 
-	"{{.ModulePath}}/internal/application/user"
+	"{{.ModulePath}}/internal/adapters/http/web/api"
 	"{{.ModulePath}}/internal/adapters/http/web/middleware"
-	"{{.ModulePath}}/internal/model"
+	"{{.ModulePath}}/internal/application/user"
 	"{{.ModulePath}}/internal/ports"
 )
 
@@ -17,8 +17,8 @@ import (
 // route. It depends only on the user application service and the token
 // service port.
 type AuthHandler struct {
-	cmd   *user.CommandHandler
-	qry   *user.QueryHandler
+	cmd    *user.CommandHandler
+	qry    *user.QueryHandler
 	tokens ports.TokenService
 }
 
@@ -34,6 +34,7 @@ func (h *AuthHandler) Register(e *echo.Echo) {
 	g.POST("/register", h.RegisterUser)
 	g.POST("/login", h.Login)
 	g.POST("/refresh", h.Refresh)
+	g.POST("/logout", h.Logout, middleware.JWTAuth(h.tokens))
 
 	e.GET("/me", h.Me, middleware.JWTAuth(h.tokens))
 }
@@ -63,28 +64,24 @@ type tokenResponse struct {
 //	@Produce      json
 //	@Param        credentials  body      credentials  true  "Registration payload"
 //	@Success      201          {object}  tokenResponse
-//	@Failure      422          {object}  model.APIError
+//	@Failure      422          {object}  api.Error
 //	@Router       /auth/register [post]
-func (h *AuthHandler) RegisterUser(	c *echo.Context) error {
+func (h *AuthHandler) RegisterUser(c *echo.Context) error {
 	var in credentials
 	if err := c.Bind(&in); err != nil {
 		return err
 	}
-	// The user id is generated server-side at the application layer; we
-	// pass a placeholder string and the command handler will produce a
-	// typed id from it. For a real id, use a uuid library.
 	ctx := c.Request().Context()
 	out, err := h.cmd.HandleCreate(ctx, user.CreateUserCommand{
-		ID:    in.Email,
 		Name:  in.Name,
 		Email: in.Email,
 	})
 	if err != nil {
-		return c.JSON(http.StatusUnprocessableEntity, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusUnprocessableEntity, api.Error{Error: err.Error()})
 	}
 	tokens, err := h.tokens.Issue(out.ID().String())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusInternalServerError, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusCreated, tokenResponse{
 		AccessToken:  tokens.AccessToken,
@@ -102,9 +99,9 @@ func (h *AuthHandler) RegisterUser(	c *echo.Context) error {
 //	@Produce      json
 //	@Param        credentials  body      credentials  true  "Login credentials"
 //	@Success      200          {object}  tokenResponse
-//	@Failure      401          {object}  model.APIError
+//	@Failure      401          {object}  api.Error
 //	@Router       /auth/login [post]
-func (h *AuthHandler) Login(	c *echo.Context) error {
+func (h *AuthHandler) Login(c *echo.Context) error {
 	var in credentials
 	if err := c.Bind(&in); err != nil {
 		return err
@@ -113,14 +110,14 @@ func (h *AuthHandler) Login(	c *echo.Context) error {
 	u, err := h.qry.HandleGet(ctx, user.GetUserQuery{ID: in.Email})
 	if err != nil {
 		slog.WarnContext(ctx, "login failed", "email", in.Email, "error", err)
-		return c.JSON(http.StatusUnauthorized, model.APIError{Error: "invalid credentials"})
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: "invalid credentials"})
 	}
 	if u.Email() != in.Email {
-		return c.JSON(http.StatusUnauthorized, model.APIError{Error: "invalid credentials"})
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: "invalid credentials"})
 	}
 	tokens, err := h.tokens.Issue(u.ID().String())
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusInternalServerError, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusOK, tokenResponse{
 		AccessToken:  tokens.AccessToken,
@@ -138,22 +135,45 @@ func (h *AuthHandler) Login(	c *echo.Context) error {
 //	@Produce      json
 //	@Param        body  body      refreshRequest  true  "Refresh token"
 //	@Success      200   {object}  tokenResponse
-//	@Failure      401   {object}  model.APIError
+//	@Failure      401   {object}  api.Error
 //	@Router       /auth/refresh [post]
-func (h *AuthHandler) Refresh(	c *echo.Context) error {
+func (h *AuthHandler) Refresh(c *echo.Context) error {
 	var in refreshRequest
 	if err := c.Bind(&in); err != nil {
 		return err
 	}
 	pair, err := h.tokens.Refresh(in.RefreshToken)
 	if err != nil {
-		return c.JSON(http.StatusUnauthorized, model.APIError{Error: err.Error()})
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: err.Error()})
 	}
 	return c.JSON(http.StatusOK, tokenResponse{
 		AccessToken:  pair.AccessToken,
 		RefreshToken: pair.RefreshToken,
 		ExpiresAt:    pair.ExpiresAt,
 	})
+}
+
+// Logout godoc
+//
+//	@Summary      Log out
+//	@Description  Revokes the supplied refresh token to prevent further refreshes.
+//	@Tags         auth
+//	@Accept       json
+//	@Produce      json
+//	@Param        body  body      refreshRequest  true  "Refresh token to revoke"
+//	@Success      204   "No Content"
+//	@Failure      401   {object}  api.Error
+//	@Security     BearerAuth
+//	@Router       /auth/logout [post]
+func (h *AuthHandler) Logout(c *echo.Context) error {
+	var in refreshRequest
+	if err := c.Bind(&in); err != nil {
+		return err
+	}
+	if err := h.tokens.Revoke(in.RefreshToken); err != nil {
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: err.Error()})
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 // Me godoc
@@ -164,12 +184,11 @@ func (h *AuthHandler) Refresh(	c *echo.Context) error {
 //	@Produce      json
 //	@Security     BearerAuth
 //	@Success      200  {object}  map[string]string
-//	@Failure      401  {object}  model.APIError
+//	@Failure      401  {object}  api.Error
 //	@Router       /me [get]
-func (h *AuthHandler) Me(	c *echo.Context) error {
+func (h *AuthHandler) Me(c *echo.Context) error {
 	uid, _ := c.Get("user_id").(string)
 	return c.JSON(http.StatusOK, map[string]interface{}{"user_id": uid})
 }
 
-// errAuthInvalid is a sentinel for the auth flow; keep here for future use.
 var errAuthInvalid = errors.New("invalid credentials")

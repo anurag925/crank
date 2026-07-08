@@ -1,8 +1,8 @@
-package platform
+package ports
 
 import "context"
 
-// Qdrant is the internal client for the Qdrant vector store. Only the
+// Qdrant is the port for the Qdrant vector store operations. Only the
 // minimum surface used by the application layer is exposed.
 type Qdrant interface {
 	Health(ctx context.Context) error

@@ -1,4 +1,4 @@
-package web
+package v1
 
 import "github.com/labstack/echo/v5"
 
@@ -11,10 +11,11 @@ type MountConfig struct {
 	// crank:http-fields (do not remove — `crank make handler` splices new fields here)
 }
 
-// Mount attaches every handler in cfg to e, each under its own group
-// prefix. Generated handlers are spliced in at the register-splice marker.
+// Mount attaches every handler in cfg to e at the /api/v1 prefix.
+// Generated handlers are spliced in at the register-splice marker.
 func Mount(e *echo.Echo, cfg MountConfig) {
-	g := e.Group("/users")
-	cfg.UserHandler.Register(g)
+	g := e.Group("/api/v1")
+	ug := g.Group("/users")
+	cfg.UserHandler.Register(ug)
 	// crank:http-register (do not remove — `crank make handler` splices new route registrations here)
 }

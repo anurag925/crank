@@ -5,6 +5,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 
 	"{{.ModulePath}}/internal/domain/user"
@@ -13,11 +14,11 @@ import (
 // userRow is the postgres row DTO for user aggregates. It is intentionally
 // private to this package: the domain aggregate is the only public contract.
 type userRow struct {
-	ID        string `gorm:"column:id;type:uuid;primaryKey"`
-	Name      string `gorm:"column:name;not null"`
-	Email     string `gorm:"column:email;not null;uniqueIndex"`
+	ID        uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
+	Name      string    `gorm:"column:name;not null"`
+	Email     string    `gorm:"column:email;not null;uniqueIndex"`
 {{- if .Has "auth"}}
-	Password  string `gorm:"column:password;not null"`
+	Password  string    `gorm:"column:password;not null"`
 {{- end}}
 	CreatedAt time.Time `gorm:"column:created_at;not null;default:current_timestamp"`
 	UpdatedAt time.Time `gorm:"column:updated_at;not null;default:current_timestamp"`
@@ -27,23 +28,20 @@ type userRow struct {
 // opinion about persistence; the adapter owns the table layout.
 func (userRow) TableName() string { return "users" }
 
-// toAggregate converts a row to a domain aggregate. The error from NewUserID
-// is ignored because the column type guarantees the value is a non-empty
-// uuid at the database level.
+// toAggregate converts a row to a domain aggregate via Rehydrate, which
+// bypasses validation so persistence round-trips are lossless.
 func (row *userRow) toAggregate() *user.User {
-	id, _ := user.NewUserID(row.ID)
-	u, _ := user.NewUser(id, row.Name, row.Email)
 {{- if .Has "auth"}}
-	u.SetPasswordHash(row.Password)
+	return user.Rehydrate(row.ID, row.Name, row.Email, row.Password, row.CreatedAt, row.UpdatedAt)
+{{- else}}
+	return user.Rehydrate(row.ID, row.Name, row.Email, "", row.CreatedAt, row.UpdatedAt)
 {{- end}}
-	u.SetTimestamps(row.CreatedAt, row.UpdatedAt)
-	return u
 }
 
 // rowFromAggregate projects a domain aggregate onto the row DTO.
 func rowFromAggregate(u *user.User) *userRow {
-	row := &userRow{
-		ID:        u.ID().String(),
+	return &userRow{
+		ID:        u.ID(),
 		Name:      u.Name(),
 		Email:     u.Email(),
 {{- if .Has "auth"}}
@@ -52,7 +50,6 @@ func rowFromAggregate(u *user.User) *userRow {
 		CreatedAt: u.CreatedAt(),
 		UpdatedAt: u.UpdatedAt(),
 	}
-	return row
 }
 
 // UserRepository is the GORM-backed implementation of
@@ -73,9 +70,9 @@ func (r *UserRepository) Save(ctx context.Context, u *user.User) error {
 
 // Get returns a user aggregate by id, mapping gorm.ErrRecordNotFound to
 // domain/user.ErrUserNotFound.
-func (r *UserRepository) Get(ctx context.Context, id user.UserID) (*user.User, error) {
+func (r *UserRepository) Get(ctx context.Context, id uuid.UUID) (*user.User, error) {
 	var row userRow
-	err := r.db.WithContext(ctx).First(&row, "id = ?", id.String()).Error
+	err := r.db.WithContext(ctx).First(&row, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, user.ErrUserNotFound
 	}
@@ -114,8 +111,8 @@ func (r *UserRepository) List(ctx context.Context) ([]*user.User, error) {
 
 // Delete removes a user row by id, mapping zero affected rows to
 // domain/user.ErrUserNotFound.
-func (r *UserRepository) Delete(ctx context.Context, id user.UserID) error {
-	res := r.db.WithContext(ctx).Delete(&userRow{}, "id = ?", id.String())
+func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
+	res := r.db.WithContext(ctx).Delete(&userRow{}, "id = ?", id)
 	if err := res.Error; err != nil {
 		return err
 	}

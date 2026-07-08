@@ -45,11 +45,14 @@ func nullTimePtr(t sql.NullTime) *time.Time {
 // OutboxRepository is the postgres-backed implementation of
 // domain/outbox.Repository.
 type OutboxRepository struct {
-	db *bun.DB
+	db bun.IDB
 }
 
-// NewOutboxRepository returns a Bun-backed OutboxRepository.
-func NewOutboxRepository(db *bun.DB) *OutboxRepository {
+// NewOutboxRepository returns a Bun-backed OutboxRepository. It accepts
+// bun.IDB (the interface satisfied by both *bun.DB and bun.Tx) so the
+// same constructor can be used at the composition root and inside a
+// RunInTx transaction.
+func NewOutboxRepository(db bun.IDB) *OutboxRepository {
 	return &OutboxRepository{db: db}
 }
 

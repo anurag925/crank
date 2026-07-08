@@ -8,8 +8,7 @@ import (
 	"{{.ModulePath}}/internal/ports"
 )
 
-// BCryptHasher is a ports.Hasher implementation backed by bcrypt. It is the
-// production wiring for the auth feature.
+// BCryptHasher is a ports.Hasher implementation backed by bcrypt.
 type BCryptHasher struct{}
 
 // NewBCryptHasher constructs a BCryptHasher.
@@ -34,5 +33,4 @@ func (BCryptHasher) Verify(hash, plaintext string) bool {
 	return bcrypt.CompareHashAndPassword([]byte(hash), []byte(plaintext)) == nil
 }
 
-// Compile-time assertion that BCryptHasher satisfies the Hasher port.
 var _ ports.Hasher = BCryptHasher{}
