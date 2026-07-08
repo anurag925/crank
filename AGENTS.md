@@ -39,6 +39,11 @@ crank make workflow OrderFulfillment --project ./myapp
 crank make activity ChargeCard --project ./myapp
 crank make migration create_orders --project ./myapp
 
+# Seed data
+crank seed up --project ./myapp
+crank seed generate --project ./myapp
+crank seed generate User --count 20 --project ./myapp
+
 # Tool wrappers
 crank run --project ./myapp
 crank build --project ./myapp
@@ -192,6 +197,10 @@ Run: `go test ./internal/...` for fast suite, `go test -tags e2e ./e2e/` for ful
 # Generate a migration
 ./crank make migration create_orders --project=./myapp
 
+# Generate seed data
+./crank seed generate --project=./myapp                         # empty seed file
+./crank seed generate Order --count 20 --project=./myapp        # 20 rows of fake data
+
 # Run migrations (with --project or from inside the project directory)
 ./crank migrate up --project=./myapp
 cd myapp && ./crank migrate up
@@ -236,17 +245,19 @@ crank/
 │   │   │   ├── list.go                    # `crank list`
 │   │   │   ├── make.go                    # `crank make` (migration + code generators)
 │   │   │   └── tools.go                   # Generic tool command factory + `crank tools`
-│   │   ├── scaffold/                      # `crank make` code generators (model/repo/service/handler/scaffold)
-│   │   │   ├── scaffold.go                # Generate() orchestration + artifact planning
-│   │   │   ├── names.go                   # Resource name inflection (singular/plural, cases)
-│   │   │   ├── fields.go                  # "name:type" field-spec parsing
-│   │   │   ├── wire.go                    # Auto-registers generated handlers in handler.go
-│   │   │   ├── wire_temporal.go           # Auto-registers Temporal workflows/activities in worker.go
-│   │   │   └── templates/                 # model/repository/service/handler/migration .tmpl files
-│   │   ├── tools/                         # Tool wrappers (one package per external CLI)
-│   │   │   ├── install.go                 # Shared InstallGoTool helper
-│   │   │   ├── migrate/                   # `crank migrate` → golang-migrate
-│   │   │   ├── swag/                      # `crank swag` → swaggo/swag
+	│   │   ├── scaffold/                      # `crank make` code generators (model/repo/service/handler/scaffold)
+	│   │   │   ├── scaffold.go                # Generate() orchestration + artifact planning
+	│   │   │   ├── names.go                   # Resource name inflection (singular/plural, cases)
+	│   │   │   ├── fields.go                  # "name:type" field-spec parsing
+	│   │   │   ├── wire.go                    # Auto-registers generated handlers in handler.go
+	│   │   │   ├── wire_temporal.go           # Auto-registers Temporal workflows/activities in worker.go
+	│   │   │   └── templates/                 # model/repository/service/handler/migration .tmpl files
+	│   │   ├── seedgen/                       # `crank seed generate` Go parser + fake data generator
+	│   │   ├── tools/                         # Tool wrappers (one package per external CLI)
+	│   │   │   ├── install.go                 # Shared InstallGoTool helper
+	│   │   │   ├── migrate/                   # `crank migrate` → golang-migrate
+	│   │   │   ├── seed/                      # `crank seed` → golang-migrate + seed generator
+	│   │   │   ├── swag/                      # `crank swag` → swaggo/swag
 │   │   │   ├── build/                     # `crank build` → go build
 │   │   │   ├── run/                       # `crank run` → go run
 │   │   │   ├── dev/                       # `crank dev` → air
@@ -615,6 +626,7 @@ file is left untouched and an error is returned.
 | Manifest I/O (.crank.yaml) | `internal/bootstrap/manifest.go` |
 | Public manifest reader | `internal/bootstrap/project.go` |
 | Code generators (`crank make`) | `internal/bootstrap/scaffold/*.go` |
+| Seed generator (`crank seed generate`) | `internal/bootstrap/seedgen/*.go` |
 | Generator templates | `internal/bootstrap/scaffold/templates/*.tmpl` |
 | Result helpers | `internal/bootstrap/result.go` |
 | Filesystem utilities | `internal/utils/fileutil.go` |
@@ -627,6 +639,7 @@ file is left untouched and an error is returned.
 | Subcommand | Wraps | Binary | Requires |
 |------------|-------|--------|----------|
 | `crank migrate` | golang-migrate | `migrate` | `bun` or `gorm` feature |
+| `crank seed` | golang-migrate + seed generate | `migrate` | `bun` or `gorm` feature |
 | `crank swag` | swaggo/swag | `swag` | — |
 | `crank build` | `go build` | `go` | — |
 | `crank run` | `go run ./cmd/server` | `go` | — |

@@ -24,6 +24,7 @@ handlers, and adapter implementations for HTTP and persistence.
 {{- end}}
 {{- if or (.Has "bun") (.Has "gorm")}}
 | Migrations | golang-migrate | [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate) |
+| Seed data | golang-migrate | [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate) |
 {{- end}}
 
 ## Quick start
@@ -38,6 +39,7 @@ Health check: `GET http://localhost:8080/health`
 
 {{- if or (.Has "bun") (.Has "gorm")}}
 Before running, ensure PostgreSQL is available and run `crank migrate up`.
+To seed data, run `crank seed up` after migrations are applied.
 {{- end}}
 
 ## Layout
@@ -59,6 +61,7 @@ Before running, ensure PostgreSQL is available and run `crank migrate up`.
 ├── pkg/logging             slog helpers
 {{- if or (.Has "bun") (.Has "gorm")}}
 ├── db/migrations           SQL migrations
+├── db/seeds                seed data SQL files
 {{- end}}
 ├── .env.example
 ├── .crank.yaml             project manifest (do not delete)
@@ -87,6 +90,9 @@ testing patterns, and how each feature module works — see the
 {{- if or (.Has "bun") (.Has "gorm")}}
 | `crank migrate up` | Apply pending migrations |
 | `crank make migration <name>` | Create a migration pair |
+| `crank seed up` | Apply pending seed files |
+| `crank seed generate <Name>` | Generate seed SQL with fake data for a domain model |
+| `crank seed generate` | Generate an empty seed file |
 {{- end}}
 | `crank make scaffold <Name> <field:type>` | Generate a full CRUD resource |
 

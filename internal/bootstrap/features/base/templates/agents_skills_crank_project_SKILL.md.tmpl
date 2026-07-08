@@ -41,6 +41,8 @@ crank vet
 crank tidy
 crank swag
 crank migrate up
+crank seed up
+crank seed generate
 ```
 
 When commands are run from outside the project root, pass `--project`:
@@ -49,6 +51,8 @@ When commands are run from outside the project root, pass `--project`:
 crank test --project /path/to/project
 crank run --project /path/to/project
 crank migrate up --project /path/to/project
+crank seed up --project /path/to/project
+crank seed generate --project /path/to/project
 ```
 
 If the `crank` command is missing, check with:
@@ -134,6 +138,7 @@ crank make scaffold Invoice number:string --tests
 crank make repository Ticket
 crank make service Cart
 crank make migration create_orders
+crank seed generate Order --count 20
 ```
 
 For Temporal projects:
