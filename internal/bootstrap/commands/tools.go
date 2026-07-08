@@ -97,6 +97,11 @@ func executeTool(t bootstrap.Tool, projectDir string, cmd *cobra.Command, extraA
 	if err != nil {
 		return err
 	}
+	// When Prepare returns nil, the tool handled everything in-process
+	// (e.g. seed generate). Nothing more to do.
+	if inv == nil {
+		return nil
+	}
 
 	// 4. Resolve the binary.
 	bin := inv.Binary

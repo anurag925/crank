@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/bootstrap/seedgen"
 	"github.com/anurag925/crank/internal/bootstrap/tools"
 	"github.com/anurag925/crank/internal/utils"
 )
@@ -20,25 +21,33 @@ func init() {
 type tool struct {
 	databaseURL string
 	steps       int
+	count       int
+	force       bool
 }
 
-func (*tool) Name() string               { return "seed" }
-func (*tool) BinaryName() string         { return "migrate" }
-func (*tool) Description() string        { return "Run seed data migrations via golang-migrate" }
+func (*tool) Name() string       { return "seed" }
+func (*tool) BinaryName() string { return "migrate" }
+func (*tool) Description() string {
+	return "Run seed data migrations or generate seed files via golang-migrate"
+}
 func (*tool) RequiresFeatures() []string { return []string{"bun", "gorm"} }
 
 func (*tool) LongDescription() string {
-	return `seed invokes the golang-migrate CLI pointing at db/seeds/ directory.
-By default it applies all pending up seed files. The database URL is taken
-from DATABASE_URL env var or the project's configs/config.yaml.
+	return `seed manages seed data in a crank-generated project.
 
-If --project is not specified, the current directory is used.
+Subcommands:
+  crank seed [up|down]            Apply or rollback seed SQL files using golang-migrate
+  crank seed generate <model>     Generate a seed SQL file with fake data for a domain model
+  crank seed generate             Generate an empty seed file for manual editing
+
+If no subcommand is given, "up" is assumed.
 
 Examples:
   crank seed up --project ./myapp
   crank seed down --steps 1 --project ./myapp
-  crank seed --project ./myapp              (defaults to "up")
-  cd myapp && crank seed up                 (uses current directory)`
+  crank seed generate User --project ./myapp
+  crank seed generate --count 20 --project ./myapp
+  crank seed --project ./myapp                    (defaults to "up")`
 }
 
 func (*tool) InstallCmd() string {
@@ -52,14 +61,22 @@ func (t *tool) Install() error {
 func (t *tool) AddFlags(cmd *cobra.Command) {
 	cmd.Flags().StringVar(&t.databaseURL, "database-url", "", "override the database URL (defaults to DATABASE_URL or config)")
 	cmd.Flags().IntVar(&t.steps, "steps", 0, "limit the number of seed steps (0 = all pending)")
+	cmd.Flags().IntVar(&t.count, "count", 10, "number of seed rows to generate (used with 'generate')")
+	cmd.Flags().BoolVar(&t.force, "force", false, "overwrite existing seed file (used with 'generate')")
 }
 
 func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*bootstrap.ToolInvocation, error) {
-	seedsDir := filepath.Join(projectDir, "db/seeds")
+	// Check if the first positional arg is "generate".
+	if len(extraArgs) > 0 && strings.ToLower(extraArgs[0]) == "generate" {
+		if err := t.handleGenerate(projectDir, extraArgs[1:]); err != nil {
+			return nil, err
+		}
+		// Signal to executeTool that the work is done (no binary to run).
+		return nil, nil
+	}
 
-	// Create the seeds directory if it doesn't exist (caller is free to
-	// add timestamped SQL files later; an empty directory is a valid
-	// golang-migrate source with zero migrations).
+	// Original migrate-wrapper path for up/down.
+	seedsDir := filepath.Join(projectDir, "db/seeds")
 	if err := utils.EnsureDir(seedsDir); err != nil {
 		return nil, fmt.Errorf("create db/seeds directory: %w", err)
 	}
@@ -99,4 +116,40 @@ func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string
 		Args: argv,
 		Dir:  projectDir,
 	}, nil
+}
+
+// handleGenerate runs the seed file generator. It reads the struct from the
+// domain layer, generates fake data, and writes a timestamped SQL file to
+// db/seeds/.
+func (t *tool) handleGenerate(projectDir string, args []string) error {
+	modelName := ""
+	if len(args) > 0 {
+		modelName = args[0]
+	}
+
+	files, err := seedgen.GenerateSeed(seedgen.Options{
+		ProjectDir: projectDir,
+		ModelName:  modelName,
+		Count:      t.count,
+		Force:      t.force,
+	})
+	if err != nil {
+		return err
+	}
+
+	for _, f := range files {
+		if f.Skipped {
+			fmt.Printf("    = db/seeds/%s (exists, skipped)\n", f.Path)
+		} else {
+			fmt.Printf("    + db/seeds/%s\n", f.Path)
+		}
+	}
+
+	if modelName != "" {
+		fmt.Printf("✔ Generated seed data for %s (%d rows)\n", modelName, t.count)
+	} else {
+		fmt.Println("✔ Generated empty seed file")
+	}
+
+	return nil
 }
