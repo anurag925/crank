@@ -71,7 +71,7 @@ func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string
 		databaseURL = dsn
 	}
 
-	direction := "up"
+	direction := ""
 	if len(extraArgs) > 0 {
 		d := strings.ToLower(extraArgs[0])
 		if d == "up" || d == "down" {
@@ -83,7 +83,9 @@ func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string
 	argv := []string{
 		"-path", filepath.Join(projectDir, "db/migrations"),
 		"-database", databaseURL,
-		direction,
+	}
+	if direction != "" {
+		argv = append(argv, direction)
 	}
 	if t.steps > 0 {
 		argv = append(argv, fmt.Sprintf("%d", t.steps))
@@ -91,7 +93,8 @@ func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string
 	argv = append(argv, extraArgs...)
 
 	return &bootstrap.ToolInvocation{
-		Args: argv,
-		Dir:  projectDir,
+		Args:  argv,
+		Dir:   projectDir,
+		Stdin: direction == "down",
 	}, nil
 }
