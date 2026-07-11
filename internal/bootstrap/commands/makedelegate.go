@@ -155,6 +155,5 @@ func runMakeTarget(projectDir, target string, args []string) error {
 		Binary: bin,
 		Args:   makeArgs,
 		Dir:    projectDir,
-		Stdin:  true,
 	})
 }

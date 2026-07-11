@@ -69,7 +69,6 @@ type ToolInvocation struct {
 	Args   []string // arguments (without the binary name)
 	Dir    string   // working directory
 	Env    []string // additional KEY=VALUE env vars (merged with os.Environ)
-	Stdin  bool     // whether to pass os.Stdin through
 }
 
 // ToolRegistry holds registered tools, analogous to the Feature Registry.

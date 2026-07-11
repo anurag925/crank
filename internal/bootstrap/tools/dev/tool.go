@@ -48,5 +48,5 @@ func (tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (
 	if !utils.PathExists(toml) {
 		return nil, fmt.Errorf("no .air.toml found in %s", projectDir)
 	}
-	return &bootstrap.ToolInvocation{Args: extraArgs, Dir: projectDir, Stdin: true}, nil
+	return &bootstrap.ToolInvocation{Args: extraArgs, Dir: projectDir}, nil
 }

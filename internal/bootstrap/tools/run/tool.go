@@ -44,5 +44,5 @@ func (tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (
 	argv := []string{"run", "./cmd/server"}
 	argv = append(argv, extraArgs...)
 
-	return &bootstrap.ToolInvocation{Args: argv, Dir: projectDir, Stdin: true}, nil
+	return &bootstrap.ToolInvocation{Args: argv, Dir: projectDir}, nil
 }

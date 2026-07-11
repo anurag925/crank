@@ -93,8 +93,7 @@ func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string
 	argv = append(argv, extraArgs...)
 
 	return &bootstrap.ToolInvocation{
-		Args:  argv,
-		Dir:   projectDir,
-		Stdin: direction == "down",
+		Args: argv,
+		Dir:  projectDir,
 	}, nil
 }

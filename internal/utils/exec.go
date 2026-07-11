@@ -13,7 +13,6 @@ type ExecConfig struct {
 	Args   []string // arguments (binary is prepended automatically)
 	Dir    string   // working directory
 	Env    []string // additional KEY=VALUE env vars to merge with os.Environ
-	Stdin  bool     // whether to wire os.Stdin into the child process
 }
 
 // RunExternal executes an external command, streaming stdout/stderr.
@@ -28,12 +27,10 @@ func RunExternal(cfg *ExecConfig) error {
 		Path:   cfg.Binary,
 		Args:   argv,
 		Dir:    cfg.Dir,
+		Stdin:  os.Stdin,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
 		Env:    env,
-	}
-	if cfg.Stdin {
-		c.Stdin = os.Stdin
 	}
 	return c.Run()
 }

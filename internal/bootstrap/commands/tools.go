@@ -134,7 +134,6 @@ func executeTool(t bootstrap.Tool, projectDir string, cmd *cobra.Command, extraA
 		Args:   inv.Args,
 		Dir:    inv.Dir,
 		Env:    inv.Env,
-		Stdin:  inv.Stdin,
 	})
 }
 
