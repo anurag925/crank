@@ -3,6 +3,7 @@ package seed
 import (
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -10,7 +11,6 @@ import (
 
 	"github.com/anurag925/crank/internal/bootstrap"
 	"github.com/anurag925/crank/internal/bootstrap/seedgen"
-	"github.com/anurag925/crank/internal/bootstrap/tools"
 	"github.com/anurag925/crank/internal/utils"
 )
 
@@ -26,71 +26,63 @@ type tool struct {
 }
 
 func (*tool) Name() string       { return "seed" }
-func (*tool) BinaryName() string { return "migrate" }
+func (*tool) BinaryName() string { return "go" }
 func (*tool) Description() string {
-	return "Run seed data migrations or generate seed files via golang-migrate"
+	return "Generate and run Go-based seed data for your project"
 }
 func (*tool) RequiresFeatures() []string { return []string{"bun", "gorm"} }
 
 func (*tool) LongDescription() string {
-	return `seed manages seed data in a crank-generated project.
+	return `seed manages seed data in a crank-generated project using Go-based seed files.
 
 Subcommands:
-  crank seed [up|down]            Apply or rollback seed SQL files using golang-migrate
-  crank seed generate <model>     Generate a seed SQL file with fake data for a domain model
-  crank seed generate             Generate an empty seed file for manual editing
+  crank seed [up|down]            Apply or rollback seed data (go run db/seeds/main.go)
+  crank seed generate <model>     Generate a Go seed file with fake data for a domain model
+  crank seed generate             Generate scaffolding files (main.go + seeder.go)
 
 If no subcommand is given, "up" is assumed.
 
+Generated files:
+  db/seeds/main.go                Entry point — connects to DB, runs seeder
+  db/seeds/<orm>/seeder.go        Orchestrator — registers all seed up/down functions
+  db/seeds/<orm>/seed_<table>.go  Per-model seed file with SeedXxxUp / SeedXxxDown
+
 Examples:
   crank seed up --project ./myapp
-  crank seed down --steps 1 --project ./myapp
+  crank seed down --project ./myapp
   crank seed generate User --project ./myapp
-  crank seed generate --count 20 --project ./myapp
+  crank seed generate --count 5 --project ./myapp
   crank seed --project ./myapp                    (defaults to "up")`
 }
 
 func (*tool) InstallCmd() string {
-	return "go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@latest"
+	return "go is required to run seed operations"
 }
 
 func (t *tool) Install() error {
-	return tools.InstallGoTool("github.com/golang-migrate/migrate/v4/cmd/migrate@latest", t.BinaryName(), "postgres")
+	return nil
 }
 
 func (t *tool) AddFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&t.databaseURL, "database-url", "", "override the database URL (defaults to DATABASE_URL or config)")
-	cmd.Flags().IntVar(&t.steps, "steps", 0, "limit the number of seed steps (0 = all pending)")
 	cmd.Flags().IntVar(&t.count, "count", 10, "number of seed rows to generate (used with 'generate')")
 	cmd.Flags().BoolVar(&t.force, "force", false, "overwrite existing seed file (used with 'generate')")
 }
 
 func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string) (*bootstrap.ToolInvocation, error) {
-	// Check if the first positional arg is "generate".
 	if len(extraArgs) > 0 && strings.ToLower(extraArgs[0]) == "generate" {
 		if err := t.handleGenerate(projectDir, extraArgs[1:]); err != nil {
 			return nil, err
 		}
-		// Signal to executeTool that the work is done (no binary to run).
 		return nil, nil
 	}
 
-	// Original migrate-wrapper path for up/down.
-	seedsDir := filepath.Join(projectDir, "db/seeds")
-	if err := utils.EnsureDir(seedsDir); err != nil {
-		return nil, fmt.Errorf("create db/seeds directory: %w", err)
-	}
+	return t.handleUpDown(projectDir, extraArgs)
+}
 
-	databaseURL := t.databaseURL
-	if databaseURL == "" {
-		databaseURL = os.Getenv("DATABASE_URL")
-	}
-	if databaseURL == "" {
-		dsn, err := bootstrap.DSNFromConfig(projectDir)
-		if err != nil {
-			return nil, fmt.Errorf("could not determine database URL: %w", err)
-		}
-		databaseURL = dsn
+func (t *tool) handleUpDown(projectDir string, extraArgs []string) (*bootstrap.ToolInvocation, error) {
+	mainPath := filepath.Join(projectDir, "db", "seeds", "main.go")
+	if !utils.PathExists(mainPath) {
+		return nil, fmt.Errorf("db/seeds/main.go not found — run 'crank seed generate' first to scaffold seed files")
 	}
 
 	direction := "up"
@@ -98,30 +90,28 @@ func (t *tool) Prepare(projectDir string, cmd *cobra.Command, extraArgs []string
 		d := strings.ToLower(extraArgs[0])
 		if d == "up" || d == "down" {
 			direction = d
-			extraArgs = extraArgs[1:]
 		}
 	}
 
-	argv := []string{
-		"-path", seedsDir,
-		"-database", databaseURL,
-		direction,
+	fmt.Printf("→ go run db/seeds/main.go -dir %s\n", direction)
+	ecmd := exec.Command("go", "run", "./db/seeds/main.go", "-dir", direction)
+	ecmd.Dir = projectDir
+	ecmd.Stdout = os.Stdout
+	ecmd.Stderr = os.Stderr
+	if err := ecmd.Run(); err != nil {
+		return nil, fmt.Errorf("seed %s: %w", direction, err)
 	}
-	if t.steps > 0 {
-		argv = append(argv, fmt.Sprintf("%d", t.steps))
-	}
-	argv = append(argv, extraArgs...)
-
-	return &bootstrap.ToolInvocation{
-		Args: argv,
-		Dir:  projectDir,
-	}, nil
+	return nil, nil
 }
 
-// handleGenerate runs the seed file generator. It reads the struct from the
-// domain layer, generates fake data, and writes a timestamped SQL file to
-// db/seeds/.
 func (t *tool) handleGenerate(projectDir string, args []string) error {
+	proj, err := bootstrap.LoadProjectInfo(projectDir)
+	if err != nil {
+		return fmt.Errorf("load project info: %w", err)
+	}
+
+	orm := detectOrm(proj.Features)
+
 	modelName := ""
 	if len(args) > 0 {
 		modelName = args[0]
@@ -132,6 +122,8 @@ func (t *tool) handleGenerate(projectDir string, args []string) error {
 		ModelName:  modelName,
 		Count:      t.count,
 		Force:      t.force,
+		ModulePath: proj.ModulePath,
+		Orm:        orm,
 	})
 	if err != nil {
 		return err
@@ -139,17 +131,29 @@ func (t *tool) handleGenerate(projectDir string, args []string) error {
 
 	for _, f := range files {
 		if f.Skipped {
-			fmt.Printf("    = db/seeds/%s (exists, skipped)\n", f.Path)
+			fmt.Printf("    = %s (exists, skipped)\n", f.Path)
 		} else {
-			fmt.Printf("    + db/seeds/%s\n", f.Path)
+			fmt.Printf("    + %s\n", f.Path)
 		}
 	}
 
 	if modelName != "" {
 		fmt.Printf("✔ Generated seed data for %s (%d rows)\n", modelName, t.count)
 	} else {
-		fmt.Println("✔ Generated empty seed file")
+		fmt.Println("✔ Generated seed scaffolding (main.go + seeder.go)")
 	}
 
 	return nil
+}
+
+func detectOrm(features []string) string {
+	for _, f := range features {
+		if f == "gorm" {
+			return "gorm"
+		}
+		if f == "bun" {
+			return "bun"
+		}
+	}
+	return "gorm"
 }

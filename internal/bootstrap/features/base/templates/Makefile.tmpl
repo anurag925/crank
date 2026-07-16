@@ -20,6 +20,7 @@ help:
 {{- if or (.Has "bun") (.Has "gorm")}}
 	@echo "  crank migrate up   - apply database migrations"
 	@echo "  crank seed up       - apply seed data"
+	@echo "  crank seed down     - rollback seeded data"
 	@echo "  crank seed generate <Name> - generate seed file with fake data"
 	@echo "  crank make migration <name> - create an up/down migration pair"
 {{- end}}

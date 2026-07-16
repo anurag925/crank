@@ -11,7 +11,7 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Parser tests
+// Parser tests (unchanged logic)
 // ---------------------------------------------------------------------------
 
 func TestParseStruct_DomainAggregate_ParseRowDTO(t *testing.T) {
@@ -113,7 +113,6 @@ func TestParseStruct_MixedVisibility(t *testing.T) {
 	if err := os.MkdirAll(domainDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	// Only exported fields should be picked up.
 	if err := os.WriteFile(filepath.Join(domainDir, "staff.go"), []byte(`package staff
 
 type Staff struct {
@@ -152,7 +151,6 @@ func TestParseStruct_NotFound(t *testing.T) {
 
 func TestParseStruct_NoDomainDir(t *testing.T) {
 	dir := t.TempDir()
-	// Create domain directory but with no matching struct name.
 	domainDir := filepath.Join(dir, "internal/domain/other")
 	if err := os.MkdirAll(domainDir, 0o755); err != nil {
 		t.Fatal(err)
@@ -202,7 +200,6 @@ type UserRow struct {
 	if len(info.ExportedFields) != 3 {
 		t.Fatalf("got %d fields, want 3", len(info.ExportedFields))
 	}
-	// GORM column tag should be used.
 	if info.ExportedFields[0].ColumnName != "user_id" {
 		t.Errorf("ColumnName = %q, want %q", info.ExportedFields[0].ColumnName, "user_id")
 	}
@@ -247,7 +244,6 @@ type Ticket struct {
 		t.Fatalf("got %d fields, want 3", len(info.ExportedFields))
 	}
 
-	// The Status field should be detected as an enum.
 	statusField := info.ExportedFields[2]
 	if statusField.Name != "Status" {
 		t.Errorf("field[2].Name = %q, want %q", statusField.Name, "Status")
@@ -258,7 +254,6 @@ type Ticket struct {
 	if len(statusField.EnumValues) != 3 {
 		t.Fatalf("expected 3 enum values, got %d: %v", len(statusField.EnumValues), statusField.EnumValues)
 	}
-	// All enum values should be present.
 	want := map[string]bool{"open": true, "closed": true, "pending": true}
 	for _, v := range statusField.EnumValues {
 		if !want[v] {
@@ -352,8 +347,8 @@ func TestColumnName(t *testing.T) {
 	}{
 		{"UserID", makeTag(`bun:"user_id,pk"`), "user_id"},
 		{"UserName", makeTag(`gorm:"column:user_name"`), "user_name"},
-		{"Email", makeTag(`bun:"-"`), "email"}, // skip tag → fallback
-		{"CreatedAt", nil, "created_at"},       // no tag → snake_case
+		{"Email", makeTag(`bun:"-"`), "email"},
+		{"CreatedAt", nil, "created_at"},
 		{"ID", nil, "id"},
 		{"MyField", makeTag(`bun:"my_field,notnull"`), "my_field"},
 	}
@@ -417,7 +412,7 @@ func TestShortenImport(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// typeString tests (AST type -> Go string)
+// typeString tests
 // ---------------------------------------------------------------------------
 
 func TestTypeString(t *testing.T) {
@@ -498,10 +493,10 @@ func TestSnakePlural(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// GenerateSeed tests
+// GenerateSeed tests — Go file generation
 // ---------------------------------------------------------------------------
 
-func TestGenerateSeed_WithFields(t *testing.T) {
+func TestGenerateSeed_WithModel(t *testing.T) {
 	dir := t.TempDir()
 	domainDir := filepath.Join(dir, "internal/domain/product")
 	if err := os.MkdirAll(domainDir, 0o755); err != nil {
@@ -518,62 +513,115 @@ type Product struct {
 		t.Fatal(err)
 	}
 
-	files, err := GenerateSeed(Options{
+	opts := Options{
 		ProjectDir: dir,
 		ModelName:  "Product",
-		Count:      5,
-	})
+		Count:      3,
+		ModulePath: "example.com/myapp",
+		Orm:        "gorm",
+	}
+	_, err := GenerateSeed(opts)
 	if err != nil {
 		t.Fatalf("GenerateSeed: %v", err)
 	}
-	if len(files) != 2 {
-		t.Fatalf("expected 2 files (up + down), got %d", len(files))
-	}
 
-	upPath := filepath.Join(dir, "db/seeds", files[0].Path)
-	data, err := os.ReadFile(upPath)
+	// Check main.go was generated.
+	mainPath := filepath.Join(dir, "db/seeds/main.go")
+	mainData, err := os.ReadFile(mainPath)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("main.go not generated:", err)
 	}
-	content := string(data)
-
-	if !strings.Contains(content, "INSERT INTO products") {
-		t.Errorf("missing INSERT INTO products:\n%s", content)
+	if !strings.Contains(string(mainData), "package main") {
+		t.Error("main.go missing package main")
 	}
-	if !strings.Contains(content, "VALUES") {
-		t.Errorf("missing VALUES:\n%s", content)
-	}
-	// Each row has 2 commas (3 fields), so 5 rows = 10 commas.
-	if strings.Count(content, ",") < 9 {
-		t.Errorf("expected ~10 commas for 5 rows of 3 fields, got %d", strings.Count(content, ","))
+	if !strings.Contains(string(mainData), "config.Load()") {
+		t.Error("main.go missing config.Load()")
 	}
 
-	// Verify down file content.
-	downPath := filepath.Join(dir, "db/seeds", files[1].Path)
-	downData, err := os.ReadFile(downPath)
+	// Check seeder.go was generated with marker comments.
+	seederPath := filepath.Join(dir, "db/seeds/gorm/seeder.go")
+	seederData, err := os.ReadFile(seederPath)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("seeder.go not generated:", err)
 	}
-	if !strings.Contains(string(downData), "TRUNCATE TABLE products") {
-		t.Errorf("down file should TRUNCATE products:\n%s", downData)
+	seederStr := string(seederData)
+	if !strings.Contains(seederStr, "crank:seed-up-begin") {
+		t.Error("seeder.go missing crank:seed-up-begin marker")
+	}
+	if !strings.Contains(seederStr, "crank:seed-up-end") {
+		t.Error("seeder.go missing crank:seed-up-end marker")
+	}
+	if !strings.Contains(seederStr, `{"products", SeedProductsUp}`) {
+		t.Error("seeder.go should have SeedProductsUp registered")
+	}
+	if !strings.Contains(seederStr, `{"products", SeedProductsDown}`) {
+		t.Error("seeder.go should have SeedProductsDown registered")
+	}
+
+	// Check seed_products.go was generated.
+	seedPath := filepath.Join(dir, "db/seeds/gorm/seed_products.go")
+	seedData, err := os.ReadFile(seedPath)
+	if err != nil {
+		t.Fatal("seed_products.go not generated:", err)
+	}
+	seedStr := string(seedData)
+	if !strings.Contains(seedStr, "func SeedProductsUp") {
+		t.Error("seed_products.go missing SeedProductsUp")
+	}
+	if !strings.Contains(seedStr, "func SeedProductsDown") {
+		t.Error("seed_products.go missing SeedProductsDown")
+	}
+	if !strings.Contains(seedStr, "clause.OnConflict{DoNothing: true}") {
+		t.Error("seed_products.go missing OnConflict clause")
+	}
+	if !strings.Contains(seedStr, `gorm:"column:id`) {
+		t.Error("seed_products.go missing gorm tag")
 	}
 }
 
-func TestGenerateSeed_Empty(t *testing.T) {
+func TestGenerateSeed_ScaffoldOnly(t *testing.T) {
 	dir := t.TempDir()
-	files, err := GenerateSeed(Options{
+
+	opts := Options{
 		ProjectDir: dir,
 		ModelName:  "",
 		Count:      0,
-	})
+		ModulePath: "example.com/myapp",
+		Orm:        "gorm",
+	}
+	files, err := GenerateSeed(opts)
 	if err != nil {
 		t.Fatalf("GenerateSeed: %v", err)
 	}
-	if len(files) != 1 {
-		t.Fatalf("expected 1 file for empty seed, got %d", len(files))
+
+	foundMain := false
+	foundSeeder := false
+	for _, f := range files {
+		if strings.Contains(f.Path, "main.go") {
+			foundMain = true
+		}
+		if strings.Contains(f.Path, "seeder.go") {
+			foundSeeder = true
+		}
 	}
-	if !strings.HasSuffix(files[0].Path, "_empty_seed.up.sql") {
-		t.Errorf("unexpected filename: %s", files[0].Path)
+	if !foundMain {
+		t.Error("scaffold should generate main.go")
+	}
+	if !foundSeeder {
+		t.Error("scaffold should generate seeder.go")
+	}
+	if len(files) != 2 {
+		t.Errorf("expected 2 files (main.go + seeder.go), got %d", len(files))
+	}
+
+	// Verify main.go exists on disk.
+	mainPath := filepath.Join(dir, "db/seeds/main.go")
+	if _, err := os.Stat(mainPath); err != nil {
+		t.Error("main.go not written to disk")
+	}
+	seederPath := filepath.Join(dir, "db/seeds/gorm/seeder.go")
+	if _, err := os.Stat(seederPath); err != nil {
+		t.Error("seeder.go not written to disk")
 	}
 }
 
@@ -590,11 +638,28 @@ func TestGenerateSeed_EmptyProjectDir(t *testing.T) {
 	}
 }
 
+func TestGenerateSeed_MissingModulePath(t *testing.T) {
+	dir := t.TempDir()
+	_, err := GenerateSeed(Options{
+		ProjectDir: dir,
+		ModelName:  "User",
+		Orm:        "gorm",
+	})
+	if err == nil {
+		t.Fatal("expected error for missing module path")
+	}
+	if !strings.Contains(err.Error(), "module path") {
+		t.Errorf("unexpected error: %v", err)
+	}
+}
+
 func TestGenerateSeed_ModelNotFound(t *testing.T) {
 	dir := t.TempDir()
 	_, err := GenerateSeed(Options{
 		ProjectDir: dir,
 		ModelName:  "NonExistent",
+		ModulePath: "example.com/myapp",
+		Orm:        "gorm",
 	})
 	if err == nil {
 		t.Fatal("expected error for non-existent model")
@@ -620,27 +685,28 @@ type Item struct {
 		t.Fatal(err)
 	}
 
-	// Count=0 should default to 10.
-	files, err := GenerateSeed(Options{
+	opts := Options{
 		ProjectDir: dir,
 		ModelName:  "Item",
-		Count:      0,
-	})
+		Count:      0, // should default to 10
+		ModulePath: "example.com/myapp",
+		Orm:        "gorm",
+	}
+	_, err := GenerateSeed(opts)
 	if err != nil {
 		t.Fatalf("GenerateSeed: %v", err)
 	}
-	if len(files) != 2 {
-		t.Fatalf("expected 2 files, got %d", len(files))
-	}
-	data, err := os.ReadFile(filepath.Join(dir, "db/seeds", files[0].Path))
+
+	seedPath := filepath.Join(dir, "db/seeds/gorm/seed_items.go")
+	data, err := os.ReadFile(seedPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// 10 rows of 2 fields: each row has 1 comma between values, plus
-	// 9 `),` separators between rows = 19 commas total.
-	got := strings.Count(string(data), ",")
-	if got < 15 || got > 25 {
-		t.Errorf("expected ~19 commas for 10 rows of 2 fields, got %d", got)
+	content := string(data)
+	// 10 entries in the entries slice.
+	count := strings.Count(content, "uuid.MustParse")
+	if count < 10 {
+		t.Errorf("expected at least 10 rows (uuid.MustParse calls), got %d", count)
 	}
 }
 
@@ -659,89 +725,341 @@ type Item struct {
 		t.Fatal(err)
 	}
 
-	// First generation.
-	files1, err := GenerateSeed(Options{ProjectDir: dir, ModelName: "Item", Count: 1})
-	if err != nil {
-		t.Fatal(err)
+	opts := Options{
+		ProjectDir: dir,
+		ModelName:  "Item",
+		Count:      1,
+		ModulePath: "example.com/myapp",
+		Orm:        "gorm",
 	}
 
-	// Second generation without force should skip.
-	files2, err := GenerateSeed(Options{ProjectDir: dir, ModelName: "Item", Count: 1})
+	// First generation.
+	files1, err := GenerateSeed(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !files2[0].Skipped {
+	_ = files1
+
+	// Second without force should skip the model seed file.
+	opts.Force = false
+	files2, err := GenerateSeed(opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	skipped := false
+	for _, f := range files2 {
+		if f.Skipped {
+			skipped = true
+		}
+	}
+	if !skipped {
 		t.Error("expected second call to skip existing file without --force")
 	}
 
-	// Third generation with force should overwrite.
-	files3, err := GenerateSeed(Options{ProjectDir: dir, ModelName: "Item", Count: 1, Force: true})
+	// Third with force should not skip.
+	opts.Force = true
+	files3, err := GenerateSeed(opts)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if files3[0].Skipped {
-		t.Error("expected --force to overwrite, but file was skipped")
+	for _, f := range files3 {
+		if f.Skipped && strings.Contains(f.Path, "seed_items.go") {
+			t.Error("expected --force to overwrite model seed file, but it was skipped")
+		}
 	}
-	_ = files1
 }
 
-func TestGenerateSeed_EmptyFileSkip(t *testing.T) {
+func TestGenerateSeed_AdditionalModel(t *testing.T) {
 	dir := t.TempDir()
 
-	// First empty generation.
-	files1, err := GenerateSeed(Options{ProjectDir: dir, ModelName: ""})
-	if err != nil {
+	// Create domain structs for User and Product.
+	userDir := filepath.Join(dir, "internal/domain/user")
+	if err := os.MkdirAll(userDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(userDir, "user.go"), []byte(`package user
+
+type User struct {
+	ID    string
+	Name  string
+	Email string
+}
+`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	// Second without force skips.
-	files2, err := GenerateSeed(Options{ProjectDir: dir, ModelName: ""})
-	if err != nil {
+	productDir := filepath.Join(dir, "internal/domain/product")
+	if err := os.MkdirAll(productDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if !files2[0].Skipped {
-		t.Error("expected empty seed generation to skip when file exists")
+	if err := os.WriteFile(filepath.Join(productDir, "product.go"), []byte(`package product
+
+type Product struct {
+	ID    string
+	Name  string
+	Price float64
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
 	}
 
-	// Third with force writes.
-	files3, err := GenerateSeed(Options{ProjectDir: dir, ModelName: "", Force: true})
+	baseOpts := Options{
+		ProjectDir: dir,
+		Count:      2,
+		ModulePath: "example.com/myapp",
+		Orm:        "gorm",
+	}
+
+	// Generate User seed.
+	opts := baseOpts
+	opts.ModelName = "User"
+	_, err := GenerateSeed(opts)
+	if err != nil {
+		t.Fatalf("GenerateSeed User: %v", err)
+	}
+
+	// Generate Product seed (should append to seeder, not overwrite).
+	opts.ModelName = "Product"
+	_, err = GenerateSeed(opts)
+	if err != nil {
+		t.Fatalf("GenerateSeed Product: %v", err)
+	}
+
+	// Verify seeder.go has both models registered.
+	seederData, err := os.ReadFile(filepath.Join(dir, "db/seeds/gorm/seeder.go"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if files3[0].Skipped {
-		t.Error("expected --force to overwrite empty seed")
+	seederStr := string(seederData)
+	if !strings.Contains(seederStr, `{"users", SeedUsersUp}`) {
+		t.Error("seeder.go should have SeedUsersUp")
 	}
-	_ = files1
+	if !strings.Contains(seederStr, `{"products", SeedProductsUp}`) {
+		t.Error("seeder.go should have SeedProductsUp")
+	}
+	if !strings.Contains(seederStr, `{"users", SeedUsersDown}`) {
+		t.Error("seeder.go should have SeedUsersDown")
+	}
+	if !strings.Contains(seederStr, `{"products", SeedProductsDown}`) {
+		t.Error("seeder.go should have SeedProductsDown")
+	}
+
+	// Repeat generation should not duplicate entries.
+	opts.ModelName = "Product"
+	_, err = GenerateSeed(opts)
+	if err != nil {
+		t.Fatalf("GenerateSeed Product (repeat): %v", err)
+	}
+	seederData2, _ := os.ReadFile(filepath.Join(dir, "db/seeds/gorm/seeder.go"))
+	seederStr2 := string(seederData2)
+	if strings.Count(seederStr2, `{"products", SeedProductsUp}`) > 1 {
+		t.Error("seeder.go should not have duplicate entries for Product")
+	}
 }
 
-func TestGenerateInsert_Content(t *testing.T) {
-	info := &StructInfo{
-		Name:      "Widget",
-		TableName: "widgets",
-		ExportedFields: []FieldInfo{
-			{Name: "ID", ColumnName: "id", GoType: "string"},
-			{Name: "Label", ColumnName: "label", GoType: "string"},
-		},
+func TestGenerateSeed_BunGeneration(t *testing.T) {
+	dir := t.TempDir()
+	domainDir := filepath.Join(dir, "internal/domain/product")
+	if err := os.MkdirAll(domainDir, 0o755); err != nil {
+		t.Fatal(err)
 	}
-	sql := generateInsert(info, 3, "20250101000000")
-	if !strings.Contains(sql, "-- Seed data for Widget") {
-		t.Errorf("missing header: %s", sql)
+	if err := os.WriteFile(filepath.Join(domainDir, "product.go"), []byte(`package product
+
+type Product struct {
+	ID    string
+	Name  string
+	Price float64
+}
+`), 0o644); err != nil {
+		t.Fatal(err)
 	}
-	if !strings.Contains(sql, "INSERT INTO widgets (id, label) VALUES") {
-		t.Errorf("missing INSERT: %s", sql)
+
+	opts := Options{
+		ProjectDir: dir,
+		ModelName:  "Product",
+		Count:      2,
+		ModulePath: "example.com/myapp",
+		Orm:        "bun",
 	}
-	// Should have 3 rows.
-	rows := strings.Count(sql, "),")
-	if rows != 2 { // 2 commas between 3 rows, last row ends with ");"
-		t.Errorf("expected 2 row separators for 3 rows, got %d", rows)
+	_, err := GenerateSeed(opts)
+	if err != nil {
+		t.Fatalf("GenerateSeed bun: %v", err)
 	}
-	if !strings.HasSuffix(strings.TrimSpace(sql), ");") {
-		t.Errorf("should end with ');'")
+
+	seedData, err := os.ReadFile(filepath.Join(dir, "db/seeds/bun/seed_products.go"))
+	if err != nil {
+		t.Fatal("bun seed_products.go not generated:", err)
+	}
+	seedStr := string(seedData)
+	if !strings.Contains(seedStr, "package bun") {
+		t.Error("bun seed should use package bun")
+	}
+	if !strings.Contains(seedStr, `"github.com/uptrace/bun"`) {
+		t.Error("bun seed should import bun")
+	}
+	if !strings.Contains(seedStr, "bun.BaseModel") {
+		t.Error("bun seed should use bun.BaseModel")
+	}
+	if !strings.Contains(seedStr, `bun:"id`) {
+		t.Error("bun seed should use bun tags")
+	}
+	if !strings.Contains(seedStr, "db.NewInsert()") {
+		t.Error("bun seed should use db.NewInsert()")
+	}
+	if !strings.Contains(seedStr, "CONFLICT (id) DO NOTHING") {
+		t.Error("bun seed should use ON CONFLICT clause")
 	}
 }
 
 // ---------------------------------------------------------------------------
-// Fake value generation tests
+// goValueForField tests
+// ---------------------------------------------------------------------------
+
+func TestGoValueForField_String(t *testing.T) {
+	v := goValueForField(FieldInfo{
+		Name:       "Name",
+		ColumnName: "name",
+		GoType:     "string",
+	}, 0)
+	if !strings.HasPrefix(v, `"`) || !strings.HasSuffix(v, `"`) {
+		t.Errorf("expected quoted string, got: %s", v)
+	}
+}
+
+func TestGoValueForField_UUID(t *testing.T) {
+	v := goValueForField(FieldInfo{
+		Name:       "ID",
+		ColumnName: "id",
+		GoType:     "uuid.UUID",
+	}, 3)
+	if !strings.Contains(v, "uuid.MustParse") {
+		t.Errorf("expected uuid.MustParse, got: %s", v)
+	}
+}
+
+func TestGoValueForField_Int(t *testing.T) {
+	v := goValueForField(FieldInfo{GoType: "int"}, 0)
+	if v[0] == '"' {
+		t.Errorf("int should not be quoted: %s", v)
+	}
+}
+
+func TestGoValueForField_Bool(t *testing.T) {
+	v := goValueForField(FieldInfo{GoType: "bool"}, 0)
+	if v != "true" && v != "false" {
+		t.Errorf("expected true/false, got: %s", v)
+	}
+}
+
+func TestGoValueForField_Time(t *testing.T) {
+	v := goValueForField(FieldInfo{GoType: "time.Time"}, 0)
+	if !strings.Contains(v, "time.Date") {
+		t.Errorf("expected time.Date, got: %s", v)
+	}
+}
+
+func TestGoValueForField_Enum(t *testing.T) {
+	v := goValueForField(FieldInfo{
+		Name:       "Status",
+		ColumnName: "status",
+		GoType:     "Status",
+		IsEnum:     true,
+		EnumValues: []string{"active", "inactive"},
+	}, 0)
+	quoted := strings.Trim(v, `"`)
+	if quoted != "active" && quoted != "inactive" {
+		t.Errorf("expected 'active' or 'inactive', got: %s", v)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// generateMain / generateSeeder tests
+// ---------------------------------------------------------------------------
+
+func TestGenerateMain(t *testing.T) {
+	content := generateMain(Options{
+		ModulePath: "example.com/myapp",
+		Orm:        "gorm",
+	})
+	if !strings.Contains(content, "package main") {
+		t.Error("missing package main")
+	}
+	if !strings.Contains(content, `"example.com/myapp/db/seeds/gorm"`) {
+		t.Error("missing seed import")
+	}
+	if !strings.Contains(content, `"example.com/myapp/internal/config"`) {
+		t.Error("missing config import")
+	}
+	if !strings.Contains(content, "config.Load()") {
+		t.Error("missing config.Load()")
+	}
+}
+
+func TestGenerateSeeder(t *testing.T) {
+	content := generateSeeder(Options{Orm: "gorm"})
+	if !strings.Contains(content, "package gorm") {
+		t.Error("missing package gorm")
+	}
+	if !strings.Contains(content, "crank:seed-up-begin") {
+		t.Error("missing up marker")
+	}
+	if !strings.Contains(content, "crank:seed-down-end") {
+		t.Error("missing down marker")
+	}
+}
+
+func TestGenerateSeeder_Bun(t *testing.T) {
+	content := generateSeeder(Options{Orm: "bun"})
+	if !strings.Contains(content, "package bun") {
+		t.Error("bun seeder should use package bun")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// updateSeeder tests
+// ---------------------------------------------------------------------------
+
+func TestUpdateSeeder(t *testing.T) {
+	dir := t.TempDir()
+	seederPath := filepath.Join(dir, "seeder.go")
+
+	initial := generateSeeder(Options{Orm: "gorm"})
+	if err := os.WriteFile(seederPath, []byte(initial), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	info := &StructInfo{
+		Name:      "Product",
+		TableName: "products",
+	}
+	opts := Options{Orm: "gorm"}
+
+	if err := updateSeeder(seederPath, info, opts); err != nil {
+		t.Fatal(err)
+	}
+
+	data, _ := os.ReadFile(seederPath)
+	content := string(data)
+
+	if !strings.Contains(content, `{"products", SeedProductsUp}`) {
+		t.Error("missing SeedProductsUp entry")
+	}
+	if !strings.Contains(content, `{"products", SeedProductsDown}`) {
+		t.Error("missing SeedProductsDown entry")
+	}
+
+	// Second call should be idempotent.
+	if err := updateSeeder(seederPath, info, opts); err != nil {
+		t.Fatal(err)
+	}
+	data2, _ := os.ReadFile(seederPath)
+	if strings.Count(string(data2), `{"products", SeedProductsUp}`) > 1 {
+		t.Error("updateSeeder should be idempotent")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Legacy SQL value tests (kept for test coverage)
 // ---------------------------------------------------------------------------
 
 func TestFakeValue_UUID(t *testing.T) {
@@ -760,7 +1078,6 @@ func TestFakeValue_UUID(t *testing.T) {
 }
 
 func TestFakeValue_ORMTypeUUID(t *testing.T) {
-	// ORM type hint should take precedence over string Go type.
 	v := fakeValue(FieldInfo{
 		Name:       "ID",
 		ColumnName: "id",
@@ -806,187 +1123,16 @@ func TestFakeValue_NumericTypes(t *testing.T) {
 	}
 }
 
-func TestFakeValue_FloatTypes(t *testing.T) {
-	for _, typ := range []string{"float32", "float64"} {
-		v := fakeValue(FieldInfo{GoType: typ})
-		if !strings.Contains(v, ".") {
-			t.Errorf("float type %q produced value without decimal: %s", typ, v)
-		}
-	}
-}
-
-func TestFakeValue_Bool(t *testing.T) {
-	v := fakeValue(FieldInfo{GoType: "bool"})
-	if v != "true" && v != "false" {
-		t.Errorf("expected true/false, got: %s", v)
-	}
-}
-
 func TestFakeValue_Time(t *testing.T) {
 	v := fakeValue(FieldInfo{GoType: "time.Time"})
 	if !strings.HasPrefix(v, "'") || !strings.HasSuffix(v, "'") {
 		t.Errorf("time value should be quoted: %s", v)
 	}
 	inner := strings.Trim(v, "'")
-	// Should match YYYY-MM-DD HH:MM:SS format.
 	if len(inner) != 19 {
 		t.Errorf("expected 19-char timestamp, got %q (len=%d)", inner, len(inner))
 	}
 }
-
-func TestFakeValue_NullablePointer(t *testing.T) {
-	// Nullable types (*string, *int) should be handled by Stripping the '*' prefix.
-	v := fakeValue(FieldInfo{Name: "Name", ColumnName: "name", GoType: "*string"})
-	if !strings.HasPrefix(v, "'") {
-		t.Errorf("expected quoted value for *string, got: %s", v)
-	}
-}
-
-func TestFakeValue_UnknownType(t *testing.T) {
-	v := fakeValue(FieldInfo{
-		Name:       "Widget",
-		ColumnName: "widget",
-		GoType:     "WidgetType",
-	})
-	// Should produce a quoted placeholder.
-	if !strings.HasPrefix(v, "'") || !strings.HasSuffix(v, "'") {
-		t.Errorf("expected quoted fallback value, got: %s", v)
-	}
-}
-
-func TestFakeValue_EnumNoValues(t *testing.T) {
-	// IsEnum with no values should not panic and fall through to type-based generation.
-	v := fakeValue(FieldInfo{
-		Name:       "Status",
-		ColumnName: "status",
-		GoType:     "Status",
-		IsEnum:     true,
-		EnumValues: nil,
-	})
-	_ = v
-}
-
-// ---------------------------------------------------------------------------
-// fakeStringForField heuristic tests
-// ---------------------------------------------------------------------------
-
-func TestFakeStringForField_IDColumn(t *testing.T) {
-	v := fakeStringForField("ID", "id")
-	if len(v) != 36 {
-		t.Errorf("expected uuid for id column, got %q (len=%d)", v, len(v))
-	}
-}
-
-func TestFakeStringForField_ForeignKeyColumn(t *testing.T) {
-	v := fakeStringForField("UserID", "user_id")
-	if len(v) != 36 {
-		t.Errorf("expected uuid for user_id column, got %q", v)
-	}
-}
-
-func TestFakeStringForField_Email(t *testing.T) {
-	v := fakeStringForField("Email", "email")
-	if !strings.Contains(v, "@") {
-		t.Errorf("expected email, got: %s", v)
-	}
-}
-
-func TestFakeStringForField_Phone(t *testing.T) {
-	v := fakeStringForField("PhoneNumber", "phone_number")
-	if !strings.HasPrefix(v, "+1-") {
-		t.Errorf("expected phone format (+1-xxx-xxx-xxxx), got: %s", v)
-	}
-}
-
-func TestFakeStringForField_Website(t *testing.T) {
-	v := fakeStringForField("Website", "website")
-	if !strings.HasPrefix(v, "https://") {
-		t.Errorf("expected URL, got: %s", v)
-	}
-}
-
-func TestFakeStringForField_Address(t *testing.T) {
-	v := fakeStringForField("Address", "address")
-	if len(v) < 5 {
-		t.Errorf("expected address string, got: %s", v)
-	}
-}
-
-func TestFakeStringForField_FirstName(t *testing.T) {
-	v := fakeStringForField("FirstName", "first_name")
-	if v == "" {
-		t.Errorf("expected non-empty first name")
-	}
-}
-
-func TestFakeStringForField_LastName(t *testing.T) {
-	v := fakeStringForField("LastName", "last_name")
-	if v == "" {
-		t.Errorf("expected non-empty last name")
-	}
-}
-
-func TestFakeStringForField_FullName(t *testing.T) {
-	v := fakeStringForField("FullName", "full_name")
-	if !strings.Contains(v, " ") {
-		t.Errorf("expected full name with space, got: %s", v)
-	}
-}
-
-func TestFakeStringForField_Password(t *testing.T) {
-	v := fakeStringForField("Password", "password")
-	if v != "password123" {
-		t.Errorf("expected 'password123', got: %s", v)
-	}
-}
-
-func TestFakeStringForField_Token(t *testing.T) {
-	v := fakeStringForField("Token", "token")
-	if !strings.HasPrefix(v, "tok_") {
-		t.Errorf("expected token starting with tok_, got: %s", v)
-	}
-}
-
-func TestFakeStringForField_Status(t *testing.T) {
-	v := fakeStringForField("Status", "status")
-	valid := map[string]bool{"active": true, "inactive": true, "pending": true, "archived": true, "draft": true}
-	if !valid[v] {
-		t.Errorf("unexpected status value: %s", v)
-	}
-}
-
-func TestFakeStringForField_Code(t *testing.T) {
-	v := fakeStringForField("Sku", "sku")
-	if len(v) < 4 {
-		t.Errorf("expected sku code, got: %s", v)
-	}
-}
-
-func TestFakeStringForField_Color(t *testing.T) {
-	v := fakeStringForField("Color", "color")
-	if v == "" {
-		t.Errorf("expected non-empty color")
-	}
-}
-
-func TestFakeStringForField_Default(t *testing.T) {
-	v := fakeStringForField("UnknownField", "unknown_field")
-	if v == "" {
-		t.Errorf("expected fallback value, got empty")
-	}
-}
-
-func TestFakeStringForField_ColumnNamePrecedence(t *testing.T) {
-	// Column name should take precedence over field name for ID detection.
-	v := fakeStringForField("UserUUID", "user_uuid")
-	if len(v) != 36 {
-		t.Errorf("expected uuid from column name, got %q", v)
-	}
-}
-
-// ---------------------------------------------------------------------------
-// escapeSQLString tests
-// ---------------------------------------------------------------------------
 
 func TestEscapeSQLString(t *testing.T) {
 	cases := []struct {
@@ -1006,29 +1152,34 @@ func TestEscapeSQLString(t *testing.T) {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// emptySeedContent tests
-// ---------------------------------------------------------------------------
-
-func TestEmptySeedContent(t *testing.T) {
-	content := emptySeedContent("20250101000000")
-	if !strings.Contains(content, "Seed data") {
-		t.Errorf("missing title")
-	}
-	if !strings.Contains(content, "20250101000000") {
-		t.Errorf("missing timestamp")
-	}
-	if !strings.Contains(content, "TODO") {
-		t.Errorf("missing TODO hint")
-	}
-	if !strings.Contains(content, "+migrate Up") {
-		t.Errorf("missing migrate directive")
+func TestFakeStringForField_IDColumn(t *testing.T) {
+	v := fakeStringForField("ID", "id")
+	if len(v) != 36 {
+		t.Errorf("expected uuid for id column, got %q (len=%d)", v, len(v))
 	}
 }
 
-// ---------------------------------------------------------------------------
-// rdPick tests
-// ---------------------------------------------------------------------------
+func TestFakeStringForField_Email(t *testing.T) {
+	v := fakeStringForField("Email", "email")
+	if !strings.Contains(v, "@") {
+		t.Errorf("expected email, got: %s", v)
+	}
+}
+
+func TestFakeStringForField_FullName(t *testing.T) {
+	v := fakeStringForField("FullName", "full_name")
+	if !strings.Contains(v, " ") {
+		t.Errorf("expected full name with space, got: %s", v)
+	}
+}
+
+func TestFakeStringForField_Status(t *testing.T) {
+	v := fakeStringForField("Status", "status")
+	valid := map[string]bool{"active": true, "inactive": true, "pending": true, "archived": true, "draft": true}
+	if !valid[v] {
+		t.Errorf("unexpected status value: %s", v)
+	}
+}
 
 func TestRdPick(t *testing.T) {
 	items := []string{"a", "b", "c"}

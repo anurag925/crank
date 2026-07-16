@@ -7,25 +7,25 @@ import (
 	"time"
 )
 
-// fakeValue generates a SQL-compatible literal value string for a field,
-// using the field's type and name to produce realistic-looking data.
-func fakeValue(fi FieldInfo) string {
+// goValueForField generates a Go literal value for a field. Unlike fakeValue
+// (which produces SQL literals), this produces Go source-code values suitable
+// for embedding in generated .go files.
+func goValueForField(fi FieldInfo, rowIdx int) string {
 	if fi.IsEnum && len(fi.EnumValues) > 0 {
-		return escapeSQLString(fi.EnumValues[rand.Intn(len(fi.EnumValues))])
+		return quoteGo(fi.EnumValues[rand.Intn(len(fi.EnumValues))])
 	}
 
-	// Check ORM type hint first (e.g. `bun:"type:uuid"`).
 	ormLower := strings.ToLower(fi.ORMType)
 	if strings.Contains(ormLower, "uuid") {
-		return "'" + fakeUUID() + "'"
+		return fmt.Sprintf("uuid.MustParse(\"a0000000-0000-4000-a000-%012x\")", rowIdx+1)
 	}
 
-	typ := strings.TrimPrefix(fi.GoType, "*") // handle nullable types
+	typ := strings.TrimPrefix(fi.GoType, "*")
 	switch {
 	case strings.HasSuffix(typ, "UUID") || strings.HasSuffix(typ, "uuid"):
-		return "'" + fakeUUID() + "'"
+		return fmt.Sprintf("uuid.MustParse(\"a0000000-0000-4000-a000-%012x\")", rowIdx+1)
 	case typ == "string" || typ == "String":
-		return "'" + fakeStringForField(fi.Name, fi.ColumnName) + "'"
+		return quoteGo(goStringForField(fi.Name, fi.ColumnName))
 	case typ == "int" || typ == "int8" || typ == "int16" || typ == "int32" || typ == "int64":
 		return fmt.Sprintf("%d", rand.Intn(99999)+1)
 	case typ == "uint" || typ == "uint8" || typ == "uint16" || typ == "uint32" || typ == "uint64":
@@ -37,20 +37,19 @@ func fakeValue(fi FieldInfo) string {
 			return "true"
 		}
 		return "false"
-	case typ == "Time" || strings.HasSuffix(typ, "Time"):
-		return "'" + fakeTime() + "'"
+	case typ == "Time" || strings.HasSuffix(typ, "Time") || typ == "time.Time":
+		t := time.Now().UTC().Add(-time.Duration(rowIdx*24) * time.Hour)
+		return fmt.Sprintf("time.Date(%d, %d, %d, 10, 0, 0, 0, time.UTC)",
+			t.Year(), t.Month(), t.Day())
 	default:
-		return "'" + escapeSQLString(fmt.Sprintf("fake-%s", fi.Name)) + "'"
+		return quoteGo(fmt.Sprintf("fake-%s", fi.Name))
 	}
 }
 
-// fakeStringForField generates a context-aware random string based on the
-// field name. This produces more realistic seed data than generic lorem ipsum.
-func fakeStringForField(fieldName, columnName string) string {
+func goStringForField(fieldName, columnName string) string {
 	name := strings.ToLower(fieldName)
 	col := strings.ToLower(columnName)
 	switch {
-	// Check column name first (more reliable for ORM-mapped fields).
 	case col == "id" || strings.HasSuffix(col, "_id") || strings.HasSuffix(col, "_uuid") ||
 		name == "id" || strings.HasSuffix(name, "_id") || strings.HasSuffix(name, "_uuid"):
 		return fakeUUID()
@@ -83,9 +82,59 @@ func fakeStringForField(fieldName, columnName string) string {
 	case strings.Contains(name, "color") || strings.Contains(name, "colour"):
 		return fakeColor()
 	default:
-		return fakeFirstName() // sensible default
+		return fakeFirstName()
 	}
 }
+
+func quoteGo(s string) string {
+	return fmt.Sprintf("%q", s)
+}
+
+// ---------------------------------------------------------------------------
+// Legacy SQL value generators (kept for test compatibility)
+// ---------------------------------------------------------------------------
+
+func fakeValue(fi FieldInfo) string {
+	if fi.IsEnum && len(fi.EnumValues) > 0 {
+		return escapeSQLString(fi.EnumValues[rand.Intn(len(fi.EnumValues))])
+	}
+
+	ormLower := strings.ToLower(fi.ORMType)
+	if strings.Contains(ormLower, "uuid") {
+		return "'" + fakeUUID() + "'"
+	}
+
+	typ := strings.TrimPrefix(fi.GoType, "*")
+	switch {
+	case strings.HasSuffix(typ, "UUID") || strings.HasSuffix(typ, "uuid"):
+		return "'" + fakeUUID() + "'"
+	case typ == "string" || typ == "String":
+		return "'" + fakeStringForField(fi.Name, fi.ColumnName) + "'"
+	case typ == "int" || typ == "int8" || typ == "int16" || typ == "int32" || typ == "int64":
+		return fmt.Sprintf("%d", rand.Intn(99999)+1)
+	case typ == "uint" || typ == "uint8" || typ == "uint16" || typ == "uint32" || typ == "uint64":
+		return fmt.Sprintf("%d", rand.Intn(99999)+1)
+	case typ == "float32" || typ == "float64":
+		return fmt.Sprintf("%.2f", rand.Float64()*1000)
+	case typ == "bool":
+		if rand.Intn(2) == 0 {
+			return "true"
+		}
+		return "false"
+	case typ == "Time" || strings.HasSuffix(typ, "Time"):
+		return "'" + fakeTime() + "'"
+	default:
+		return "'" + escapeSQLString(fmt.Sprintf("fake-%s", fi.Name)) + "'"
+	}
+}
+
+func fakeStringForField(fieldName, columnName string) string {
+	return goStringForField(fieldName, columnName)
+}
+
+// ---------------------------------------------------------------------------
+// Shared fake data generators
+// ---------------------------------------------------------------------------
 
 var firstNames = []string{
 	"Alice", "Bob", "Charlie", "Diana", "Eve", "Frank", "Grace",
@@ -155,21 +204,17 @@ func fakeColor() string {
 	return colors[rand.Intn(len(colors))]
 }
 
-// fakeUUID generates a random UUID v4 string.
 func fakeUUID() string {
 	return fmt.Sprintf("%08x-%04x-%04x-%04x-%012x",
 		rand.Uint32(), rand.Intn(0xffff), rand.Intn(0xffff),
 		rand.Intn(0xffff), rand.Int63n(0xffffffffffff))
 }
 
-// fakeTime generates a recent SQL-compatible timestamp string.
 func fakeTime() string {
 	t := time.Now().UTC().Add(-time.Duration(rand.Intn(90*24)) * time.Hour)
 	return t.Format("2006-01-02 15:04:05")
 }
 
-// escapeSQLString wraps a string in single quotes after escaping any
-// single quotes within it.
 func escapeSQLString(s string) string {
 	return strings.ReplaceAll(s, "'", "''")
 }
