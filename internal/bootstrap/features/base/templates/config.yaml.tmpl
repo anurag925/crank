@@ -3,7 +3,7 @@ app:
   host: "0.0.0.0"
   port: 8080
   env: "development"
-{{- if or (.Has "bun") (.Has "gorm")}}
+{{- if .Has "gorm"}}
 
 database:
   host: "localhost"

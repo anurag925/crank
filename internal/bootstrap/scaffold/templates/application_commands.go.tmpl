@@ -1,11 +1,19 @@
 package {{.R.Snake}}
-{{if .HasTime}}
+{{- if or .HasTime .HasUUID}}
 
-import "time"
-{{end}}
+import (
+{{- if .HasTime}}
+	"time"
+{{- end}}
+{{- if .HasUUID}}
+	"github.com/google/uuid"
+{{- end}}
+)
+{{- end}}
+
 // Create{{.R.Pascal}}Command is the application-layer request to create a new
-// {{.R.Snake}}. The CommandHandler converts the stringly-typed ID into a
-// typed {{.R.Pascal}}ID before constructing the aggregate.
+// {{.R.Snake}}. The CommandHandler parses the stringly-typed ID into a
+// uuid.UUID before constructing the aggregate.
 type Create{{.R.Pascal}}Command struct {
 	ID string
 {{- range .Fields}}

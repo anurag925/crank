@@ -1,1 +1,4 @@
+{{- if .Has "auth"}}
+DROP TABLE IF EXISTS revoked_tokens;
+{{- end}}
 DROP TABLE IF EXISTS users;

@@ -2,22 +2,23 @@
 // make` family). Given a resource name and optional field specs it renders
 // Domain-Driven Go code — domain aggregates + value objects + events +
 // repository ports, application command/query handlers, persistence adapters
-// (bun-backed when the bun feature is enabled, in-memory otherwise) and an
-// HTTP handler — into an existing crank-generated project. Generated
-// handlers are automatically wired into the project's
-// `internal/adapters/http/web/routes.go` so the resulting endpoints work out
-// of the box.
+// (gorm-backed or in-memory) and an HTTP handler — into an existing
+// crank-generated project. Generated handlers are automatically wired
+// into the project's `internal/adapters/http/web/routes.go` so the
+// resulting endpoints work out of the box.
 package scaffold
 
 import (
 	"embed"
 	"fmt"
 	"go/format"
+	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"text/template"
-	"time"
 
 	"github.com/anurag925/crank/internal/bootstrap"
 	"github.com/anurag925/crank/internal/utils"
@@ -68,12 +69,8 @@ type Result struct {
 // handful of derived flags templates consult to decide which sections to emit.
 type tmplData struct {
 	Module string
-	// Bun is true when the project has the bun ORM feature enabled. When
-	// true, the scaffold emits a Bun-backed repository.
-	Bun bool
 	// Gorm is true when the project has the gorm ORM feature enabled. When
-	// true, the scaffold emits a GORM-backed repository. Only one of Bun
-	// and Gorm can be true at a time.
+	// true, the scaffold emits a GORM-backed repository plus a migration.
 	Gorm     bool
 	Auth     bool
 	Temporal bool
@@ -96,8 +93,8 @@ type artifact struct {
 }
 
 // Generate runs a code generator according to opts. It reads the project's
-// manifest to decide between the postgres (Bun-backed adapter + migration)
-// and in-memory (always shipped) variants, renders the relevant templates,
+// manifest to decide between the GORM-backed adapter + migration and the
+// in-memory (always shipped) variants, renders the relevant templates,
 // writes the files and — for handler/scaffold kinds — wires the new handler
 // into the Echo router through `internal/adapters/http/web/routes.go`.
 func Generate(opts Options) (*Result, error) {
@@ -140,7 +137,6 @@ func Generate(opts Options) (*Result, error) {
 	idField := uuidFieldOrNil(fields)
 	data := tmplData{
 		Module:   info.ModulePath,
-		Bun:      info.Has("bun"),
 		Gorm:     info.Has("gorm"),
 		Auth:     info.Has("auth"),
 		Temporal: info.Has("temporal"),
@@ -201,8 +197,27 @@ func Generate(opts Options) (*Result, error) {
 		if err != nil {
 			return nil, err
 		}
+		// A generated handler must also be assembled into the composition root
+		// (cmd/server/main.go), otherwise its MountConfig field stays nil and
+		// every route it registers nil-panics at request time.
+		if wire == wireHandlerTarget {
+			if err := wireCompositionRoot(opts.ProjectDir, res); err != nil {
+				return nil, err
+			}
+		}
 		result.Wired = wr.Wired
 		result.WireHint = wr.Hint
+	}
+
+	// When the plan generates an application command handler, make sure the
+	// UnitOfWork's TxRepositories interface (and its in-memory / gorm-backed
+	// implementations) expose a transaction-scoped accessor for this
+	// resource's repository — the command handler calls repos.<Plural>()
+	// inside SaveAndPublish. The splice is idempotent and best-effort.
+	if planGeneratesCommandHandler(plan) {
+		if err := wireTxRepositories(opts.ProjectDir, res); err != nil {
+			return nil, err
+		}
 	}
 
 	sort.Strings(result.Created)
@@ -250,14 +265,13 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 	qryHandler := artifact{out: r.DDDAppPath() + "/query_handler.go", tmpl: "application_query_handler.go.tmpl", testTmpl: "application_query_handler_test.go.tmpl", goFile: true}
 
 	// Persistence adapters.
-	bunAdapter := artifact{out: r.DDDBunAdapterPath(), tmpl: "adapter_persistence_postgres_repository.go.tmpl", testTmpl: "adapter_persistence_postgres_repository_test.go.tmpl", goFile: true}
 	gormAdapter := artifact{out: r.DDDGormAdapterPath(), tmpl: "adapter_persistence_gorm_repository.go.tmpl", testTmpl: "adapter_persistence_gorm_repository_test.go.tmpl", goFile: true}
 	memAdapter := artifact{out: r.DDDMemoryAdapterPath(), tmpl: "adapter_persistence_memory_repository.go.tmpl", testTmpl: "adapter_persistence_memory_repository_test.go.tmpl", goFile: true}
 
 	// HTTP adapter.
 	httpAdapter := artifact{out: r.DDDHTTPHandlerPath(), tmpl: "adapter_http_handler.go.tmpl", testTmpl: "adapter_http_handler_test.go.tmpl", goFile: true}
 
-	migration := (data.Bun || data.Gorm) && !opts.SkipMigration
+	migration := data.Gorm && !opts.SkipMigration
 
 	switch opts.Kind {
 	case KindModel:
@@ -266,16 +280,11 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 		wantMigration = migration
 
 	case KindRepository:
-		// ORM adapter is primary when either bun or gorm is enabled;
+		// The GORM adapter is primary when the gorm feature is enabled;
 		// otherwise the in-memory adapter is the primary artifact.
-		if data.Bun || data.Gorm {
-			if data.Bun {
-				bunAdapter.primary = true
-				plan = []artifact{bunAdapter, memAdapter, repoPort}
-			} else {
-				gormAdapter.primary = true
-				plan = []artifact{gormAdapter, memAdapter, repoPort}
-			}
+		if data.Gorm {
+			gormAdapter.primary = true
+			plan = []artifact{gormAdapter, memAdapter, repoPort}
 		} else {
 			memAdapter.primary = true
 			plan = []artifact{memAdapter, repoPort}
@@ -303,9 +312,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 			plan = append(plan, aggregate, events, derrors, repoPort,
 				commands, cmdHandler, queries, qryHandler,
 				memAdapter)
-			if data.Bun {
-				plan = append(plan, bunAdapter)
-			} else if data.Gorm {
+			if data.Gorm {
 				plan = append(plan, gormAdapter)
 			}
 		}
@@ -318,9 +325,7 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 			aggregate, events, derrors, repoPort,
 			commands, cmdHandler, queries, qryHandler,
 			memAdapter}
-		if data.Bun {
-			plan = append(plan, bunAdapter)
-		} else if data.Gorm {
+		if data.Gorm {
 			plan = append(plan, gormAdapter)
 		}
 		wantMigration = migration
@@ -345,6 +350,18 @@ func buildPlan(opts Options, data tmplData) (plan []artifact, wantMigration bool
 	}
 
 	return plan, wantMigration, wire, nil
+}
+
+// planGeneratesCommandHandler reports whether the plan includes the
+// application command handler artifact, which references the UnitOfWork's
+// transaction-scoped repository accessor (repos.<Plural>()).
+func planGeneratesCommandHandler(plan []artifact) bool {
+	for _, a := range plan {
+		if a.tmpl == "application_command_handler.go.tmpl" {
+			return true
+		}
+	}
+	return false
 }
 
 // withTestArtifacts expands a plan so each artifact that declares a test
@@ -407,11 +424,10 @@ func renderTemplate(name string, data tmplData) (string, error) {
 // TmplDataFor builds a tmplData value for a single scaffold run. It is
 // exposed so that external callers (e.g. the smoke test under cmd/_smoke)
 // can drive the same template-rendering pipeline that Generate uses.
-func TmplDataFor(module string, Bun, Gorm, auth bool, r Resource, fields []Field) tmplData {
+func TmplDataFor(module string, Gorm, auth bool, r Resource, fields []Field) tmplData {
 	idField := uuidFieldOrNil(fields)
 	return tmplData{
 		Module:  module,
-		Bun:     Bun,
 		Gorm:    Gorm,
 		Auth:    auth,
 		R:       r,
@@ -432,8 +448,7 @@ func RenderTemplateForTest(name string, data tmplData) (string, error) {
 // resource. It is a no-op (returns the files as skipped) when a create
 // migration for the same table already exists.
 //
-// Columns mirror the postgres row DTO emitted by the adapter template:
-// text for primitive strings, UUID for the typed identifier.
+// Columns mirror the GORM model emitted by the adapter template.
 func generateMigration(projectDir string, data tmplData) (created, skipped []string, err error) {
 	dir := filepath.Join(projectDir, "db/migrations")
 	name := "create_" + data.R.SnakePlural
@@ -448,7 +463,7 @@ func generateMigration(projectDir string, data tmplData) (created, skipped []str
 		return nil, nil, err
 	}
 
-	stamp := time.Now().UTC().Format("20060102150405")
+	stamp := NextMigrationVersion(dir)
 	upRel := filepath.Join("db/migrations", fmt.Sprintf("%s_%s.up.sql", stamp, name))
 	downRel := filepath.Join("db/migrations", fmt.Sprintf("%s_%s.down.sql", stamp, name))
 
@@ -467,4 +482,40 @@ func generateMigration(projectDir string, data tmplData) (created, skipped []str
 		return nil, nil, err
 	}
 	return []string{upRel, downRel}, nil, nil
+}
+
+// migrationPrefixRE captures the leading numeric version of a migration file
+// name (e.g. "000004" in "000004_create_orders.up.sql").
+var migrationPrefixRE = regexp.MustCompile(`^(\d+)_`)
+
+// NextMigrationVersion returns the next migration version string for dir. It
+// scans the existing *.sql migrations, finds the highest numeric version
+// prefix, and returns that value + 1 zero-padded to at least 6 digits so it
+// matches the base feature's 000001-style scheme (and continues monotonically
+// from it).
+//
+// Using a monotonic sequence — rather than a wall-clock timestamp — guarantees
+// unique, collision-free versions even when several migrations are generated
+// within the same second (which golang-migrate rejects as "duplicate migration
+// version").
+func NextMigrationVersion(dir string) string {
+	var max uint64
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		m := migrationPrefixRE.FindStringSubmatch(e.Name())
+		if m == nil {
+			continue
+		}
+		n, err := strconv.ParseUint(m[1], 10, 64)
+		if err != nil {
+			continue
+		}
+		if n > max {
+			max = n
+		}
+	}
+	return fmt.Sprintf("%06d", max+1)
 }

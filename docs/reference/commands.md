@@ -24,7 +24,6 @@ Examples:
 
 ```bash
 crank init myapp --features=base,auth
-crank init myapp --features=base,auth --use-bun
 crank init myapp --module=github.com/acme/myapp --features=base,redis
 crank init myapp --target ./services
 ```
@@ -33,13 +32,12 @@ Flags:
 
 | Flag | Description |
 | --- | --- |
-| `--features` | Comma-separated feature list. Defaults to `base`; GORM is added automatically unless an ORM is already selected or `--use-bun` is passed. |
+| `--features` | Comma-separated feature list. Defaults to `base`; GORM is added automatically. |
 | `--module` | Go module path. Defaults to the project name. |
 | `--target` | Parent directory in which to create the project. Defaults to `.`. |
 | `--force` | Overwrite an existing non-empty target directory. |
-| `--use-bun` | Use Bun instead of the default GORM ORM. |
 
-When run in a terminal without explicit flags, `crank init` can prompt interactively for project name, module path, ORM, features, target directory, and overwrite behavior.
+When run in a terminal without explicit flags, `crank init` can prompt interactively for project name, module path, features, target directory, and overwrite behavior.
 
 ### `crank add`
 
@@ -106,7 +104,7 @@ Supported kinds:
 | Kind | Generates |
 | --- | --- |
 | `model` | Domain aggregate, value object, events, errors, repository port, and migration when an ORM is enabled. |
-| `repository` | Persistence adapter. Uses GORM, Bun, or in-memory depending on enabled features. |
+| `repository` | Persistence adapter. Uses GORM or in-memory depending on enabled features. |
 | `service` | Application command/query handlers. |
 | `handler` | Echo HTTP handler and route wiring. Also generates dependencies unless `--only` is used. |
 | `scaffold` | Full stack: domain, application, persistence, HTTP handler, route wiring, and migrations. |
@@ -121,7 +119,7 @@ Flags:
 | `--project` | Target project directory. Defaults to `.`. |
 | `--only` | Generate only the requested kind, skipping dependencies. |
 | `--force` | Overwrite the primary generated artifact if it exists. |
-| `--skip-migration` | Do not generate a table migration even when GORM or Bun is enabled. |
+| `--skip-migration` | Do not generate a table migration even when GORM is enabled. |
 | `--tests` | Generate `_test.go` files alongside generated layers. |
 
 Examples:
@@ -156,7 +154,7 @@ Tool commands accept `--project`. If omitted, the current directory is used.
 
 ### `crank migrate`
 
-`crank migrate` requires the `gorm` or `bun` feature.
+`crank migrate` requires the `gorm` feature.
 
 ```bash
 crank migrate up

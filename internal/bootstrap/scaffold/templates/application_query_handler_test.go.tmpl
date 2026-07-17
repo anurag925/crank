@@ -10,6 +10,7 @@ import (
 	"{{.Module}}/internal/adapters/persistence/memory"
 	"{{.Module}}/internal/domain/{{.R.Snake}}"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -23,8 +24,7 @@ func TestNewQueryHandler(t *testing.T) {
 func Test{{.R.Pascal}}QueryHandler_HandleGet(t *testing.T) {
 	repo := memory.New{{.R.Pascal}}Repository()
 	// Seed a value directly.
-	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID("123e4567-e89b-12d3-a456-426614174000")
-	require.NoError(t, err)
+	id := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 	seed, err := {{.R.Snake}}.New{{.R.Pascal}}(id{{range .Fields}}, {{.Sample}}{{end}})
 	require.NoError(t, err)
 	require.NoError(t, repo.Save(context.Background(), seed))
@@ -32,7 +32,7 @@ func Test{{.R.Pascal}}QueryHandler_HandleGet(t *testing.T) {
 	h := NewQueryHandler(repo)
 	got, err := h.HandleGet(context.Background(), Get{{.R.Pascal}}Query{ID: id.String()})
 	require.NoError(t, err)
-	assert.Equal(t, id, got.ID())
+	assert.Equal(t, id, got.ID)
 }
 
 func Test{{.R.Pascal}}QueryHandler_HandleGet_NotFound(t *testing.T) {

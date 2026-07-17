@@ -36,17 +36,17 @@ func TestE2E_Make_Model_Tests(t *testing.T) {
 	compileProject(t, dir)
 }
 
-// TestE2E_Make_Repository_Tests covers the repository kind on a bun
+// TestE2E_Make_Repository_Tests covers the repository kind on a gorm
 // project. The repository test template renders route/sentinel-only tests
 // (no live DB) so the test should compile and pass against a generated
 // project.
 func TestE2E_Make_Repository_Tests(t *testing.T) {
-	dir := scaffold(t, "make_repo_tests", []string{"base", "bun"})
+	dir := scaffold(t, "make_repo_tests", []string{"base", "gorm"})
 	runCrank(t, "", "make", "repository", "Ticket", "subject:string", "--tests", "--project", dir)
-	assertExists(t, dir, "internal/adapters/persistence/bun/ticket_repository.go")
-	assertExists(t, dir, "internal/adapters/persistence/bun/ticket_repository_test.go")
+	assertExists(t, dir, "internal/adapters/persistence/gorm/ticket_repository.go")
+	assertExists(t, dir, "internal/adapters/persistence/gorm/ticket_repository_test.go")
 	compileProject(t, dir)
-	runGo(t, dir, "test", "./internal/adapters/persistence/bun/...")
+	runGo(t, dir, "test", "./internal/adapters/persistence/gorm/...")
 }
 
 // TestE2E_Make_Service_Tests covers the service kind on a base-only
@@ -78,7 +78,7 @@ func TestE2E_Make_HandlerOnly_WithTests(t *testing.T) {
 	assertExists(t, dir, "internal/adapters/http/web/tag_handler.go")
 	assertExists(t, dir, "internal/adapters/http/web/tag_handler_test.go")
 	assertNotExists(t, dir, "internal/domain/tag/tag.go")
-	assertNotExists(t, dir, "internal/adapters/persistence/bun/tag_repository.go")
+	assertNotExists(t, dir, "internal/adapters/persistence/gorm/tag_repository.go")
 	assertNotExists(t, dir, "internal/application/tag/commands.go")
 	// We intentionally do NOT call compileProject here because of the
 	// known bug described above.
@@ -87,10 +87,10 @@ func TestE2E_Make_HandlerOnly_WithTests(t *testing.T) {
 // TestE2E_Make_RepositoryOnly_NoModel verifies --only on the repository
 // kind. Only the repository file is created; the model is skipped.
 func TestE2E_Make_RepositoryOnly_NoModel(t *testing.T) {
-	dir := scaffold(t, "make_repo_only", []string{"base", "bun"})
+	dir := scaffold(t, "make_repo_only", []string{"base", "gorm"})
 	runCrank(t, "", "make", "repository", "Voucher", "code:string",
 		"--only", "--project", dir)
-	assertExists(t, dir, "internal/adapters/persistence/bun/voucher_repository.go")
+	assertExists(t, dir, "internal/adapters/persistence/gorm/voucher_repository.go")
 	assertNotExists(t, dir, "internal/domain/voucher/voucher.go")
 }
 
@@ -111,14 +111,14 @@ func TestE2E_Make_ServiceOnly_NoModel(t *testing.T) {
 // suppresses the create-table migration even when the field list spans
 // every supported type. The model + repository are still created.
 func TestE2E_Make_SkipMigration_AllFieldTypes(t *testing.T) {
-	dir := scaffold(t, "make_skip_migration_all_types", []string{"base", "bun"})
+	dir := scaffold(t, "make_skip_migration_all_types", []string{"base", "gorm"})
 	runCrank(t, "", "make", "scaffold", "Product",
 		"name:string", "bio:text", "age:int", "balance:int64", "rating:float",
 		"active:bool", "joined_at:time", "token:uuid", "contact:email",
 		"--skip-migration", "--project", dir,
 	)
 	assertExists(t, dir, "internal/domain/product/product.go")
-	assertExists(t, dir, "internal/adapters/persistence/bun/product_repository.go")
+	assertExists(t, dir, "internal/adapters/persistence/gorm/product_repository.go")
 	assertExists(t, dir, "internal/adapters/http/web/product_handler.go")
 	assertGlobCount(t, dir, "db/migrations/*_create_products.up.sql", 0)
 	compileProject(t, dir)
@@ -126,7 +126,7 @@ func TestE2E_Make_SkipMigration_AllFieldTypes(t *testing.T) {
 
 // TestE2E_Make_SkipMigration_HandlerKind works with the handler kind too.
 func TestE2E_Make_SkipMigration_HandlerKind(t *testing.T) {
-	dir := scaffold(t, "make_skip_mig_handler", []string{"base", "bun"})
+	dir := scaffold(t, "make_skip_mig_handler", []string{"base", "gorm"})
 	runCrank(t, "", "make", "handler", "OrderItem", "label:string",
 		"--skip-migration", "--project", dir,
 	)
@@ -143,7 +143,7 @@ func TestE2E_Make_SkipMigration_HandlerKind(t *testing.T) {
 // ID, CreatedAt and UpdatedAt fields; the migration likewise contains
 // only the bare minimum.
 func TestE2E_Make_Scaffold_ZeroFields(t *testing.T) {
-	dir := scaffold(t, "make_zero_fields", []string{"base", "bun"})
+	dir := scaffold(t, "make_zero_fields", []string{"base", "gorm"})
 	runCrank(t, "", "make", "scaffold", "Bare", "--project", dir)
 	assertExists(t, dir, "internal/domain/bare/bare.go")
 	assertExists(t, dir, "internal/adapters/http/web/bare_handler.go")
@@ -193,7 +193,7 @@ func TestE2E_Make_Model_ZeroFields(t *testing.T) {
 // content (we can detect this by adding a sentinel comment to the model
 // first and then force-regenerating).
 func TestE2E_Make_Handler_ForceOverwrite(t *testing.T) {
-	dir := scaffold(t, "make_handler_force", []string{"base", "bun"})
+	dir := scaffold(t, "make_handler_force", []string{"base", "gorm"})
 	runCrank(t, "", "make", "handler", "Review", "--project", dir)
 	handlerPath := filepath.Join(dir, "internal/adapters/http/web/review_handler.go")
 	orig, err := readFileErr(handlerPath)
@@ -231,7 +231,7 @@ func TestE2E_Make_Model_ForceOverwrite(t *testing.T) {
 // a duplicate migration file. We rely on the existing scaffold filename
 // pattern (`<timestamp>_create_<name>.up.sql`) and the glob count.
 func TestE2E_Make_Migration_Idempotent(t *testing.T) {
-	dir := scaffold(t, "make_mig_idempotent", []string{"base", "bun"})
+	dir := scaffold(t, "make_mig_idempotent", []string{"base", "gorm"})
 	runCrank(t, "", "make", "scaffold", "Item", "name:string", "--project", dir)
 	runCrank(t, "", "make", "scaffold", "Item", "name:string", "--force", "--project", dir)
 	// After force, the migration is still expected to exist exactly once
@@ -242,7 +242,7 @@ func TestE2E_Make_Migration_Idempotent(t *testing.T) {
 
 // TestE2E_Make_Migration_StandalonePair verifies that `crank make
 // migration` produces a fresh timestamped .up.sql and .down.sql pair
-// (DB-agnostic, no bun required).
+// (DB-agnostic, no gorm required).
 func TestE2E_Make_Migration_StandalonePair(t *testing.T) {
 	dir := scaffoldBase(t, "make_mig_standalone")
 	runCrank(t, "", "make", "migration", "add_index_to_things", "--project", dir)
@@ -297,14 +297,14 @@ func TestE2E_Make_Migration_InvalidChars(t *testing.T) {
 // `crank make scaffold Account`, but we re-test it on a fresh project to
 // make sure no field type has regressed silently.
 func TestE2E_Make_AllFieldTypes_Validates(t *testing.T) {
-	dir := scaffold(t, "make_all_field_types", []string{"base", "bun"})
+	dir := scaffold(t, "make_all_field_types", []string{"base", "gorm"})
 	runCrank(t, "", "make", "scaffold", "Customer",
 		"name:string", "bio:text", "age:int", "balance:int64", "rating:float",
 		"active:bool", "joined_at:time", "token:uuid", "contact:email",
 		"--project", dir,
 	)
 	assertExists(t, dir, "internal/domain/customer/customer.go")
-	assertExists(t, dir, "internal/adapters/persistence/bun/customer_repository.go")
+	assertExists(t, dir, "internal/adapters/persistence/gorm/customer_repository.go")
 	assertExists(t, dir, "internal/adapters/http/web/customer_handler.go")
 	compileProject(t, dir)
 }
@@ -421,7 +421,7 @@ func TestE2E_Make_PluralInput_Singularized(t *testing.T) {
 // subsequent `crank make handler Foo` for the same resource reuses the
 // model and only adds handler + repository/service.
 func TestE2E_Make_Handler_AfterModel(t *testing.T) {
-	dir := scaffold(t, "make_h_after_m", []string{"base", "bun"})
+	dir := scaffold(t, "make_h_after_m", []string{"base", "gorm"})
 	runCrank(t, "", "make", "model", "Receipt", "amount:float", "--project", dir)
 	// Snapshot mtime of the model file so we can detect whether it was
 	// re-written by the subsequent handler call.
@@ -429,7 +429,7 @@ func TestE2E_Make_Handler_AfterModel(t *testing.T) {
 	runCrank(t, "", "make", "handler", "Receipt", "--project", dir)
 	assertExists(t, dir, "internal/adapters/http/web/receipt_handler.go")
 	assertExists(t, dir, "internal/domain/receipt/receipt.go")
-	assertExists(t, dir, "internal/adapters/persistence/bun/receipt_repository.go")
+	assertExists(t, dir, "internal/adapters/persistence/gorm/receipt_repository.go")
 	compileProject(t, dir)
 }
 
@@ -512,12 +512,12 @@ func TestE2E_Make_Handler_WiringNoDuplicateOnForce(t *testing.T) {
 	}
 }
 
-// TestE2E_Make_Handler_WiringOnBun exercises the wiring on a
-// project that has a different feature set (bun instead of
+// TestE2E_Make_Handler_WiringOnGorm exercises the wiring on a
+// project that has a different feature set (gorm instead of
 // base-only). The wiring code path is feature-agnostic, but this
 // confirms it.
-func TestE2E_Make_Handler_WiringOnBun(t *testing.T) {
-	dir := scaffold(t, "make_handler_wire_pg", []string{"base", "bun"})
+func TestE2E_Make_Handler_WiringOnGorm(t *testing.T) {
+	dir := scaffold(t, "make_handler_wire_pg", []string{"base", "gorm"})
 	runCrank(t, "", "make", "handler", "Ledger", "amount:float", "--project", dir)
 	hub := readFile(t, dir, "internal/adapters/http/web/routes.go")
 	if !strings.Contains(hub, "cfg.LedgerHandler.Register(") {

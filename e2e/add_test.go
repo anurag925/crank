@@ -144,13 +144,13 @@ func TestE2E_Add_Temporal(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 // TestE2E_Add_AlreadyInstalled verifies the duplicate-add guard: running
-// `crank add bun` against a project that already has bun must
+// `crank add gorm` against a project that already has gorm must
 // fail with a clear message and leave the project untouched.
 func TestE2E_Add_AlreadyInstalled(t *testing.T) {
-	// Use a bun-enabled project so the duplicate-add fails.
-	dir := scaffold(t, "add_dup", []string{"base", "bun"})
-	// bun is in the manifest; try to add it again.
-	out, err := runCrankRaw(t, "", "add", "bun", "--project", dir)
+	// Use a gorm-enabled project so the duplicate-add fails.
+	dir := scaffold(t, "add_dup", []string{"base", "gorm"})
+	// gorm is in the manifest; try to add it again.
+	out, err := runCrankRaw(t, "", "add", "gorm", "--project", dir)
 	if err == nil {
 		t.Fatalf("expected 'already installed' error, got success:\n%s", out)
 	}
@@ -165,7 +165,7 @@ func TestE2E_Add_AlreadyInstalled(t *testing.T) {
 func TestE2E_Add_NoManifest(t *testing.T) {
 	dir := t.TempDir()
 	// Empty dir — no manifest, no project.
-	out, err := runCrankRaw(t, "", "add", "bun", "--project", dir)
+	out, err := runCrankRaw(t, "", "add", "gorm", "--project", dir)
 	if err == nil {
 		t.Fatalf("expected no-manifest error, got success:\n%s", out)
 	}
@@ -256,13 +256,13 @@ func TestE2E_Add_Idempotent(t *testing.T) {
 // This is exactly what a real user does in production and exercises every
 // piece of the Add + config-inject + manifest + go-get pipeline together.
 //
-// KNOWN ISSUE: when bun is added to a base-only project, the base
+// KNOWN ISSUE: when gorm is added to a base-only project, the base
 // feature's `internal/adapters/persistence/memory/user_repository_test.go`
 // (which calls `NewUserRepository()` with no args) is left unchanged, but
-// the bun feature's `internal/adapters/persistence/bun/user_repository.go`
-// now defines `NewUserRepository(db *bun.DB)`. This produces a compile failure.
+// the gorm feature's `internal/adapters/persistence/gorm/user_repository.go`
+// now defines `NewUserRepository(db *gorm.DB)`. This produces a compile failure.
 //
-// We document this as a known bug: the subtest for "bun" (and every
+// We document this as a known bug: the subtest for "gorm" (and every
 // subsequent feature in the same project) is expected to fail `go vet`
 // for that reason. We mark them with t.Skip so CI stays green, and the
 // accompanying TestE2E_Add_AllFeaturesSequential_FinalCompile test
@@ -273,7 +273,7 @@ func TestE2E_Add_AllFeaturesSequential(t *testing.T) {
 	// The order below matches what a typical user would add; we vary it
 	// slightly to prove the order of `crank add` calls doesn't matter
 	// (other than each being a valid pre/post state).
-	sequence := []string{"bun", "auth", "crypto", "redis", "mongodb", "temporal"}
+	sequence := []string{"gorm", "auth", "crypto", "redis", "mongodb", "temporal"}
 	for _, feature := range sequence {
 		t.Run(feature, func(t *testing.T) {
 			runCrank(t, "", "add", feature, "--project", dir)
@@ -300,14 +300,14 @@ func TestE2E_Add_AllFeaturesSequential(t *testing.T) {
 // TestE2E_Add_AllFeaturesSequential_FinalCompile attempts to compile the
 // final state of the sequential-add project. As noted in
 // TestE2E_Add_AllFeaturesSequential, this is expected to fail because the
-// base feature's user_test.go is not updated when bun is added.
+// base feature's user_test.go is not updated when gorm is added.
 // We keep the test as a regression net: when the bug is fixed, the test
 // will start passing without any code change here.
 func TestE2E_Add_AllFeaturesSequential_FinalCompile(t *testing.T) {
-	t.Skip("Known bug: adding bun to a base project leaves user_test.go incompatible. " +
+	t.Skip("Known bug: adding gorm to a base project leaves user_test.go incompatible. " +
 		"See TestE2E_Add_AllFeaturesSequential for the regression net.")
 	dir := scaffoldBase(t, "add_all_seq_compile")
-	sequence := []string{"bun", "auth", "crypto", "redis", "mongodb", "temporal"}
+	sequence := []string{"gorm", "auth", "crypto", "redis", "mongodb", "temporal"}
 	for _, feature := range sequence {
 		runCrank(t, "", "add", feature, "--project", dir)
 	}

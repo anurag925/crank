@@ -4,27 +4,28 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test{{.R.Pascal}}Created_EventName(t *testing.T) {
 	now := time.Now().UTC()
-	e := {{.R.Pascal}}Created{ {{.R.Pascal}}ID: "{{.R.Snake}}-id", occurredAt: now}
+	e := {{.R.Pascal}}Created{ID: uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"), occurredAt: now}
 	assert.Equal(t, "{{.R.Snake}}.created", e.EventName())
 	assert.Equal(t, now, e.OccurredAt())
 }
 
 func Test{{.R.Pascal}}Updated_EventName(t *testing.T) {
 	now := time.Now().UTC()
-	e := {{.R.Pascal}}Updated{ {{.R.Pascal}}ID: "{{.R.Snake}}-id", occurredAt: now}
+	e := {{.R.Pascal}}Updated{ID: uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"), occurredAt: now}
 	assert.Equal(t, "{{.R.Snake}}.updated", e.EventName())
 	assert.Equal(t, now, e.OccurredAt())
 }
 
 func Test{{.R.Pascal}}Deleted_EventName(t *testing.T) {
 	now := time.Now().UTC()
-	e := {{.R.Pascal}}Deleted{ {{.R.Pascal}}ID: "{{.R.Snake}}-id", occurredAt: now}
+	e := {{.R.Pascal}}Deleted{ID: uuid.MustParse("123e4567-e89b-12d3-a456-426614174000"), occurredAt: now}
 	assert.Equal(t, "{{.R.Snake}}.deleted", e.EventName())
 	assert.Equal(t, now, e.OccurredAt())
 }
@@ -34,14 +35,14 @@ func Test{{.R.Pascal}}_Events_ImplementDomainEvent(t *testing.T) {
 	var _ interface {
 		EventName() string
 		OccurredAt() time.Time
-	} = {{.R.Pascal}}Created{ {{.R.Pascal}}ID: "x", occurredAt: now}
+	} = {{.R.Pascal}}Created{ID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), occurredAt: now}
 	var _ interface {
 		EventName() string
 		OccurredAt() time.Time
-	} = {{.R.Pascal}}Updated{ {{.R.Pascal}}ID: "x", occurredAt: now}
+	} = {{.R.Pascal}}Updated{ID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), occurredAt: now}
 	var _ interface {
 		EventName() string
 		OccurredAt() time.Time
-	} = {{.R.Pascal}}Deleted{ {{.R.Pascal}}ID: "x", occurredAt: now}
+	} = {{.R.Pascal}}Deleted{ID: uuid.MustParse("00000000-0000-0000-0000-000000000001"), occurredAt: now}
 	require.True(t, true)
 }

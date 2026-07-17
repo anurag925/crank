@@ -24,13 +24,13 @@ const legacyHandlerFile = "internal/handler/handler.go"
 // Marker comments emitted by the base feature's routes.go template. New
 // handlers are spliced in at these anchors.
 const (
-	markerHTTPFields   = "// crank:http-fields"
-	markerHTTPRegister = "// crank:http-register"
+	markerHTTPFields     = "// crank:http-fields"
+	markerHTTPRegister   = "// crank:http-register"
 	markerTxRepoImports  = "// crank:tx-repo-imports"
 	markerTxRepositories = "// crank:tx-repositories"
 	markerTxRepoMethods  = "// crank:tx-repo-methods"
 	markerTxRepoFields   = "// crank:tx-repo-fields"
-	markerInMemRepoFields = "// crank:inmem-repo-fields"
+	markerInMemOptions   = "// crank:inmem-options"
 )
 
 // wireResult reports the outcome of attempting to register a handler in the
@@ -75,9 +75,13 @@ func wireHandler(projectDir string, r Resource) (wireResult, error) {
 		return wireResult{Wired: true}, nil
 	}
 
+	idx := wireGroupIndex(content, r)
 	fieldLine := fmt.Sprintf("\t%sHandler *%sHandler\n", r.Pascal, r.Pascal)
-	registerLine := fmt.Sprintf("\tg%d := e.Group(\"/%s\")\n\tcfg.%sHandler.Register(g%d)\n",
-		wireGroupIndex(content, r), r.KebabPlural, r.Pascal, wireGroupIndex(content, r))
+	// Mount generated handlers under the shared /api/v1 group (variable `g`
+	// in the base Mount()), so their routes match the UserHandler convention
+	// (/api/v1/<resource>) rather than being exposed at the router root.
+	registerLine := fmt.Sprintf("\tg%d := g.Group(\"/%s\")\n\tcfg.%sHandler.Register(g%d)\n",
+		idx, r.KebabPlural, r.Pascal, idx)
 
 	updated, ok := spliceAtMarkers(content, fieldLine, registerLine)
 	if !ok {
@@ -113,17 +117,13 @@ func isAlreadyWired(content string, r Resource) bool {
 
 // wireGroupIndex returns a small integer that can be appended to the local
 // group variable name to avoid clashing with other generated handlers. The
-// first handler wired into a file is `g` (no suffix), the second is `g2`, the
-// third `g3`, and so on. The implementation just counts how many gN = e.Group
-// lines already exist.
+// first handler wired into a file is `g2`, the next `g3`, and so on (the base
+// feature already uses the bare `g` for the /api/v1 root group). The
+// implementation finds the highest existing `gN := <x>.Group(...)` suffix.
 func wireGroupIndex(content string, r Resource) int {
-	if !strings.Contains(content, " := e.Group(") {
-		return 0
-	}
-	// Find the highest "gN" prefix currently in use.
 	max := 0
 	for _, line := range strings.Split(content, "\n") {
-		if !strings.Contains(line, " := e.Group(") {
+		if !strings.Contains(line, ".Group(") || !strings.Contains(line, ":=") {
 			continue
 		}
 		idx := strings.Index(line, ":=")
@@ -131,12 +131,6 @@ func wireGroupIndex(content string, r Resource) int {
 			continue
 		}
 		name := strings.TrimSpace(line[:idx])
-		if name == "g" {
-			if max < 0 {
-				max = 0
-			}
-			continue
-		}
 		var n int
 		if _, err := fmt.Sscanf(name, "g%d", &n); err == nil {
 			if n > max {
@@ -144,7 +138,7 @@ func wireGroupIndex(content string, r Resource) int {
 			}
 		}
 	}
-	// The base feature's first group is named `g` (no suffix); the second
+	// The base feature's first group is named `g` (no suffix); the first
 	// generated resource is therefore `g2`.
 	if max < 2 {
 		return 2
@@ -180,7 +174,7 @@ func manualWireHint(r Resource, target string) string {
 
   • in the MountConfig struct:   %s *%sHandler
   • in Mount(), before the marker:
-        g := e.Group("/%s")
+        g := g.Group("/%s")
         cfg.%sHandler.Register(g)`,
 		target,
 		r.Pascal, r.Pascal,
@@ -198,34 +192,37 @@ const inMemUoWFile = "internal/adapters/uow/in_memory_uow.go"
 // gormUoWFile is the path to the GORM-backed outbox UoW adapter.
 const gormUoWFile = "internal/adapters/outbox/gorm_uow.go"
 
-// bunUoWFile is the path to the Bun-backed outbox UoW adapter.
-const bunUoWFile = "internal/adapters/outbox/bun_uow.go"
-
 // wireTxRepositories splices a new repository accessor into every TxRepositories
 // implementation in the project. It updates:
 //
-//   1. uow/uow.go — TxRepositories interface + imports
-//   2. adapters/outbox/gorm_uow.go — txRepositories struct + accessor method
-//   3. adapters/outbox/bun_uow.go — txRepositories struct + accessor method (if bun)
-//   4. adapters/uow/in_memory_uow.go — inMemoryTxRepositories struct + accessor
+//  1. uow/uow.go — TxRepositories interface + imports
+//  2. adapters/outbox/gorm_uow.go — txRepositories struct + accessor method
+//  3. adapters/uow/in_memory_uow.go — inMemoryTxRepositories struct + accessor
 //
-// It is idempotent; if the accessor already exists no file is modified.
+// It is idempotent; if the accessor already exists no file is modified. A file
+// that does not exist for the project's feature set (e.g. the GORM outbox UoW
+// in a project without outbox) is skipped silently. Any other failure — a read
+// error, a splice that produces invalid Go, or a write error — is returned so
+// the caller does not report a broken wiring as success.
 func wireTxRepositories(projectDir string, r Resource) error {
 	accessorName := r.PascalPlural
 	interfaceMethod := fmt.Sprintf("\t%s() %s.Repository\n", accessorName, r.Snake)
 	importLine := fmt.Sprintf("\t\"%s/internal/domain/%s\"\n", modulePathFromProject(projectDir), r.Snake)
 
 	// 1. uow/uow.go — TxRepositories interface + imports
-	spliceUoWInterface(projectDir, accessorName, interfaceMethod, importLine)
+	if err := spliceUoWInterface(projectDir, accessorName, interfaceMethod, importLine); err != nil {
+		return err
+	}
 
 	// 2. in-memory UoW
-	spliceInMemTxRepos(projectDir, r, accessorName)
+	if err := spliceInMemTxRepos(projectDir, r, accessorName); err != nil {
+		return err
+	}
 
 	// 3. GORM outbox UoW
-	spliceGormTxRepos(projectDir, r, accessorName)
-
-	// 4. Bun outbox UoW
-	spliceBunTxRepos(projectDir, r, accessorName)
+	if err := spliceGormTxRepos(projectDir, r, accessorName); err != nil {
+		return err
+	}
 
 	return nil
 }
@@ -238,15 +235,18 @@ func modulePathFromProject(projectDir string) string {
 	return info.ModulePath
 }
 
-func spliceUoWInterface(projectDir, accessorName, interfaceMethod, importLine string) {
+func spliceUoWInterface(projectDir, accessorName, interfaceMethod, importLine string) error {
 	path := filepath.Join(projectDir, uowFile)
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return
+		if os.IsNotExist(err) {
+			return nil // no UoW interface in this project shape; nothing to wire
+		}
+		return fmt.Errorf("read %s: %w", uowFile, err)
 	}
 	s := string(content)
 	if strings.Contains(s, accessorName+"()") {
-		return // already wired
+		return nil // already wired
 	}
 
 	// Add domain import
@@ -258,50 +258,66 @@ func spliceUoWInterface(projectDir, accessorName, interfaceMethod, importLine st
 
 	formatted, err := format.Source([]byte(s))
 	if err != nil {
-		return
+		return fmt.Errorf("wiring %s produced invalid Go (leaving it untouched): %w", uowFile, err)
 	}
-	_ = os.WriteFile(path, formatted, 0o644)
+	if err := os.WriteFile(path, formatted, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", uowFile, err)
+	}
+	return nil
 }
 
-func spliceInMemTxRepos(projectDir string, r Resource, accessorName string) {
+func spliceInMemTxRepos(projectDir string, r Resource, accessorName string) error {
 	path := filepath.Join(projectDir, inMemUoWFile)
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", inMemUoWFile, err)
 	}
 	s := string(content)
 	if strings.Contains(s, accessorName+"()") {
-		return
+		return nil
 	}
 
 	fieldLine := fmt.Sprintf("\t%sRepo %s.Repository\n", r.Camel, r.Snake)
 	methodLine := fmt.Sprintf("func (r *inMemoryTxRepositories) %s() %s.Repository { return r.%sRepo }\n", accessorName, r.Snake, r.Camel)
-	constructorField := fmt.Sprintf("\t%sRepo %s.Repository\n", r.Camel, r.Snake)
+	optionFunc := fmt.Sprintf("func With%sRepo(r %s.Repository) Option {\n\treturn func(repos *inMemoryTxRepositories) { repos.%sRepo = r }\n}\n", r.Pascal, r.Snake, r.Camel)
+	importLine := fmt.Sprintf("\t\"%s/internal/domain/%s\"\n", modulePathFromProject(projectDir), r.Snake)
 
+	if !strings.Contains(s, importLine) {
+		s = strings.Replace(s, markerTxRepoImports, importLine+"\t"+markerTxRepoImports, 1)
+	}
 	s = strings.Replace(s, markerTxRepoFields, fieldLine+"\t"+markerTxRepoFields, 1)
 	s = strings.Replace(s, markerTxRepoMethods, "\n"+methodLine+"\t"+markerTxRepoMethods, 1)
-	s = strings.Replace(s, markerInMemRepoFields, constructorField+"\t"+markerInMemRepoFields, 1)
+	s = strings.Replace(s, markerInMemOptions, "\n"+optionFunc+"\n"+markerInMemOptions, 1)
 
 	formatted, err := format.Source([]byte(s))
 	if err != nil {
-		return
+		return fmt.Errorf("wiring %s produced invalid Go (leaving it untouched): %w", inMemUoWFile, err)
 	}
-	_ = os.WriteFile(path, formatted, 0o644)
+	if err := os.WriteFile(path, formatted, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", inMemUoWFile, err)
+	}
+	return nil
 }
 
-func spliceGormTxRepos(projectDir string, r Resource, accessorName string) {
+func spliceGormTxRepos(projectDir string, r Resource, accessorName string) error {
 	path := filepath.Join(projectDir, gormUoWFile)
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("read %s: %w", gormUoWFile, err)
 	}
 	s := string(content)
 	if strings.Contains(s, accessorName+"()") {
-		return
+		return nil
 	}
 
 	importLine := fmt.Sprintf("\t\"%s/internal/domain/%s\"\n", modulePathFromProject(projectDir), r.Snake)
-	methodLine := fmt.Sprintf("func (r *txRepositories) %s() %s.Repository {\n\t\treturn gorm.New%sRepository(r.tx)\n\t}\n", accessorName, r.Snake, r.Pascal)
+	methodLine := fmt.Sprintf("func (r *txRepositories) %s() %s.Repository {\n\t\treturn gormadapter.New%sRepository(r.tx)\n\t}\n", accessorName, r.Snake, r.Pascal)
 
 	if !strings.Contains(s, importLine) {
 		s = strings.Replace(s, markerTxRepoImports, importLine+"\t"+markerTxRepoImports, 1)
@@ -310,33 +326,10 @@ func spliceGormTxRepos(projectDir string, r Resource, accessorName string) {
 
 	formatted, err := format.Source([]byte(s))
 	if err != nil {
-		return
+		return fmt.Errorf("wiring %s produced invalid Go (leaving it untouched): %w", gormUoWFile, err)
 	}
-	_ = os.WriteFile(path, formatted, 0o644)
-}
-
-func spliceBunTxRepos(projectDir string, r Resource, accessorName string) {
-	path := filepath.Join(projectDir, bunUoWFile)
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return
+	if err := os.WriteFile(path, formatted, 0o644); err != nil {
+		return fmt.Errorf("write %s: %w", gormUoWFile, err)
 	}
-	s := string(content)
-	if strings.Contains(s, accessorName+"()") {
-		return
-	}
-
-	importLine := fmt.Sprintf("\t\"%s/internal/domain/%s\"\n", modulePathFromProject(projectDir), r.Snake)
-	methodLine := fmt.Sprintf("func (r *txRepositories) %s() %s.Repository {\n\t\treturn bun.New%sRepository(r.tx)\n\t}\n", accessorName, r.Snake, r.Pascal)
-
-	if !strings.Contains(s, importLine) {
-		s = strings.Replace(s, markerTxRepoImports, importLine+"\t"+markerTxRepoImports, 1)
-	}
-	s = strings.Replace(s, markerTxRepoMethods, "\n"+methodLine+"\t"+markerTxRepoMethods, 1)
-
-	formatted, err := format.Source([]byte(s))
-	if err != nil {
-		return
-	}
-	_ = os.WriteFile(path, formatted, 0o644)
+	return nil
 }

@@ -10,7 +10,7 @@ import (
 	"github.com/anurag925/crank/internal/bootstrap/scaffold"
 
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
+	_ "github.com/anurag925/crank/internal/bootstrap/features/gorm"
 )
 
 func main() {
@@ -31,7 +31,7 @@ func main() {
 		ProjectName: "demo",
 		ModulePath:  "github.com/example/demo",
 		TargetDir:   tmp,
-		Features:    []string{"base", "bun"},
+		Features:    []string{"base", "gorm"},
 	})
 	if err != nil {
 		panic(err)
@@ -71,10 +71,10 @@ func main() {
 		"internal/application/order/command_handler.go",
 		"internal/application/order/queries.go",
 		"internal/application/order/query_handler.go",
-		"internal/adapters/persistence/bun/order_repository.go",
+		"internal/adapters/persistence/gorm/order_repository.go",
 		"internal/adapters/persistence/memory/order_repository.go",
-		"internal/adapters/http/web/order_handler.go",
-		"internal/adapters/http/web/order_handler_test.go",
+		"internal/adapters/http/web/v1/order_handler.go",
+		"internal/adapters/http/web/v1/order_handler_test.go",
 	}
 	for _, p := range expected {
 		full := filepath.Join(res.ProjectDir, p)

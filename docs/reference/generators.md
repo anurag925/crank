@@ -64,7 +64,7 @@ crank make model Order customer:string total:float
 
 ### `repository`
 
-Generates the persistence adapter for a resource. Uses GORM, Bun, or in-memory depending on enabled features. All repos use the row DTO pattern — a private `{name}Row` struct with ORM tags, `toAggregate()` via `Rehydrate()`, and `rowFromAggregate()`. Domain aggregates have zero ORM tags.
+Generates the persistence adapter for a resource. Uses GORM or in-memory depending on enabled features. All repos use the row DTO pattern — a private `{name}Row` struct with ORM tags, `toAggregate()` via `Rehydrate()`, and `rowFromAggregate()`. Domain aggregates have zero ORM tags.
 
 ```bash
 crank make repository Order

@@ -10,16 +10,20 @@ import (
 // User is the aggregate root for application users. The base feature provides
 // the minimum surface: identity, name, email, lifecycle timestamps, and
 // domain events. The auth feature extends it with a Password value object
-// and authentication behavior. No JSON, DB, or validation tags live on the
-// aggregate — HTTP and persistence adapters own their own DTOs.
+// and authentication behavior. GORM tags live on the aggregate itself — the
+// same struct is used as both the domain model and the persistence row.
 type User struct {
-	id        uuid.UUID
-	name      string
-	email     string
-	password  string // bcrypt hash; populated only by the auth feature
-	createdAt time.Time
-	updatedAt time.Time
-	events    []shared.DomainEvent
+	ID        uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
+	CreatedAt time.Time `gorm:"column:created_at;not null"`
+	UpdatedAt time.Time `gorm:"column:updated_at;not null"`
+	Name      string    `gorm:"column:name;not null"`
+	Email     string    `gorm:"column:email;not null;uniqueIndex"`
+	Password  string    `gorm:"column:password;not null"` // bcrypt hash; populated only by the auth feature
+	events    []shared.DomainEvent `gorm:"-"`
+}
+
+func (u *User) TableName() string {
+	return "users"
 }
 
 // NewUser constructs a new User aggregate, validates its invariants, and
@@ -37,75 +41,60 @@ func NewUser(id uuid.UUID, name, email string) (*User, error) {
 	}
 	now := time.Now().UTC()
 	u := &User{
-		id:        id,
-		name:      name,
-		email:     email,
-		createdAt: now,
-		updatedAt: now,
+		ID:        id,
+		CreatedAt: now,
+		UpdatedAt: now,
+		Name:      name,
+		Email:     email,
 	}
 	u.recordEvent(UserCreated{ID: id, occurredAt: now})
 	return u, nil
 }
 
-// ID returns the aggregate's identifier.
-func (u *User) ID() uuid.UUID { return u.id }
-
-// Name returns the user's display name.
-func (u *User) Name() string { return u.name }
-
-// Email returns the user's email address.
-func (u *User) Email() string { return u.email }
-
-// CreatedAt returns the time the aggregate was first persisted.
-func (u *User) CreatedAt() time.Time { return u.createdAt }
-
-// UpdatedAt returns the time the aggregate was last mutated.
-func (u *User) UpdatedAt() time.Time { return u.updatedAt }
-
 // PasswordHash returns the stored bcrypt hash, or "" if the auth feature
 // is not enabled. Persistence adapters use this to round-trip the hash.
-func (u *User) PasswordHash() string { return u.password }
+func (u *User) PasswordHash() string { return u.Password }
 
 // SetPasswordHash stores a bcrypt hash on the aggregate. Called by the
 // persistence layer when rehydrating, and by the application layer when
 // registering a new user.
-func (u *User) SetPasswordHash(h string) { u.password = h }
+func (u *User) SetPasswordHash(h string) { u.Password = h }
 
 // SetTimestamps overwrites the lifecycle timestamps. Used by the
 // persistence layer to rehydrate an aggregate from a row whose created_at
 // and updated_at columns were set at write time.
 func (u *User) SetTimestamps(created, updated time.Time) {
-	u.createdAt = created
-	u.updatedAt = updated
+	u.CreatedAt = created
+	u.UpdatedAt = updated
 }
 
 // Update replaces the aggregate's mutable fields and records a UserUpdated event.
 func (u *User) Update(name, email string) {
 	now := time.Now().UTC()
-	u.name = name
-	u.email = email
-	u.updatedAt = now
-	u.recordEvent(UserUpdated{ID: u.id, occurredAt: now})
+	u.Name = name
+	u.Email = email
+	u.UpdatedAt = now
+	u.recordEvent(UserUpdated{ID: u.ID, occurredAt: now})
 }
 
 // MarkDeleted records a UserDeleted event. The application service is
 // responsible for calling Repository.Delete afterwards and publishing the
 // pulled events.
 func (u *User) MarkDeleted() {
-	u.recordEvent(UserDeleted{ID: u.id, occurredAt: time.Now().UTC()})
+	u.recordEvent(UserDeleted{ID: u.ID, occurredAt: time.Now().UTC()})
 }
 
 // Rehydrate reconstructs an aggregate from a persistence row, bypassing the
-// validation done by NewUser. It is intended for use by the postgres and
+// validation done by NewUser. It is intended for use by the GORM and
 // in-memory adapters only. Callers must guarantee that id is non-zero.
 func Rehydrate(id uuid.UUID, name, email, password string, created, updated time.Time) *User {
 	return &User{
-		id:        id,
-		name:      name,
-		email:     email,
-		password:  password,
-		createdAt: created,
-		updatedAt: updated,
+		ID:        id,
+		CreatedAt: created,
+		UpdatedAt: updated,
+		Name:      name,
+		Email:     email,
+		Password:  password,
 	}
 }
 

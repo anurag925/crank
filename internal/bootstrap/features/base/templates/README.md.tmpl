@@ -16,13 +16,10 @@ handlers, and adapter implementations for HTTP and persistence.
 {{- if .Has "auth"}}
 | Auth | JWT + bcrypt | [golang-jwt](https://github.com/golang-jwt/jwt) |
 {{- end}}
-{{- if .Has "bun"}}
-| ORM | Bun | [bun.uptrace.dev](https://bun.uptrace.dev) |
-{{- end}}
 {{- if .Has "gorm"}}
 | ORM | GORM | [gorm.io/docs](https://gorm.io/docs) |
 {{- end}}
-{{- if or (.Has "bun") (.Has "gorm")}}
+{{- if .Has "gorm"}}
 | Migrations | golang-migrate | [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate) |
 | Seed data | golang-migrate | [github.com/golang-migrate/migrate](https://github.com/golang-migrate/migrate) |
 {{- end}}
@@ -37,7 +34,7 @@ crank dev                     # run with live reload
 
 Health check: `GET http://localhost:8080/health`
 
-{{- if or (.Has "bun") (.Has "gorm")}}
+{{- if .Has "gorm"}}
 Before running, ensure PostgreSQL is available and run `crank migrate up`.
 To seed data, run `crank seed up` after migrations are applied.
 {{- end}}
@@ -51,7 +48,7 @@ To seed data, run `crank seed up` after migrations are applied.
 ├── internal
 │   ├── adapters            HTTP handlers, persistence, event bus
 │   │   ├── http/web        Echo handlers + middleware
-│   │   └── persistence     memory, {{if .Has "bun"}}bun, {{end}}{{if .Has "gorm"}}gorm, {{end}}repositories
+│   │   └── persistence     memory, {{if .Has "gorm"}}gorm, {{end}}repositories
 │   ├── application         use cases (CQRS)
 │   ├── config              config loading (Viper + env)
 │   ├── domain              pure Go aggregates, ports, events
@@ -59,7 +56,7 @@ To seed data, run `crank seed up` after migrations are applied.
 │   ├── ports               cross-cutting interfaces
 │   └── validator           request validation
 ├── pkg/logging             slog helpers
-{{- if or (.Has "bun") (.Has "gorm")}}
+{{- if .Has "gorm"}}
 ├── db/migrations           SQL migrations
 ├── db/seeds                seed data SQL files
 {{- end}}
@@ -87,7 +84,7 @@ testing patterns, and how each feature module works — see the
 | `crank vet` | Run `go vet` |
 | `crank tidy` | Sync `go.mod` / `go.sum` |
 | `crank swag` | Generate Swagger docs into `docs/` |
-{{- if or (.Has "bun") (.Has "gorm")}}
+{{- if .Has "gorm"}}
 | `crank migrate up` | Apply pending migrations |
 | `crank make migration <name>` | Create a migration pair |
 | `crank seed up` | Apply pending seed files |

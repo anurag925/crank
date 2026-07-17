@@ -1,12 +1,18 @@
 package user
 
 // CreateUserCommand is the application-layer request to create a new user.
-// The CommandHandler converts the stringly-typed ID into a typed UserID
-// before constructing the aggregate.
+// The CommandHandler parses the stringly-typed ID into a uuid.UUID before
+// constructing the aggregate.
 type CreateUserCommand struct {
 	ID    string
 	Name  string
 	Email string
+{{- if .Has "auth"}}
+	// Password is the optional plaintext password. When non-empty, the
+	// CommandHandler hashes it via the Hasher port and stores the hash on
+	// the aggregate; the plaintext is never persisted.
+	Password string
+{{- end}}
 }
 
 // UpdateUserCommand is the application-layer request to mutate an existing
@@ -22,3 +28,12 @@ type UpdateUserCommand struct {
 type DeleteUserCommand struct {
 	ID string
 }
+{{- if .Has "auth"}}
+
+// AuthenticateUserCommand is the application-layer request to verify a user's
+// email/password credentials during login.
+type AuthenticateUserCommand struct {
+	Email    string
+	Password string
+}
+{{- end}}

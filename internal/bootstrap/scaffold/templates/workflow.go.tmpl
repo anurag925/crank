@@ -4,6 +4,9 @@ import (
 {{- if .HasTime}}
 	"time"
 {{- end}}
+{{- if .HasUUID}}
+	"github.com/google/uuid"
+{{- end}}
 	"go.temporal.io/sdk/workflow"
 )
 

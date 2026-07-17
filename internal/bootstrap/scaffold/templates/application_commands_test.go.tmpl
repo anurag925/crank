@@ -5,6 +5,9 @@ import (
 {{- if .HasTime}}
 	"time"
 {{- end}}
+{{- if .HasUUID}}
+	"github.com/google/uuid"
+{{- end}}
 )
 
 // Commands are pure data carriers; this test simply asserts the struct

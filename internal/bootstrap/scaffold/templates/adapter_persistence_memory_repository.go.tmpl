@@ -12,7 +12,7 @@ import (
 // {{.R.Pascal}}Repository is the in-memory implementation of
 // domain/{{.R.Snake}}.Repository. It is safe for concurrent use and is
 // intended for tests, local development, and projects that do not enable the
-// postgres feature.
+// gorm feature.
 type {{.R.Pascal}}Repository struct {
 	mu    sync.RWMutex
 	items map[uuid.UUID]*{{.R.Snake}}.{{.R.Pascal}}
@@ -27,7 +27,7 @@ func New{{.R.Pascal}}Repository() *{{.R.Pascal}}Repository {
 func (r *{{.R.Pascal}}Repository) Save(_ context.Context, x *{{.R.Snake}}.{{.R.Pascal}}) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	r.items[x.ID()] = x
+	r.items[x.ID] = x
 	return nil
 }
 

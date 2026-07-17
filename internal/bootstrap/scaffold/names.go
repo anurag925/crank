@@ -186,23 +186,10 @@ func (r Resource) DDDDomainPath() string { return "internal/domain/" + r.Snake }
 // directory, e.g. "internal/application/order".
 func (r Resource) DDDAppPath() string { return "internal/application/" + r.Snake }
 
-// DDDBunAdapterPath returns the project-relative path of the bun-backed
-// adapter file, e.g. "internal/adapters/persistence/bun/order_repository.go".
-func (r Resource) DDDBunAdapterPath() string {
-	return "internal/adapters/persistence/bun/" + r.Snake + "_repository.go"
-}
-
 // DDDGormAdapterPath returns the project-relative path of the gorm-backed
 // adapter file, e.g. "internal/adapters/persistence/gorm/order_repository.go".
 func (r Resource) DDDGormAdapterPath() string {
 	return "internal/adapters/persistence/gorm/" + r.Snake + "_repository.go"
-}
-
-// DDDPostgresAdapterPath is an alias for DDDBunAdapterPath kept for
-// backwards compatibility with any external callers. Prefer DDDBunAdapterPath
-// in new code.
-func (r Resource) DDDPostgresAdapterPath() string {
-	return r.DDDBunAdapterPath()
 }
 
 // DDDMemoryAdapterPath returns the project-relative path of the in-memory

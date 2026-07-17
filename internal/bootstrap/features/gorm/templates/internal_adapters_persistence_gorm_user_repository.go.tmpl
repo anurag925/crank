@@ -11,49 +11,8 @@ import (
 	"{{.ModulePath}}/internal/domain/user"
 )
 
-// userRow is the postgres row DTO for user aggregates. It is intentionally
-// private to this package: the domain aggregate is the only public contract.
-type userRow struct {
-	ID        uuid.UUID `gorm:"column:id;type:uuid;primaryKey"`
-	Name      string    `gorm:"column:name;not null"`
-	Email     string    `gorm:"column:email;not null;uniqueIndex"`
-{{- if .Has "auth"}}
-	Password  string    `gorm:"column:password;not null"`
-{{- end}}
-	CreatedAt time.Time `gorm:"column:created_at;not null;default:current_timestamp"`
-	UpdatedAt time.Time `gorm:"column:updated_at;not null;default:current_timestamp"`
-}
-
-// TableName pins the GORM-managed table name. The domain aggregate has no
-// opinion about persistence; the adapter owns the table layout.
-func (userRow) TableName() string { return "users" }
-
-// toAggregate converts a row to a domain aggregate via Rehydrate, which
-// bypasses validation so persistence round-trips are lossless.
-func (row *userRow) toAggregate() *user.User {
-{{- if .Has "auth"}}
-	return user.Rehydrate(row.ID, row.Name, row.Email, row.Password, row.CreatedAt, row.UpdatedAt)
-{{- else}}
-	return user.Rehydrate(row.ID, row.Name, row.Email, "", row.CreatedAt, row.UpdatedAt)
-{{- end}}
-}
-
-// rowFromAggregate projects a domain aggregate onto the row DTO.
-func rowFromAggregate(u *user.User) *userRow {
-	return &userRow{
-		ID:        u.ID(),
-		Name:      u.Name(),
-		Email:     u.Email(),
-{{- if .Has "auth"}}
-		Password:  u.PasswordHash(),
-{{- end}}
-		CreatedAt: u.CreatedAt(),
-		UpdatedAt: u.UpdatedAt(),
-	}
-}
-
-// UserRepository is the GORM-backed implementation of
-// domain/user.Repository.
+// UserRepository is the GORM-backed implementation of domain/user.Repository.
+// The domain aggregate doubles as the GORM model — no separate Row DTO.
 type UserRepository struct {
 	db *gorm.DB
 }
@@ -65,46 +24,47 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 
 // Save inserts a new row or updates an existing one keyed by id.
 func (r *UserRepository) Save(ctx context.Context, u *user.User) error {
-	return r.db.WithContext(ctx).Save(rowFromAggregate(u)).Error
+	u.UpdatedAt = time.Now().UTC()
+	return r.db.WithContext(ctx).Save(u).Error
 }
 
 // Get returns a user aggregate by id, mapping gorm.ErrRecordNotFound to
 // domain/user.ErrUserNotFound.
 func (r *UserRepository) Get(ctx context.Context, id uuid.UUID) (*user.User, error) {
-	var row userRow
-	err := r.db.WithContext(ctx).First(&row, "id = ?", id).Error
+	row := new(user.User)
+	err := r.db.WithContext(ctx).First(row, "id = ?", id).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, user.ErrUserNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	return row.toAggregate(), nil
+	return row, nil
 }
 
 // GetByEmail returns a user aggregate by email address, or
 // domain/user.ErrUserNotFound.
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*user.User, error) {
-	var row userRow
-	err := r.db.WithContext(ctx).First(&row, "email = ?", email).Error
+	row := new(user.User)
+	err := r.db.WithContext(ctx).First(row, "email = ?", email).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, user.ErrUserNotFound
 	}
 	if err != nil {
 		return nil, err
 	}
-	return row.toAggregate(), nil
+	return row, nil
 }
 
 // List returns every user row as a domain aggregate.
 func (r *UserRepository) List(ctx context.Context) ([]*user.User, error) {
-	var rows []userRow
+	var rows []user.User
 	if err := r.db.WithContext(ctx).Order("id ASC").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	out := make([]*user.User, 0, len(rows))
 	for i := range rows {
-		out = append(out, rows[i].toAggregate())
+		out = append(out, &rows[i])
 	}
 	return out, nil
 }
@@ -112,7 +72,7 @@ func (r *UserRepository) List(ctx context.Context) ([]*user.User, error) {
 // Delete removes a user row by id, mapping zero affected rows to
 // domain/user.ErrUserNotFound.
 func (r *UserRepository) Delete(ctx context.Context, id uuid.UUID) error {
-	res := r.db.WithContext(ctx).Delete(&userRow{}, "id = ?", id)
+	res := r.db.WithContext(ctx).Delete(&user.User{}, "id = ?", id)
 	if err := res.Error; err != nil {
 		return err
 	}

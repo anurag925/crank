@@ -4,7 +4,7 @@ package e2e
 // through the `crank add` command. These tests focus on:
 //
 //   - Per-feature injection correctness for every feature that has a
-//     config snippet (bun, auth, crypto, redis, mongodb, temporal).
+//     config snippet (gorm, auth, crypto, redis, mongodb, temporal).
 //   - Idempotency at the file level (re-running add for an already-present
 //     feature must not duplicate the section).
 //   - Imports injection (the "time" import that auth's JWTConfig needs).
@@ -28,13 +28,13 @@ import (
 // Per-feature injection correctness
 // ---------------------------------------------------------------------------
 
-// TestE2E_ConfigInject_Bun verifies that adding bun to a base
+// TestE2E_ConfigInject_Gorm verifies that adding gorm to a base
 // project injects the expected struct field, struct definition, viper
 // defaults, YAML section and env-section — all in the right files and at
 // the right markers.
-func TestE2E_ConfigInject_Bun(t *testing.T) {
-	dir := scaffoldBaseRaw(t, "ci_bun")
-	runCrank(t, "", "add", "bun", "--project", dir)
+func TestE2E_ConfigInject_Gorm(t *testing.T) {
+	dir := scaffoldBaseRaw(t, "ci_gorm")
+	runCrank(t, "", "add", "gorm", "--project", dir)
 
 	assertContainsAll(t, dir, "internal/config/config.go",
 		"Database DatabaseConfig",
@@ -58,8 +58,8 @@ func TestE2E_ConfigInject_Bun(t *testing.T) {
 		`sslmode: "disable"`,
 	)
 	// The DB_NAME is the project's package name (last segment of the
-	// module path). For scaffoldBaseRaw("ci_bun") that is
-	// "ci_bun".
+	// module path). For scaffoldBaseRaw("ci_gorm") that is
+	// "ci_gorm".
 	assertContainsAll(t, dir, ".env.example",
 		"DATABASE_PASSWORD=postgres",
 	)
@@ -229,7 +229,7 @@ func TestE2E_ConfigInject_GoIdempotent(t *testing.T) {
 // nothing to anchor against.
 func TestE2E_ConfigInject_MarkersPreservedAfterAdd(t *testing.T) {
 	dir := scaffoldBaseRaw(t, "ci_markers")
-	runCrank(t, "", "add", "bun", "--project", dir)
+	runCrank(t, "", "add", "gorm", "--project", dir)
 	runCrank(t, "", "add", "redis", "--project", dir)
 
 	cfg := readFile(t, dir, "internal/config/config.go")
@@ -262,14 +262,14 @@ func TestE2E_ConfigInject_MarkersPreservedAfterAdd(t *testing.T) {
 // syntactically valid Go (and therefore parseable by the go toolchain).
 //
 // KNOWN BUG: the all-features-injected project is the same project that
-// triggers the "add bun to base" bug (see
+// triggers the "add gorm to base" bug (see
 // TestE2E_Add_AllFeaturesSequential for details). We verify the
 // config.go and config.yaml injection contents but skip the
 // project-level compile check.
 func TestE2E_ConfigInject_FormatValid(t *testing.T) {
-	t.Skip("Triggers the same add-bun-to-base bug as TestE2E_Add_AllFeaturesSequential.")
+	t.Skip("Triggers the same add-gorm-to-base bug as TestE2E_Add_AllFeaturesSequential.")
 	dir := scaffoldBase(t, "ci_format_valid")
-	runCrank(t, "", "add", "bun", "--project", dir)
+	runCrank(t, "", "add", "gorm", "--project", dir)
 	runCrank(t, "", "add", "auth", "--project", dir)
 	runCrank(t, "", "add", "crypto", "--project", dir)
 	runCrank(t, "", "add", "redis", "--project", dir)
@@ -308,10 +308,10 @@ func TestE2E_ConfigInject_MissingMarkerGraceful(t *testing.T) {
 		t.Fatalf("rewrite config.go: %v", err)
 	}
 
-	// Now add bun; the injection should either succeed (just
+	// Now add gorm; the injection should either succeed (just
 	// inserting at the next-closest position) or report a clean error.
 	// We just want the file to remain syntactically valid Go.
-	out, err := runCrankRaw(t, "", "add", "bun", "--project", dir)
+	out, err := runCrankRaw(t, "", "add", "gorm", "--project", dir)
 	_ = out
 	_ = err
 	// Re-read config.go — if injection failed silently the file is
@@ -333,12 +333,12 @@ func TestE2E_ConfigInject_MissingMarkerGraceful(t *testing.T) {
 // best regression net for the import-merging code path.
 //
 // KNOWN BUG: same as TestE2E_ConfigInject_FormatValid — the all-features
-// project triggers the add-bun-to-base bug. We verify config
+// project triggers the add-gorm-to-base bug. We verify config
 // contents but skip the project-level compile.
 func TestE2E_ConfigInject_AllFeaturesCombined(t *testing.T) {
-	t.Skip("Triggers the same add-bun-to-base bug as TestE2E_Add_AllFeaturesSequential.")
+	t.Skip("Triggers the same add-gorm-to-base bug as TestE2E_Add_AllFeaturesSequential.")
 	dir := scaffoldBase(t, "ci_all")
-	runCrank(t, "", "add", "bun", "--project", dir)
+	runCrank(t, "", "add", "gorm", "--project", dir)
 	runCrank(t, "", "add", "auth", "--project", dir)
 	runCrank(t, "", "add", "crypto", "--project", dir)
 	runCrank(t, "", "add", "redis", "--project", dir)

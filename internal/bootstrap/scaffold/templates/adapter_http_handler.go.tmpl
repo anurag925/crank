@@ -3,7 +3,10 @@ package v1
 import (
 	"errors"
 	"net/http"
+
+{{- if .HasUUID}}
 	"github.com/google/uuid"
+{{- end}}
 	"github.com/labstack/echo/v5"
 
 	"{{.Module}}/internal/adapters/http/web/api"
@@ -11,21 +14,22 @@ import (
 	"{{.Module}}/internal/domain/{{.R.Snake}}"
 )
 
-// {{.R.Snake}}DTO is the input/output DTO for {{.R.Snake}} HTTP endpoints. The
-// HTTP layer owns validation tags; the domain aggregate stays tag-free.
+// {{.R.Snake}}DTO is the input/output DTO for {{.R.Snake}} HTTP endpoints.
+// The HTTP DTO owns validation tags and string-serialized IDs.
 type {{.R.Snake}}DTO struct {
 	ID string `json:"id" validate:"omitempty,uuid"`
 {{- range .Fields}}
-	{{.GoName}} {{.GoType}} `json:"{{.Name}}"{{if .Validate}} validate:"{{.Validate}}"{{end}}`
+	{{.GoName}} {{.DTOGoType}} `json:"{{.Name}}"{{if .Validate}} validate:"{{.Validate}}"{{end}}`
 {{- end}}
 }
 
 // toCreateCommand converts the DTO to an application Create command.
+// UUID-typed DTO fields are parsed from string to uuid.UUID for the command layer.
 func (d {{.R.Snake}}DTO) toCreateCommand() app{{.R.Pascal}}.Create{{.R.Pascal}}Command {
 	return app{{.R.Pascal}}.Create{{.R.Pascal}}Command{
 		ID: d.ID,
 {{- range .Fields}}
-		{{.GoName}}: d.{{.GoName}},
+		{{.GoName}}: {{if .IsUUID}}uuid.MustParse(d.{{.GoName}}){{else}}d.{{.GoName}}{{end}},
 {{- end}}
 	}
 }
@@ -35,7 +39,7 @@ func (d {{.R.Snake}}DTO) toUpdateCommand() app{{.R.Pascal}}.Update{{.R.Pascal}}C
 	return app{{.R.Pascal}}.Update{{.R.Pascal}}Command{
 		ID: d.ID,
 {{- range .Fields}}
-		{{.GoName}}: d.{{.GoName}},
+		{{.GoName}}: {{if .IsUUID}}uuid.MustParse(d.{{.GoName}}){{else}}d.{{.GoName}}{{end}},
 {{- end}}
 	}
 }
@@ -43,9 +47,9 @@ func (d {{.R.Snake}}DTO) toUpdateCommand() app{{.R.Pascal}}.Update{{.R.Pascal}}C
 // toDTO projects a domain aggregate onto the response DTO shape.
 func to{{.R.Pascal}}DTO(x *{{.R.Snake}}.{{.R.Pascal}}) {{.R.Snake}}DTO {
 	return {{.R.Snake}}DTO{
-		ID: x.ID().String(),
+		ID: x.ID.String(),
 {{- range .Fields}}
-		{{.GoName}}: x.{{.GoName}}(),
+		{{.GoName}}: {{if .IsUUID}}x.{{.GoName}}.String(){{else}}x.{{.GoName}}{{end}},
 {{- end}}
 	}
 }

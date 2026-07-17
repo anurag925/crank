@@ -18,7 +18,7 @@ A generated `crank` project gives you:
 - Structured logging with `log/slog` including redaction and context-aware enrichment.
 - Request validation with `go-playground/validator` via automatic binder validation.
 - Swagger/OpenAPI generation with `swaggo/swag`.
-- Optional PostgreSQL persistence through GORM or Bun with the row DTO pattern.
+- Optional PostgreSQL persistence through GORM, where the domain aggregate doubles as the GORM model.
 - Optional modules for auth (JWT with token revocation), Redis, MongoDB, Qdrant, Temporal, OpenTelemetry, React views, crypto helpers, transactional outbox, and audit trailing.
 - `TxRepositories` — transaction-scoped domain repos so application handlers never import persistence adapters.
 - Versioned HTTP handlers at `/api/v1` with self-scoped user endpoints.
@@ -62,7 +62,6 @@ curl http://localhost:8080/health
 | | [AI agent support](./explanation/ai-agents.md) | Understand how generated projects guide AI agents to use Crank correctly. |
 | | [Feature: Base](./explanation/features/base.md) | Foundation — Echo, Viper, config, validation, logging, in-memory adapters. |
 | | [Feature: GORM](./explanation/features/gorm.md) | PostgreSQL persistence via GORM (default ORM). |
-| | [Feature: Bun](./explanation/features/bun.md) | PostgreSQL persistence via Bun ORM. |
 | | [Feature: Auth](./explanation/features/auth.md) | JWT authentication, bcrypt hashing, auth endpoints. |
 | | [Feature: Crypto](./explanation/features/crypto.md) | AES-256-GCM encryption helpers. |
 | | [Feature: Redis](./explanation/features/redis.md) | Redis caching client and port interface. |

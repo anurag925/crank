@@ -4,40 +4,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func new{{.R.Pascal}}ID(t *testing.T) {{.R.Pascal}}ID {
-	t.Helper()
-	id, err := New{{.R.Pascal}}ID("123e4567-e89b-12d3-a456-426614174000")
-	require.NoError(t, err)
-	return id
-}
-
 func TestNew{{.R.Pascal}}(t *testing.T) {
-	id := new{{.R.Pascal}}ID(t)
+	id := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 {{- if .Fields}}
 	o, err := New{{.R.Pascal}}(id{{range .Fields}}, {{.Sample}}{{end}})
 {{- else}}
 	o, err := New{{.R.Pascal}}(id)
 {{- end}}
 	require.NoError(t, err)
-	assert.Equal(t, id, o.ID())
-	assert.False(t, o.CreatedAt().IsZero())
+	assert.Equal(t, id, o.ID)
+	assert.False(t, o.CreatedAt.IsZero())
 }
 
 func TestNew{{.R.Pascal}}_RejectsZeroID(t *testing.T) {
 {{- if .Fields}}
-	_, err := New{{.R.Pascal}}(""{{range .Fields}}, {{.Sample}}{{end}})
+	_, err := New{{.R.Pascal}}(uuid.Nil{{range .Fields}}, {{.Sample}}{{end}})
 {{- else}}
-	_, err := New{{.R.Pascal}}("")
+	_, err := New{{.R.Pascal}}(uuid.Nil)
 {{- end}}
 	assert.ErrorIs(t, err, ErrInvalid{{.R.Pascal}}ID)
 }
 
 func Test{{.R.Pascal}}_PullEvents(t *testing.T) {
-	id := new{{.R.Pascal}}ID(t)
+	id := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 {{- if .Fields}}
 	o, err := New{{.R.Pascal}}(id{{range .Fields}}, {{.Sample}}{{end}})
 {{- else}}

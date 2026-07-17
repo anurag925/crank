@@ -11,6 +11,7 @@ import (
 	"{{.ModulePath}}/internal/application/uow"
 	"{{.ModulePath}}/internal/domain/shared"
 	"{{.ModulePath}}/internal/domain/user"
+	// crank:tx-repo-imports (do not remove — `crank make scaffold` splices new domain imports here)
 	"{{.ModulePath}}/internal/ports"
 )
 
@@ -26,25 +27,38 @@ func (r *inMemoryTxRepositories) Users() user.Repository { return r.userRepo }
 
 // crank:tx-repo-methods (do not remove — `crank make scaffold` splices new repo accessor methods here)
 
+// Option configures the set of repositories an InMemoryUoW hands to save
+// closures. Generated resources contribute a With<Resource>Repo option so
+// their repository is reachable via repos.<Plural>() inside SaveAndPublish.
+type Option func(*inMemoryTxRepositories)
+
+// crank:inmem-options (do not remove — `crank make scaffold` splices new WithXxxRepo options here)
+
 // InMemoryUoW is a non-transactional UnitOfWork. It calls the save closure
 // first; if that succeeds it publishes the events. A failure in save
 // short-circuits the publish step. A failure in publish is logged but does
 // not unwind the save.
 type InMemoryUoW struct {
-	bus      ports.EventBus
-	userRepo user.Repository
-	// crank:inmem-repo-fields (do not remove — `crank make scaffold` splices new repo fields here)
+	bus   ports.EventBus
+	repos *inMemoryTxRepositories
 }
 
-// NewInMemoryUoW returns a UnitOfWork backed by in-memory repositories.
-func NewInMemoryUoW(bus ports.EventBus, userRepo user.Repository) *InMemoryUoW {
-	return &InMemoryUoW{bus: bus, userRepo: userRepo}
+// NewInMemoryUoW returns a UnitOfWork backed by in-memory repositories. The
+// user repository is always required; additional repositories are supplied
+// through With<Resource>Repo options so read-your-writes semantics hold (the
+// same repository instance is shared with the composition root).
+func NewInMemoryUoW(bus ports.EventBus, userRepo user.Repository, opts ...Option) *InMemoryUoW {
+	repos := &inMemoryTxRepositories{userRepo: userRepo}
+	for _, opt := range opts {
+		opt(repos)
+	}
+	return &InMemoryUoW{bus: bus, repos: repos}
 }
 
-// SaveAndPublish runs the save closure with an inMemoryTxRepositories that
-// hands out the in-memory repos, then publishes events if save succeeded.
+// SaveAndPublish runs the save closure with the shared inMemoryTxRepositories,
+// then publishes events if save succeeded.
 func (u *InMemoryUoW) SaveAndPublish(ctx context.Context, save func(ctx context.Context, repos uow.TxRepositories) error, events []shared.DomainEvent) error {
-	if err := save(ctx, &inMemoryTxRepositories{userRepo: u.userRepo}); err != nil {
+	if err := save(ctx, u.repos); err != nil {
 		return err
 	}
 	if u.bus != nil && len(events) > 0 {

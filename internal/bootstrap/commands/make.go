@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/spf13/cobra"
 
@@ -16,8 +15,8 @@ import (
 const makeLongDesc = `Generate boilerplate code: model, repository, service, handler, scaffold, workflow, activity, migration.
 
 Kinds:
-  model       Domain struct (+ migration if bun)
-  repository  Data-access layer (Bun-backed or in-memory)
+  model       Domain struct (+ migration if gorm)
+  repository  Data-access layer (GORM-backed or in-memory)
   service     CRUD service layer
   handler     HTTP handler (Echo router)
   scaffold    Full stack (model + repo + handler + wiring)
@@ -107,7 +106,7 @@ func NewMakeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&projectDir, "project", ".", "path to the crank project directory")
 	cmd.Flags().BoolVar(&only, "only", false, "generate only the requested kind, skipping dependencies (model, repo/service)")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite the target file if it already exists")
-	cmd.Flags().BoolVar(&skipMigration, "skip-migration", false, "do not generate a table migration even when the bun feature is enabled")
+	cmd.Flags().BoolVar(&skipMigration, "skip-migration", false, "do not generate a table migration even when the gorm feature is enabled")
 	cmd.Flags().BoolVar(&tests, "tests", false, "generate _test.go files alongside each generated layer")
 	return cmd
 }
@@ -144,7 +143,7 @@ func makeMigration(projectDir, name string) error {
 		return err
 	}
 
-	stamp := time.Now().UTC().Format("20060102150405")
+	stamp := scaffold.NextMigrationVersion(dir)
 	up := filepath.Join(dir, fmt.Sprintf("%s_%s.up.sql", stamp, name))
 	down := filepath.Join(dir, fmt.Sprintf("%s_%s.down.sql", stamp, name))
 

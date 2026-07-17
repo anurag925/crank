@@ -1,7 +1,8 @@
-package web
+package v1
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,29 +11,49 @@ import (
 	"time"
 {{- end}}
 
-	app{{.R.Pascal}} "{{.Module}}/internal/application/{{.R.Snake}}"
 	"{{.Module}}/internal/adapters/persistence/memory"
+	app{{.R.Pascal}} "{{.Module}}/internal/application/{{.R.Snake}}"
+	"{{.Module}}/internal/application/uow"
+	"{{.Module}}/internal/domain/shared"
+	"{{.Module}}/internal/domain/{{.R.Snake}}"
 
 	"github.com/labstack/echo/v5"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-// new{{.R.Pascal}}TestEcho returns an Echo instance wired with the validating
-// binder so handler tests exercise the same binding/validation path as
-// production.
+// fake{{.R.Pascal}}UoW is a test double for uow.UnitOfWork: it runs the save
+// closure synchronously against an in-memory TxRepositories so the handler
+// exercises its full create/update/delete path without a real database or
+// transaction.
+type fake{{.R.Pascal}}UoW struct{ repo {{.R.Snake}}.Repository }
+
+func (u fake{{.R.Pascal}}UoW) SaveAndPublish(ctx context.Context, save func(context.Context, uow.TxRepositories) error, _ []shared.DomainEvent) error {
+	return save(ctx, fake{{.R.Pascal}}TxRepos{repo: u.repo})
+}
+
+// fake{{.R.Pascal}}TxRepos satisfies uow.TxRepositories by embedding the
+// interface and overriding the accessor this handler uses.
+type fake{{.R.Pascal}}TxRepos struct {
+	uow.TxRepositories
+	repo {{.R.Snake}}.Repository
+}
+
+func (f fake{{.R.Pascal}}TxRepos) {{.R.PascalPlural}}() {{.R.Snake}}.Repository { return f.repo }
+
+// new{{.R.Pascal}}TestEcho returns a bare Echo instance for handler tests.
+// The routing and handler behaviour is exercised directly; the sample DTO
+// used below already satisfies the DTO's validation rules, so the default
+// binder is sufficient here.
 func new{{.R.Pascal}}TestEcho() *echo.Echo {
-	e := echo.New()
-	e.Binder = &echoBinder{defaultBinder: new(echo.DefaultBinder)}
-	return e
+	return echo.New()
 }
 
 // new{{.R.Pascal}}Handler wires a {{.R.Pascal}}Handler against an in-memory
-// repository and a nil event bus. The handler skips publishing when the bus
-// is nil.
+// repository and a fake unit of work.
 func new{{.R.Pascal}}Handler() *{{.R.Pascal}}Handler {
 	repo := memory.New{{.R.Pascal}}Repository()
-	cmd := app{{.R.Pascal}}.NewCommandHandler(repo, nil)
+	cmd := app{{.R.Pascal}}.NewCommandHandler(repo, fake{{.R.Pascal}}UoW{repo: repo})
 	qry := app{{.R.Pascal}}.NewQueryHandler(repo)
 	return New{{.R.Pascal}}Handler(cmd, qry)
 }
@@ -42,7 +63,7 @@ func new{{.R.Pascal}}Handler() *{{.R.Pascal}}Handler {
 func sample{{.R.Pascal}}DTO() {{.R.Snake}}DTO {
 	return {{.R.Snake}}DTO{
 		ID: "123e4567-e89b-12d3-a456-426614174000",{{range .Fields}}
-		{{.GoName}}: {{.Sample}},{{end}}
+			{{.GoName}}: {{.DTOSample}},{{end}}
 	}
 }
 

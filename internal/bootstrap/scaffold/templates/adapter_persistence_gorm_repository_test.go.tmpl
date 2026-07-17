@@ -2,29 +2,21 @@ package gorm
 
 import (
 	"testing"
-{{- if .HasTime}}
-	"time"
-{{- end}}
+
+	"{{.Module}}/internal/domain/{{.R.Snake}}"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // With gorm the repository needs a live database, so the CRUD methods
 // are not exercised here. These tests cover the parts that do not require a
-// *gorm.DB (row mapping, constructor, error sentinel wiring).
+// *gorm.DB (constructor, error sentinel wiring).
 func TestNew{{.R.Pascal}}Repository(t *testing.T) {
 	assert.NotNil(t, New{{.R.Pascal}}Repository(nil))
 }
 
-func Test{{.R.Pascal}}Row_toAggregate(t *testing.T) {
-	row := &{{.R.Snake}}Row{
-		ID: "123e4567-e89b-12d3-a456-426614174000",
-{{- range .Fields}}
-		{{.GoName}}: {{.Sample}},
-{{- end}}
-	}
-	x := row.toAggregate()
-	require.NotNil(t, x)
-	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", x.ID().String())
+func Test{{.R.Pascal}}Repository_UsesAggregateTableName(t *testing.T) {
+	// The aggregate's TableName method is used by GORM, so it must
+	// return the correct table name.
+	assert.Equal(t, "{{.R.SnakePlural}}", (&{{.R.Snake}}.{{.R.Pascal}}{}).TableName())
 }

@@ -39,6 +39,10 @@ func (feature) Files() []bootstrap.FileMapping {
 		{TemplatePath: "templates/internal_domain_user_password.go.tmpl", OutputPath: "internal/domain/user/password.go"},
 		{TemplatePath: "templates/internal_domain_user_email.go.tmpl", OutputPath: "internal/domain/user/email.go"},
 
+		// Domain: revoked-token aggregate that doubles as the GORM model for
+		// the token denylist (only needed alongside the gorm-backed adapter).
+		{TemplatePath: "templates/internal_domain_token_revoked_token.go.tmpl", OutputPath: "internal/domain/token/revoked_token.go", Requires: "gorm"},
+
 		// Ports
 		{TemplatePath: "templates/internal_ports_hasher.go.tmpl", OutputPath: "internal/ports/hasher.go"},
 		{TemplatePath: "templates/internal_ports_tokenservice.go.tmpl", OutputPath: "internal/ports/tokenservice.go"},

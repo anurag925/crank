@@ -62,14 +62,14 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 
 	// Activities are registered in the Activities container.
 	acts := read(t, dir, "internal/adapters/temporal/activity/activities.go")
-	if !strings.Contains(acts, "w.RegisterActivity(activity.ChargeCardActivity)") {
+	if !strings.Contains(acts, "w.RegisterActivity(ChargeCardActivity)") {
 		t.Errorf("activities.go missing Activity registration:\n%s", acts)
 	}
 	assertParses(t, dir, "internal/adapters/temporal/activity/activities.go")
 }
 
 func TestWorkflowGeneratorRequiresTemporalFeature(t *testing.T) {
-	dir := newProject(t, []string{"bun"}) // temporal not enabled
+	dir := newProject(t, []string{"gorm"}) // temporal not enabled
 
 	if _, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,
@@ -101,7 +101,7 @@ func TestTemporalWiringIsIdempotent(t *testing.T) {
 	}
 
 	acts := read(t, dir, "internal/adapters/temporal/activity/activities.go")
-	if n := strings.Count(acts, "w.RegisterActivity(activity.NotifyActivity)"); n != 1 {
+	if n := strings.Count(acts, "w.RegisterActivity(NotifyActivity)"); n != 1 {
 		t.Errorf("expected exactly one Notify registration in activities.go, got %d:\n%s", n, acts)
 	}
 }

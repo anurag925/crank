@@ -30,7 +30,7 @@ func (*tool) BinaryName() string { return "go" }
 func (*tool) Description() string {
 	return "Generate and run Go-based seed data for your project"
 }
-func (*tool) RequiresFeatures() []string { return []string{"bun", "gorm"} }
+func (*tool) RequiresFeatures() []string { return []string{"gorm"} }
 
 func (*tool) LongDescription() string {
 	return `seed manages seed data in a crank-generated project using Go-based seed files.
@@ -44,8 +44,8 @@ If no subcommand is given, "up" is assumed.
 
 Generated files:
   db/seeds/main.go                Entry point — connects to DB, runs seeder
-  db/seeds/<orm>/seeder.go        Orchestrator — registers all seed up/down functions
-  db/seeds/<orm>/seed_<table>.go  Per-model seed file with SeedXxxUp / SeedXxxDown
+  db/seeds/gorm/seeder.go         Orchestrator — registers all seed up/down functions
+  db/seeds/gorm/seed_<table>.go   Per-model seed file with SeedXxxUp / SeedXxxDown
 
 Examples:
   crank seed up --project ./myapp
@@ -110,8 +110,6 @@ func (t *tool) handleGenerate(projectDir string, args []string) error {
 		return fmt.Errorf("load project info: %w", err)
 	}
 
-	orm := detectOrm(proj.Features)
-
 	modelName := ""
 	if len(args) > 0 {
 		modelName = args[0]
@@ -123,7 +121,6 @@ func (t *tool) handleGenerate(projectDir string, args []string) error {
 		Count:      t.count,
 		Force:      t.force,
 		ModulePath: proj.ModulePath,
-		Orm:        orm,
 	})
 	if err != nil {
 		return err
@@ -144,16 +141,4 @@ func (t *tool) handleGenerate(projectDir string, args []string) error {
 	}
 
 	return nil
-}
-
-func detectOrm(features []string) string {
-	for _, f := range features {
-		if f == "gorm" {
-			return "gorm"
-		}
-		if f == "bun" {
-			return "bun"
-		}
-	}
-	return "gorm"
 }

@@ -34,9 +34,11 @@ func wireWorkflow(projectDir string, r Resource) (wireResult, error) {
 }
 
 // wireActivity registers a generated activity with the project's Activities
-// container (internal/adapters/temporal/activity/activities.go).
+// container (internal/adapters/temporal/activity/activities.go). The container
+// lives in the same `activity` package as the generated activity, so the
+// registration reference is unqualified.
 func wireActivity(projectDir string, r Resource) (wireResult, error) {
-	reg := fmt.Sprintf("w.RegisterActivity(activity.%sActivity)", r.Pascal)
+	reg := fmt.Sprintf("w.RegisterActivity(%sActivity)", r.Pascal)
 	hint := fmt.Sprintf(`could not auto-register the activity in %s. Add this to Activities.Register():
 
   %s`, activitiesFile, reg)
@@ -52,7 +54,6 @@ func wireWorker(projectDir, targetFile, marker, regLine, hint string) (wireResul
 	path := filepath.Join(projectDir, targetFile)
 	data, err := os.ReadFile(path)
 	if os.IsNotExist(err) {
-		fmt.Printf("DEBUG wireWorker: file %s does not exist\n", path)
 		return wireResult{Hint: hint}, nil
 	}
 	if err != nil {
@@ -64,14 +65,12 @@ func wireWorker(projectDir, targetFile, marker, regLine, hint string) (wireResul
 		return wireResult{Wired: true}, nil
 	}
 	if !strings.Contains(content, marker) {
-		fmt.Printf("DEBUG wireWorker: marker %q not found in %s\ncontent:\n%s\n", marker, targetFile, content)
 		return wireResult{Hint: hint}, nil
 	}
 
 	updated := strings.Replace(content, marker, regLine+"\n\t"+marker, 1)
 	formatted, err := format.Source([]byte(updated))
 	if err != nil {
-		fmt.Printf("DEBUG wireWorker: format.Source failed for %s: %v\nupdated:\n%s\n", targetFile, err, updated)
 		return wireResult{Hint: hint}, nil
 	}
 	if err := os.WriteFile(path, formatted, 0o644); err != nil {

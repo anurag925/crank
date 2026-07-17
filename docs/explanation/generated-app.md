@@ -50,8 +50,7 @@ myapp/
 │   │   │   └── middleware/         ← Logging, auth, tracing
 │   │   ├── persistence/
 │   │   │   ├── memory/             ← In-memory repos (always)
-│   │   │   ├── gorm/               ← GORM repos (row DTO pattern)
-│   │   │   └── bun/                ← Bun repos (row DTO pattern)
+│   │   │   └── gorm/               ← GORM repos (row DTO pattern)
 │   │   ├── uow/                    ← In-memory UoW with TxRepositories
 │   │   ├── outbox/                 ← Transactional UoW + worker (outbox feature)
 │   │   └── auth/jwt/               ← JWT token service
@@ -87,10 +86,9 @@ myapp/
 |--------|-----------------|
 | `eventbus.NewInMemory()` | Always |
 | `memory.NewUserRepository()` | No ORM feature |
-| `bun.NewUserRepository(db)` | `bun` feature |
 | `gorm.NewUserRepository(gormDB)` | `gorm` feature |
 | `uow.NewInMemoryUoW(bus, userRepo)` | No outbox |
-| `outboxadapter.NewGormUoW(gormDB)` / `NewBunUoW(db)` | `outbox` + ORM |
+| `outboxadapter.NewGormUoW(gormDB)` | `outbox` + ORM |
 | `jwt.NewTokenService(cfg.JWT, denylist)` | `auth` feature |
 | `redisclient.NewClient(cfg.Redis)` | `redis` feature |
 | `qdrantclient.NewClient(ctx, cfg.Qdrant)` | `qdrant` feature |
@@ -131,7 +129,7 @@ type User struct {
 
 - **uuid.UUID IDs** — All aggregates use `uuid.UUID`. Commands carry `string` IDs, parsed by handlers. Generate new UUID on create when empty.
 - **Private fields with getters** — `ID()`, `Name()`, `Email()`. No direct field access.
-- **No struct tags on aggregates** — No `json`, `db`, `gorm`, or `bun` tags. Each layer owns its DTOs.
+- **No struct tags on aggregates** — No `json`, `db`, or `gorm` tags. Each layer owns its DTOs.
 - **Rehydrate() bypasses validation** — Used by persistence adapters for lossless round-trips.
 - **Constructor validates** — `NewUser(id, name, email)` rejects `uuid.Nil` and empty strings.
 
@@ -337,7 +335,6 @@ Generated handlers use `package v1`, `api.Error`, and the `Register(g *echo.Grou
 | [Echo v5](https://echo.labstack.com) | HTTP framework |
 | [Viper](https://github.com/spf13/viper) | Config management |
 | [GORM](https://gorm.io/docs) | GORM ORM |
-| [Bun](https://bun.uptrace.dev) | Bun ORM |
 | [golang-jwt](https://github.com/golang-jwt/jwt) | JWT library |
 | [go-redis](https://redis.uptrace.dev) | Redis client |
 | [swaggo/swag](https://github.com/swaggo/swag) | Swagger/OpenAPI |

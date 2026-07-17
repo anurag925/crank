@@ -13,7 +13,6 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/features/audit"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/auth"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/crypto"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/gorm"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"

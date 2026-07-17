@@ -19,8 +19,6 @@ type Options struct {
 	Force bool
 	// ModulePath is the Go module path for import statements.
 	ModulePath string
-	// Orm is the ORM in use ("gorm" or "bun").
-	Orm string
 }
 
 // GeneratedFile reports a seed file that was created or skipped.
@@ -39,9 +37,6 @@ func GenerateSeed(opts Options) ([]GeneratedFile, error) {
 	}
 	if opts.Count <= 0 {
 		opts.Count = 10
-	}
-	if opts.Orm == "" {
-		opts.Orm = "gorm"
 	}
 	if opts.ModulePath == "" {
 		return nil, fmt.Errorf("module path is required for Go seed generation")
@@ -63,15 +58,15 @@ func GenerateSeed(opts Options) ([]GeneratedFile, error) {
 	}
 
 	// 2. Always ensure seeder.go exists (never force-overwrite scaffolding).
-	ormDir := filepath.Join(seedsDir, opts.Orm)
+	ormDir := filepath.Join(seedsDir, "gorm")
 	seederPath := filepath.Join(ormDir, "seeder.go")
 	if !fileExists(seederPath) {
 		if err := writeSeedFile(seederPath, generateSeeder(opts), false); err != nil {
 			return nil, err
 		}
-		files = append(files, GeneratedFile{Path: fmt.Sprintf("db/seeds/%s/seeder.go", opts.Orm)})
+		files = append(files, GeneratedFile{Path: "db/seeds/gorm/seeder.go"})
 	} else {
-		files = append(files, GeneratedFile{Path: fmt.Sprintf("db/seeds/%s/seeder.go", opts.Orm), Skipped: true})
+		files = append(files, GeneratedFile{Path: "db/seeds/gorm/seeder.go", Skipped: true})
 	}
 
 	if opts.ModelName == "" {
@@ -91,7 +86,7 @@ func GenerateSeed(opts Options) ([]GeneratedFile, error) {
 	// 4. Generate per-model seed file.
 	seedFileName := fmt.Sprintf("seed_%s.go", info.TableName)
 	seedPath := filepath.Join(ormDir, seedFileName)
-	seedRelPath := fmt.Sprintf("db/seeds/%s/%s", opts.Orm, seedFileName)
+	seedRelPath := fmt.Sprintf("db/seeds/gorm/%s", seedFileName)
 	if fileExists(seedPath) && !opts.Force {
 		files = append(files, GeneratedFile{Path: seedRelPath, Skipped: true})
 		return files, nil
@@ -118,7 +113,7 @@ import (
 	"fmt"
 	"log"
 
-	seed%s "%s/db/seeds/%s"
+	seedgorm "%s/db/seeds/gorm"
 	"%s/internal/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -139,7 +134,7 @@ func main() {
 		log.Fatalf("failed to connect to database: %%v", err)
 	}
 
-	seeder := seed%s.NewSeeder(db)
+	seeder := seedgorm.NewSeeder(db)
 	switch dir {
 	case "up":
 		if err := seeder.SeedUp(); err != nil {
@@ -155,10 +150,10 @@ func main() {
 		log.Fatalf("invalid direction: %%s (use 'up' or 'down')", dir)
 	}
 }
-`, ormPkg(opts.Orm), opts.ModulePath, opts.Orm, opts.ModulePath, ormPkg(opts.Orm))
+`, opts.ModulePath, opts.ModulePath)
 }
 
-// generateSeeder returns the content for db/seeds/<orm>/seeder.go.
+// generateSeeder returns the content for db/seeds/gorm/seeder.go.
 func generateSeeder(opts Options) string {
 	return fmt.Sprintf(`package %s
 
@@ -216,14 +211,11 @@ func (s *Seeder) SeedDown() error {
 	}
 	return nil
 }
-`, ormPkg(opts.Orm))
+`, "gorm")
 }
 
-// generateModelSeed returns the content for db/seeds/<orm>/seed_<table>.go.
+// generateModelSeed returns the content for db/seeds/gorm/seed_<table>.go.
 func generateModelSeed(info *StructInfo, opts Options) string {
-	if opts.Orm == "bun" {
-		return generateBunModelSeed(info, opts)
-	}
 	return generateGormModelSeed(info, opts)
 }
 
@@ -240,7 +232,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-`, ormPkg(opts.Orm)))
+`, "gorm"))
 
 	if needsTime {
 		b.WriteString("\t\"time\"\n")
@@ -284,7 +276,7 @@ type seed%s struct {
 		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&e).Error; err != nil {
 			return err
 		}
-		log.Printf("  ✓ ` + info.TableName + ` %%s", e.`)
+		log.Printf("  ✓ ` + info.TableName + ` %s", e.`)
 
 	nameField := findNameField(info)
 	if nameField != "" {
@@ -301,91 +293,6 @@ type seed%s struct {
 	// SeedDown
 	b.WriteString(fmt.Sprintf(`func Seed%sDown(db *gorm.DB) error {
 	return db.Where("id LIKE 'a0000000-0000-4000-a000-00000000000%%%%'").Delete(&seed%s{}).Error
-}
-`, pascalPlural(info.Name), info.Name))
-
-	return b.String()
-}
-
-func generateBunModelSeed(info *StructInfo, opts Options) string {
-	var b strings.Builder
-
-	needsTime := hasTimeField(info)
-
-	b.WriteString(fmt.Sprintf(`package %s
-
-import (
-	"context"
-	"log"
-
-	"github.com/google/uuid"
-	"github.com/uptrace/bun"
-`, ormPkg(opts.Orm)))
-
-	if needsTime {
-		b.WriteString("\t\"time\"\n")
-	}
-
-	b.WriteString(fmt.Sprintf(`)
-
-type seed%s struct {
-	bun.BaseModel `+"`"+`bun:"table:%s"`+"`"+`
-`, info.Name, info.TableName))
-
-	for _, f := range info.ExportedFields {
-		b.WriteString(fmt.Sprintf("\t%s %s `bun:\"%s\"`\n",
-			f.Name, goTypeForField(f), bunTag(f)))
-	}
-
-	b.WriteString("}\n\n")
-
-	// SeedUp
-	b.WriteString(fmt.Sprintf(`func Seed%sUp(db *bun.DB) error {
-	ctx := context.Background()
-	entries := []seed%s{
-`, pascalPlural(info.Name), info.Name))
-
-	for i := 0; i < opts.Count; i++ {
-		b.WriteString("\t\t{")
-		for j, f := range info.ExportedFields {
-			if j > 0 {
-				b.WriteString(", ")
-			}
-			val := goValueForField(f, i)
-			if f.Name == "ID" || (strings.HasSuffix(strings.ToLower(f.Name), "id") && isUUIDType(f)) {
-				val = goIDValue(i)
-			}
-			b.WriteString(fmt.Sprintf("%s: %s", f.Name, val))
-		}
-		b.WriteString("},\n")
-	}
-
-	b.WriteString(`	}
-	for _, e := range entries {
-		if _, err := db.NewInsert().Model(&e).On("CONFLICT (id) DO NOTHING").Exec(ctx); err != nil {
-			return err
-		}
-		log.Printf("  ✓ ` + info.TableName + ` %%s", e.`)
-
-	nameField := findNameField(info)
-	if nameField != "" {
-		b.WriteString(nameField)
-	} else {
-		b.WriteString("ID")
-	}
-	b.WriteString(`)
-	}
-	return nil
-}
-`)
-
-	// SeedDown
-	b.WriteString(fmt.Sprintf(`func Seed%sDown(db *bun.DB) error {
-	ctx := context.Background()
-	_, err := db.NewDelete().Model((*seed%s)(nil)).
-		Where("id LIKE 'a0000000-0000-4000-a000-00000000000%%%%'").
-		Exec(ctx)
-	return err
 }
 `, pascalPlural(info.Name), info.Name))
 
@@ -444,13 +351,6 @@ func writeSeedFile(path, content string, force bool) error {
 	return os.WriteFile(path, []byte(content), 0o644)
 }
 
-func ormPkg(orm string) string {
-	if orm == "bun" {
-		return "bun"
-	}
-	return "gorm"
-}
-
 func pascalPlural(name string) string {
 	return name + "s"
 }
@@ -499,18 +399,6 @@ func gormTag(f FieldInfo) string {
 		tag += ";type:uuid"
 		if strings.EqualFold(f.ColumnName, "id") {
 			tag += ";primaryKey"
-		}
-	}
-	return tag
-}
-
-func bunTag(f FieldInfo) string {
-	tag := f.ColumnName
-	lower := strings.ToLower(f.GoType)
-	if strings.Contains(lower, "uuid") || strings.Contains(strings.ToLower(f.ORMType), "uuid") {
-		tag += ",type:uuid"
-		if strings.EqualFold(f.ColumnName, "id") {
-			tag += ",pk"
 		}
 	}
 	return tag

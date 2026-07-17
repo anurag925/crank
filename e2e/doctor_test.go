@@ -114,7 +114,7 @@ func (h *CouponHandler) Register(g *echo.Group) {}
 // timestamp that appears more than once. Postgres is required so the
 // project has a db/migrations/ directory.
 func TestE2E_Doctor_DuplicateMigration(t *testing.T) {
-	dir := scaffold(t, "doctor_dup_migration", []string{"base", "bun"})
+	dir := scaffold(t, "doctor_dup_migration", []string{"base", "gorm"})
 
 	// Create a second migration with a duplicate timestamp prefix.
 	dup := filepath.Join(dir, "db/migrations/000001_duplicate.up.sql")

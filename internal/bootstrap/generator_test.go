@@ -204,33 +204,6 @@ func TestAdd_AuthToBase(t *testing.T) {
 	}
 }
 
-func TestAdd_BunToBase(t *testing.T) {
-	tmp := t.TempDir()
-	result, err := Generate(GlobalRegistry, Options{
-		ProjectName: "addbun",
-		TargetDir:   tmp,
-	})
-	if err != nil {
-		t.Fatalf("Generate: %v", err)
-	}
-
-	result2, err := Add(GlobalRegistry, result.ProjectDir, "bun")
-	if err != nil {
-		t.Fatalf("Add bun: %v", err)
-	}
-
-	// bun files should exist
-	for _, f := range []string{
-		"internal/adapters/persistence/bun/db.go",
-		"internal/adapters/persistence/bun/migrate.go",
-		"db/migrations/000001_init.up.sql",
-	} {
-		if _, err := os.Stat(filepath.Join(result2.ProjectDir, f)); os.IsNotExist(err) {
-			t.Errorf("expected %s after Add bun", f)
-		}
-	}
-}
-
 // --- renderTemplate tests ---
 
 func TestRenderTemplate_Basic(t *testing.T) {
@@ -249,8 +222,8 @@ func TestRenderTemplate_ConditionalBlocks(t *testing.T) {
 {{- if .Has "auth"}}
 AUTH
 {{- end}}
-{{- if .Has "bun"}}
-BUN
+{{- if .Has "redis"}}
+REDIS
 {{- end}}
 end`
 
@@ -263,13 +236,13 @@ end`
 		if !strings.Contains(out, "AUTH") {
 			t.Error("expected AUTH in output")
 		}
-		if strings.Contains(out, "BUN") {
-			t.Error("unexpected BUN in output")
+		if strings.Contains(out, "REDIS") {
+			t.Error("unexpected REDIS in output")
 		}
 	})
 
-	t.Run("bun only", func(t *testing.T) {
-		ctx := NewContext("app", "app", []string{"base", "bun"})
+	t.Run("redis only", func(t *testing.T) {
+		ctx := NewContext("app", "app", []string{"base", "redis"})
 		out, err := renderTemplate("test", tmpl, ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -277,19 +250,19 @@ end`
 		if strings.Contains(out, "AUTH") {
 			t.Error("unexpected AUTH in output")
 		}
-		if !strings.Contains(out, "BUN") {
-			t.Error("expected BUN in output")
+		if !strings.Contains(out, "REDIS") {
+			t.Error("expected REDIS in output")
 		}
 	})
 
 	t.Run("both", func(t *testing.T) {
-		ctx := NewContext("app", "app", []string{"base", "auth", "bun"})
+		ctx := NewContext("app", "app", []string{"base", "auth", "redis"})
 		out, err := renderTemplate("test", tmpl, ctx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !strings.Contains(out, "AUTH") || !strings.Contains(out, "BUN") {
-			t.Errorf("expected both AUTH and BUN, got:\n%s", out)
+		if !strings.Contains(out, "AUTH") || !strings.Contains(out, "REDIS") {
+			t.Errorf("expected both AUTH and REDIS, got:\n%s", out)
 		}
 	})
 }

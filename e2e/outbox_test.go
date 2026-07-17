@@ -1,6 +1,6 @@
 package e2e
 
-// Tests for the `outbox` feature. The outbox requires bun (it uses a
+// Tests for the `outbox` feature. The outbox requires gorm (it uses a
 // database transaction to make the aggregate write and the outbox row
 // commit atomically). These tests cover the requirement check, the
 // multi-feature init path, and the migration that the feature contributes.
@@ -11,13 +11,13 @@ import (
 	"testing"
 )
 
-// TestE2E_Outbox_RequiresBun confirms `crank add outbox` refuses to
+// TestE2E_Outbox_RequiresGorm confirms `crank add outbox` refuses to
 // run on a base-only project.
-func TestE2E_Outbox_RequiresBun(t *testing.T) {
+func TestE2E_Outbox_RequiresGorm(t *testing.T) {
 	dir := scaffoldBase(t, "outbox_no_pg")
 	out, err := runCrankRaw(t, "", "add", "outbox", "--project", dir)
 	if err == nil {
-		t.Fatalf("expected add outbox to fail without bun\n%s", out)
+		t.Fatalf("expected add outbox to fail without gorm\n%s", out)
 	}
 	if !strings.Contains(out, "requires a database ORM") {
 		t.Errorf("error should call out outbox ORM requirement, got:\n%s", out)
@@ -41,17 +41,17 @@ func TestE2E_Outbox_Init_DefaultsToGorm(t *testing.T) {
 	}
 }
 
-// TestE2E_Outbox_InitWithBun runs the init happy path with
-// base+bun+outbox and verifies the generated project compiles and
-// wires the bun-backed UoW plus the worker.
-func TestE2E_Outbox_InitWithBun(t *testing.T) {
-	dir := scaffold(t, "outbox_init", []string{"base", "bun", "outbox"})
+// TestE2E_Outbox_InitWithGorm runs the init happy path with
+// base+gorm+outbox and verifies the generated project compiles and
+// wires the gorm-backed UoW plus the worker.
+func TestE2E_Outbox_InitWithGorm(t *testing.T) {
+	dir := scaffold(t, "outbox_init", []string{"base", "gorm", "outbox"})
 
 	// Outbox-specific files exist.
 	assertExists(t, dir, "internal/domain/outbox/event.go")
 	assertExists(t, dir, "internal/domain/outbox/repository.go")
-	assertExists(t, dir, "internal/adapters/persistence/bun/outbox_repository.go")
-	assertExists(t, dir, "internal/adapters/outbox/bun_uow.go")
+	assertExists(t, dir, "internal/adapters/persistence/gorm/outbox_repository.go")
+	assertExists(t, dir, "internal/adapters/outbox/gorm_uow.go")
 	assertExists(t, dir, "internal/adapters/outbox/worker.go")
 
 	// The migration adds the outbox_events table.
@@ -60,15 +60,15 @@ func TestE2E_Outbox_InitWithBun(t *testing.T) {
 		t.Errorf("outbox up migration should create the outbox_events table:\n%s", upMigration)
 	}
 
-	// The composition root wires the bun UoW and starts the worker.
+	// The composition root wires the gorm UoW and starts the worker.
 	main := readFile(t, dir, "cmd/server/main.go")
-	if !strings.Contains(main, "outboxadapter.NewBunUoW") {
-		t.Errorf("main.go should construct the bun UoW:\n%s", main)
+	if !strings.Contains(main, "outboxadapter.NewGormUoW") {
+		t.Errorf("main.go should construct the gorm UoW:\n%s", main)
 	}
 	if !strings.Contains(main, "outboxWorker.Run") {
 		t.Errorf("main.go should start the outbox worker goroutine:\n%s", main)
 	}
-	if !strings.Contains(main, "bun.NewOutboxRepository") {
+	if !strings.Contains(main, "gorm.NewOutboxRepository") {
 		t.Errorf("main.go should construct the outbox repository:\n%s", main)
 	}
 
@@ -83,7 +83,7 @@ func TestE2E_Outbox_InitWithBun(t *testing.T) {
 
 	// Manifest lists all three features.
 	manifest := readFile(t, dir, ".crank.yaml")
-	for _, f := range []string{"base", "bun", "outbox"} {
+	for _, f := range []string{"base", "gorm", "outbox"} {
 		if !strings.Contains(manifest, "- "+f) {
 			t.Errorf("manifest missing feature %q", f)
 		}
@@ -93,8 +93,8 @@ func TestE2E_Outbox_InitWithBun(t *testing.T) {
 	compileProject(t, dir)
 }
 
-// TestE2E_Outbox_AddAfterBun confirms the add path: scaffold a
-// base+bun project, then add outbox via the binary. The end state
+// TestE2E_Outbox_AddAfterGorm confirms the add path: scaffold a
+// base+gorm project, then add outbox via the binary. The end state
 // must match the init-with-all-three case.
 //
 // Note: this test exercises the add path's ability to write the new
@@ -103,8 +103,8 @@ func TestE2E_Outbox_InitWithBun(t *testing.T) {
 // limitation of the add path (base's main.go has SkipIfExists) which
 // callers work around by either initing with all features at once or
 // running `crank make` to rewire the composition root.
-func TestE2E_Outbox_AddAfterBun(t *testing.T) {
-	dir := scaffold(t, "outbox_add", []string{"base", "bun"})
+func TestE2E_Outbox_AddAfterGorm(t *testing.T) {
+	dir := scaffold(t, "outbox_add", []string{"base", "gorm"})
 
 	runCrank(t, "", "add", "outbox", "--project", dir)
 
@@ -113,9 +113,9 @@ func TestE2E_Outbox_AddAfterBun(t *testing.T) {
 	assertExists(t, dir, "migrations/000002_add_outbox_events.down.sql")
 
 	// Outbox files were created.
-	assertExists(t, dir, "internal/adapters/outbox/bun_uow.go")
+	assertExists(t, dir, "internal/adapters/outbox/gorm_uow.go")
 	assertExists(t, dir, "internal/adapters/outbox/worker.go")
-	assertExists(t, dir, "internal/adapters/persistence/bun/outbox_repository.go")
+	assertExists(t, dir, "internal/adapters/persistence/gorm/outbox_repository.go")
 
 	// Manifest now lists outbox.
 	manifest := readFile(t, dir, ".crank.yaml")

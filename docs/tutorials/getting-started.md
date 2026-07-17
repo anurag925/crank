@@ -20,19 +20,7 @@ By default, `crank` adds the `gorm` feature automatically. The effective feature
 base, auth, gorm
 ```
 
-If you prefer Bun instead of GORM:
-
-```bash
-crank init bookstore --features=base,auth --use-bun
-```
-
-You can also pick Bun explicitly:
-
-```bash
-crank init bookstore --features=base,auth,bun
-```
-
-If you pass only `base`, the current CLI still adds the default ORM (`gorm`). Pick Bun explicitly with `--use-bun` when you want Bun instead.
+GORM is the sole ORM. Even if you pass only `base`, the CLI still adds `gorm`, so generated projects are database-ready by default.
 
 ## 2. Enter the project
 
@@ -52,7 +40,7 @@ cp .env.example .env
 
 `configs/config.yaml` contains safe defaults that can be committed. Secrets and machine-specific values belong in `.env` or real environment variables.
 
-If you selected GORM or Bun, make sure PostgreSQL is available and your database values are correct.
+If you selected GORM, make sure PostgreSQL is available and your database values are correct.
 
 Common local values:
 
@@ -87,7 +75,7 @@ Generate a complete CRUD resource for books:
 crank make scaffold Book title:string author:string price:float --tests
 ```
 
-This creates domain, application, persistence, HTTP handler, tests, and route wiring. If the project has GORM or Bun enabled, it also creates a migration unless you pass `--skip-migration`.
+This creates domain, application, persistence, HTTP handler, tests, and route wiring. If the project has GORM enabled, it also creates a migration unless you pass `--skip-migration`.
 
 Apply migrations:
 

@@ -45,27 +45,6 @@ const bt = "`"
 // YAML section, and .env section that the feature contributes.
 func featureConfigData(pkgName string) map[string]configInjection {
 	return map[string]configInjection{
-		"bun": {
-			StructField: "\tDatabase DatabaseConfig " + bt + "mapstructure:\"database\"" + bt + "\n",
-			StructDef: "// DatabaseConfig holds PostgreSQL connection settings.\n" +
-				"// The Password field is a secret — set it via DATABASE_PASSWORD in .env.\n" +
-				"type DatabaseConfig struct {\n" +
-				"\tHost     string " + bt + "mapstructure:\"host\"" + bt + "\n" +
-				"\tPort     int    " + bt + "mapstructure:\"port\"" + bt + "\n" +
-				"\tUser     string " + bt + "mapstructure:\"user\"" + bt + "\n" +
-				"\tPassword string " + bt + "mapstructure:\"password\" env:\"DATABASE_PASSWORD\"" + bt + "\n" +
-				"\tName     string " + bt + "mapstructure:\"name\"" + bt + "\n" +
-				"\tSSLMode  string " + bt + "mapstructure:\"sslmode\"" + bt + "\n" +
-				"}\n\n" +
-				"// DSN returns a libpq-style connection string.\n" +
-				"func (d DatabaseConfig) DSN() string {\n" +
-				"\treturn fmt.Sprintf(\"postgres://%s:%s@%s:%d/%s?sslmode=%s\",\n" +
-				"\t\td.User, d.Password, d.Host, d.Port, d.Name, d.SSLMode)\n" +
-				"}\n",
-			Defaults:    "\tv.SetDefault(\"database.host\", \"localhost\")\n" + "\tv.SetDefault(\"database.port\", 5432)\n" + "\tv.SetDefault(\"database.user\", \"postgres\")\n" + "\tv.SetDefault(\"database.password\", \"postgres\")\n" + "\tv.SetDefault(\"database.name\", \"" + pkgName + "\")\n" + "\tv.SetDefault(\"database.sslmode\", \"disable\")\n",
-			YAMLSection: "\ndatabase:\n  host: \"localhost\"\n  port: 5432\n  user: \"postgres\"\n  password: \"postgres\"\n  name: \"" + pkgName + "\"\n  sslmode: \"disable\"\n",
-			EnvSection:  "\nDATABASE_PASSWORD=postgres\n",
-		},
 		"gorm": {
 			StructField: "\tDatabase DatabaseConfig " + bt + "mapstructure:\"database\"" + bt + "\n",
 			StructDef: "// DatabaseConfig holds PostgreSQL connection settings.\n" +

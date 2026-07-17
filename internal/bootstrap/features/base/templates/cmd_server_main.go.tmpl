@@ -18,9 +18,6 @@ import (
 {{- end}}
 
 	_ "{{.ModulePath}}/docs"
-{{- if .Has "bun"}}
-	"{{.ModulePath}}/internal/adapters/persistence/bun"
-{{- end}}
 {{- if .Has "gorm"}}
 	"{{.ModulePath}}/internal/adapters/persistence/gorm"
 {{- end}}
@@ -28,13 +25,14 @@ import (
 	"{{.ModulePath}}/internal/adapters/http/web"
 	"{{.ModulePath}}/internal/adapters/http/web/middleware"
 	v1 "{{.ModulePath}}/internal/adapters/http/web/v1"
-{{- if and (not (.Has "bun")) (not (.Has "gorm"))}}
+{{- if not (.Has "gorm")}}
 	"{{.ModulePath}}/internal/adapters/persistence/memory"
 {{- end}}
 {{- if not (.Has "outbox")}}
 	"{{.ModulePath}}/internal/adapters/uow"
 {{- end}}
 	userapp "{{.ModulePath}}/internal/application/user"
+	// crank:composition-imports (do not remove — `crank make handler` splices new application imports here)
 	"{{.ModulePath}}/internal/config"
 	"{{.ModulePath}}/internal/domain/user"
 	"{{.ModulePath}}/pkg/logging"
@@ -92,14 +90,6 @@ func main() {
 		"env", cfg.App.Env,
 		"log_level", cfg.Logging.Level,
 	)
-{{if .Has "bun"}}
-	db, err := bun.NewDB(cfg.Database)
-	if err != nil {
-		logger.Error("failed to connect to database", "error", err)
-		os.Exit(1)
-	}
-	defer func() { _ = db.Close() }()
-{{end}}
 {{if .Has "gorm"}}
 	gormDB, err := gorm.NewDB(cfg.Database)
 	if err != nil {
@@ -178,18 +168,13 @@ func main() {
 
 	// ---- Composition root: explicit DDD wiring ----
 	bus := eventbus.NewInMemory()
-{{if .Has "bun"}}
-	userRepo := bun.NewUserRepository(db)
-{{else if .Has "gorm"}}
+{{if .Has "gorm"}}
 	userRepo := gorm.NewUserRepository(gormDB)
 {{else}}
 	userRepo := memory.NewUserRepository()
 {{end}}
+	// crank:repos (do not remove — `crank make handler` splices new repository constructors here)
 {{if .Has "outbox"}}
-{{if .Has "bun"}}
-	outboxRepo := bun.NewOutboxRepository(db)
-	uow := outboxadapter.NewBunUoW(db)
-{{end}}
 {{if .Has "gorm"}}
 	outboxRepo := gorm.NewOutboxRepository(gormDB)
 	uow := outboxadapter.NewGormUoW(gormDB)
@@ -199,34 +184,33 @@ func main() {
 		BatchSize: cfg.Outbox.BatchSize,
 	})
 {{else}}
-	uow := uow.NewInMemoryUoW(bus, userRepo)
+	uowOpts := []uow.Option{
+		// crank:uow-repos (do not remove — `crank make handler` splices new WithXxxRepo options here)
+	}
+	uow := uow.NewInMemoryUoW(bus, userRepo, uowOpts...)
 {{end}}
 {{if .Has "auth"}}
 	hasher := crypto.NewBCryptHasher()
 {{if .Has "gorm"}}
 	denylist := gorm.NewTokenDenylist(gormDB)
 	tokens := jwt.NewTokenService(cfg.JWT, denylist)
-{{else if .Has "bun"}}
-	tokens := jwt.NewTokenService(cfg.JWT, nil)
 {{else}}
 	tokens := jwt.NewTokenService(cfg.JWT, nil)
 {{end}}
-	_ = hasher
 {{end}}
 {{if .Has "audit"}}
 {{if .Has "gorm"}}
 	auditRepo := gorm.NewAuditRepository(gormDB)
-{{else if .Has "bun"}}
-	auditRepo := bun.NewAuditRepository(db)
 {{end}}
 	auditLogger := auditadapter.NewLogger(auditRepo)
 	auditLogger.Subscribe(bus)
 	auditQry := auditapp.NewQueryHandler(auditRepo)
 	auditHandler := v1.NewAuditHandler(auditQry)
 {{end}}
-	userCmd := userapp.NewCommandHandler(userRepo, uow)
+	userCmd := userapp.NewCommandHandler(userRepo, uow{{if .Has "auth"}}, hasher{{end}})
 	userQry := userapp.NewQueryHandler(userRepo)
 	userHandler := v1.NewUserHandler(userCmd, userQry)
+	// crank:composition-root (do not remove — `crank make handler` splices new cmd/qry/handler wiring here)
 
 	e := web.NewServer(logger)
 	e.Use(echomw.Recover())
@@ -246,7 +230,11 @@ func main() {
 	e.GET("/swagger/*", echoSwagger.WrapHandler)
 	e.GET("/health", web.Health)
 
-	v1.Mount(e, v1.MountConfig{UserHandler: userHandler})
+	mountCfg := v1.MountConfig{
+		UserHandler: userHandler,
+		// crank:mount-config (do not remove — `crank make handler` splices new handler fields here)
+	}
+	v1.Mount(e, mountCfg)
 {{if .Has "auth"}}
 	authHandler := web.NewAuthHandler(userCmd, userQry, tokens)
 	authHandler.Register(e)

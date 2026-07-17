@@ -25,8 +25,7 @@ myapp/
 │   │   │   └── middleware/
 │   │   ├── persistence/
 │   │   │   ├── memory/
-│   │   │   ├── gorm/
-│   │   │   └── bun/
+│   │   │   └── gorm/
 │   │   └── uow/
 │   ├── application/
 │   │   ├── user/

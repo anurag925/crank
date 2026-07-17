@@ -1,7 +1,7 @@
 APP_NAME := {{.ProjectName}}
 BIN_DIR  := bin
 
-# Common development tasks (build, run, dev, test, fmt, vet, tidy, swag{{if or (.Has "bun") (.Has "gorm")}}, migrate{{end}})
+# Common development tasks (build, run, dev, test, fmt, vet, tidy, swag{{if .Has "gorm"}}, migrate{{end}})
 # are provided by the `crank` CLI, so they are intentionally NOT duplicated here.
 # Run `crank tools` to list them. This Makefile holds only targets that crank does
 # not provide natively — add your own project-specific targets below. They can be
@@ -17,7 +17,7 @@ help:
 	@echo "  crank dev          - run with live reload (air)"
 	@echo "  crank test         - run all tests"
 	@echo "  crank swag         - generate Swagger docs"
-{{- if or (.Has "bun") (.Has "gorm")}}
+{{- if .Has "gorm"}}
 	@echo "  crank migrate up   - apply database migrations"
 	@echo "  crank seed up       - apply seed data"
 	@echo "  crank seed down     - rollback seeded data"

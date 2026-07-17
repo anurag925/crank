@@ -14,7 +14,6 @@ import (
 
 	// Register features so bootstrap.Generate can build a project.
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/gorm"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/temporal"
 )
@@ -72,13 +71,13 @@ func dddHandlerLayers() []string {
 		"internal/application/order/queries.go",
 		"internal/application/order/query_handler.go",
 		"internal/adapters/persistence/memory/order_repository.go",
-		"internal/adapters/persistence/bun/order_repository.go",
+		"internal/adapters/persistence/gorm/order_repository.go",
 		"internal/adapters/http/web/v1/order_handler.go",
 	}
 }
 
-func TestGenerateHandlerPostgres(t *testing.T) {
-	dir := newProject(t, []string{"bun"})
+func TestGenerateHandlerGorm(t *testing.T) {
+	dir := newProject(t, []string{"gorm"})
 
 	res, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,
@@ -98,29 +97,55 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 		assertParses(t, dir, rel)
 	}
 
-	// Domain aggregate is plain Go — no JSON/DB/validation tags.
+	// Domain aggregate has exported fields with GORM tags.
 	aggregate := read(t, dir, "internal/domain/order/order.go")
-	for _, banned := range []string{`json:"`, `bun:"`, `validate:"`} {
-		if strings.Contains(aggregate, banned) {
-			t.Errorf("domain aggregate must not carry %q tags:\n%s", banned, aggregate)
+	for _, want := range []string{
+		"type Order struct",
+		"ID        uuid.UUID",
+		"Customer  string",
+		"Total     float64",
+		"CreatedAt time.Time",
+		"UpdatedAt time.Time",
+		`gorm:"column:id;primaryKey;type:uuid"`,
+		`gorm:"column:customer;not null;type:TEXT"`,
+		`gorm:"column:total;not null;type:DOUBLE PRECISION"`,
+		"func NewOrder(",
+		"func (o *Order) TableName() string",
+	} {
+		if !strings.Contains(aggregate, want) {
+			t.Errorf("aggregate missing %q", want)
 		}
 	}
-	if !strings.Contains(aggregate, "func NewOrder(") {
-		t.Errorf("aggregate missing NewOrder constructor")
+	// id, created_at and updated_at are grouped together at the top of the
+	// struct, ahead of the resource-specific fields.
+	if idIdx, cIdx, uIdx, custIdx := strings.Index(aggregate, "ID        uuid.UUID"),
+		strings.Index(aggregate, "CreatedAt time.Time"),
+		strings.Index(aggregate, "UpdatedAt time.Time"),
+		strings.Index(aggregate, "Customer  string"); !(idIdx >= 0 && idIdx < cIdx && cIdx < uIdx && uIdx < custIdx) {
+		t.Errorf("expected id/created_at/updated_at grouped at the top of the struct:\n%s", aggregate)
+	}
+	// No getters allowed.
+	for _, banned := range []string{"func (o *Order) ID()", "func (o *Order) Customer()", "func (o *Order) Total()"} {
+		if strings.Contains(aggregate, banned) {
+			t.Errorf("aggregate must not have getter %q:\n%s", banned, aggregate)
+		}
 	}
 
-	// Postgres adapter has its own row DTO and maps sql.ErrNoRows to the
-	// domain sentinel.
-	repo := read(t, dir, "internal/adapters/persistence/bun/order_repository.go")
+	// GORM adapter uses the aggregate directly (no Row DTO).
+	repo := read(t, dir, "internal/adapters/persistence/gorm/order_repository.go")
 	for _, want := range []string{
-		"type orderRow struct",
-		"func NewOrderRepository(db bun.IDB)",
+		"func NewOrderRepository(db *gorm.DB)",
 		"func (r *OrderRepository) Save(",
 		"func (r *OrderRepository) Delete(",
-		"ErrOrderNotFound",
+		"gorm.ErrRecordNotFound",
 	} {
 		if !strings.Contains(repo, want) {
-			t.Errorf("bun repository missing %q", want)
+			t.Errorf("gorm repository missing %q", want)
+		}
+	}
+	for _, banned := range []string{"orderRow", "toAggregate", "OrderRowFromAggregate"} {
+		if strings.Contains(repo, banned) {
+			t.Errorf("gorm repository must not contain %q", banned)
 		}
 	}
 
@@ -147,6 +172,10 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 	if !strings.Contains(string(up), "CREATE TABLE IF NOT EXISTS orders") {
 		t.Errorf("migration missing CREATE TABLE:\n%s", up)
 	}
+	if !strings.Contains(string(up),
+		"id UUID PRIMARY KEY,\n    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,\n    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,") {
+		t.Errorf("migration must group id/created_at/updated_at at the top:\n%s", up)
+	}
 	if !strings.Contains(string(up), "customer TEXT NOT NULL") {
 		t.Errorf("migration missing customer column:\n%s", up)
 	}
@@ -156,7 +185,7 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 		t.Errorf("expected handler to be wired, hint=%q", res.WireHint)
 	}
 	hub := read(t, dir, "internal/adapters/http/web/v1/routes.go")
-	for _, want := range []string{"*OrderHandler", `e.Group("/orders")`, "cfg.OrderHandler.Register("} {
+	for _, want := range []string{"*OrderHandler", `g.Group("/orders")`, "cfg.OrderHandler.Register("} {
 		if !strings.Contains(hub, want) {
 			t.Errorf("routes.go not wired with %q:\n%s", want, hub)
 		}
@@ -164,7 +193,7 @@ func TestGenerateHandlerPostgres(t *testing.T) {
 	assertParses(t, dir, "internal/adapters/http/web/v1/routes.go")
 }
 
-func TestGenerateHandlerGorm(t *testing.T) {
+func TestGenerateHandlerGormDetail(t *testing.T) {
 	dir := newProject(t, []string{"gorm"})
 
 	res, err := scaffold.Generate(scaffold.Options{
@@ -185,11 +214,6 @@ func TestGenerateHandlerGorm(t *testing.T) {
 		assertParses(t, dir, gormRepo)
 	}
 
-	// Bun adapter should NOT exist.
-	if exists(dir, "internal/adapters/persistence/bun/invoice_repository.go") {
-		t.Error("bun adapter should not be generated on a gorm project")
-	}
-
 	// In-memory adapter always ships.
 	assertParses(t, dir, "internal/adapters/persistence/memory/invoice_repository.go")
 
@@ -201,7 +225,6 @@ func TestGenerateHandlerGorm(t *testing.T) {
 		"func (r *InvoiceRepository) Save(",
 		"func (r *InvoiceRepository) Delete(",
 		"gorm.ErrRecordNotFound",
-		"TableName",
 	} {
 		if !strings.Contains(repo, want) {
 			t.Errorf("gorm repository missing %q", want)
@@ -223,7 +246,7 @@ func TestGenerateHandlerGorm(t *testing.T) {
 		t.Errorf("expected handler to be wired, hint=%q", res.WireHint)
 	}
 	hub := read(t, dir, "internal/adapters/http/web/v1/routes.go")
-	for _, want := range []string{"*InvoiceHandler", `e.Group("/invoices")`, "cfg.InvoiceHandler.Register("} {
+	for _, want := range []string{"*InvoiceHandler", `g.Group("/invoices")`, "cfg.InvoiceHandler.Register("} {
 		if !strings.Contains(hub, want) {
 			t.Errorf("routes.go not wired with %q: %s", want, hub)
 		}
@@ -232,7 +255,7 @@ func TestGenerateHandlerGorm(t *testing.T) {
 }
 
 func TestGenerateHandlerInMemory(t *testing.T) {
-	dir := newProject(t, nil) // base only, no bun
+	dir := newProject(t, nil) // base only, no gorm
 
 	res, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,
@@ -244,7 +267,7 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 	}
 
 	// All DDD layers are generated, but the persistence adapter is the
-	// in-memory one (no bun adapter is produced without the feature).
+	// in-memory one (no ORM adapter is produced without the feature).
 	for _, rel := range []string{
 		"internal/domain/ticket/ticket.go",
 		"internal/application/ticket/command_handler.go",
@@ -255,16 +278,16 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 			t.Errorf("expected %s", rel)
 		}
 	}
-	if exists(dir, "internal/adapters/persistence/bun/ticket_repository.go") {
-		t.Error("did not expect a bun adapter without the bun feature")
+	if exists(dir, "internal/adapters/persistence/gorm/ticket_repository.go") {
+		t.Error("did not expect a gorm adapter without the gorm feature")
 	}
-	// No migration without bun.
+	// No migration without gorm.
 	ups, _ := filepath.Glob(filepath.Join(dir, "db/migrations", "*_create_tickets.up.sql"))
 	if len(ups) != 0 {
-		t.Errorf("did not expect a migration for a non-bun project, found %d", len(ups))
+		t.Errorf("did not expect a migration for a non-ORM project, found %d", len(ups))
 	}
 
-	// In-memory repository is produced regardless of bun.
+	// In-memory repository is produced regardless of ORM.
 	assertParses(t, dir, "internal/adapters/persistence/memory/ticket_repository.go")
 
 	if !res.Wired {
@@ -272,8 +295,56 @@ func TestGenerateHandlerInMemory(t *testing.T) {
 	}
 }
 
+// TestHandlerWiresCompositionRoot guards the composition-root wiring: a
+// generated handler must be constructed AND passed to v1.Mount in
+// cmd/server/main.go, otherwise its MountConfig field stays nil and every
+// route it registers nil-panics at runtime. The in-memory path additionally
+// exercises the functional-option wiring into the in-memory UnitOfWork.
+func TestHandlerWiresCompositionRoot(t *testing.T) {
+	cases := []struct {
+		name     string
+		features []string
+		repoLine string
+		wantOpt  bool // in-memory UoW option only present without outbox
+	}{
+		{"in_memory", nil, "ticketRepo := memory.NewTicketRepository()", true},
+		{"gorm", []string{"gorm"}, "ticketRepo := gorm.NewTicketRepository(gormDB)", true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := newProject(t, tc.features)
+			if _, err := scaffold.Generate(scaffold.Options{
+				ProjectDir: dir,
+				Kind:       scaffold.KindHandler,
+				Name:       "Ticket",
+			}); err != nil {
+				t.Fatalf("Generate handler: %v", err)
+			}
+
+			main := read(t, dir, "cmd/server/main.go")
+			want := []string{
+				`ticketapp "github.com/example/demo/internal/application/ticket"`,
+				tc.repoLine,
+				"ticketCmd := ticketapp.NewCommandHandler(ticketRepo, uow)",
+				"ticketQry := ticketapp.NewQueryHandler(ticketRepo)",
+				"ticketHandler := v1.NewTicketHandler(ticketCmd, ticketQry)",
+				"TicketHandler: ticketHandler,",
+			}
+			if tc.wantOpt {
+				want = append(want, "uow.WithTicketRepo(ticketRepo),")
+			}
+			for _, w := range want {
+				if !strings.Contains(main, w) {
+					t.Errorf("main.go missing composition wiring %q:\n%s", w, main)
+				}
+			}
+			assertParses(t, dir, "cmd/server/main.go")
+		})
+	}
+}
+
 func TestGenerateModelOnly(t *testing.T) {
-	dir := newProject(t, []string{"bun"})
+	dir := newProject(t, []string{"gorm"})
 
 	_, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,
@@ -290,13 +361,13 @@ func TestGenerateModelOnly(t *testing.T) {
 		t.Error("expected domain/tag/tag.go")
 	}
 	if exists(dir, "internal/adapters/persistence/memory/tag_repository.go") ||
-		exists(dir, "internal/adapters/http/web/v1tag_handler.go") {
+		exists(dir, "internal/adapters/http/web/v1/tag_handler.go") {
 		t.Error("model generation should not produce adapters")
 	}
 }
 
 func TestHandlerOnlySkipsDependencies(t *testing.T) {
-	dir := newProject(t, []string{"bun"})
+	dir := newProject(t, []string{"gorm"})
 
 	_, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,
@@ -318,7 +389,7 @@ func TestHandlerOnlySkipsDependencies(t *testing.T) {
 }
 
 func TestPrimaryConflictRequiresForce(t *testing.T) {
-	dir := newProject(t, []string{"bun"})
+	dir := newProject(t, []string{"gorm"})
 	opts := scaffold.Options{ProjectDir: dir, Kind: scaffold.KindModel, Name: "Note"}
 
 	if _, err := scaffold.Generate(opts); err != nil {
@@ -335,7 +406,7 @@ func TestPrimaryConflictRequiresForce(t *testing.T) {
 }
 
 func TestWiringIsIdempotent(t *testing.T) {
-	dir := newProject(t, []string{"bun"})
+	dir := newProject(t, []string{"gorm"})
 	base := scaffold.Options{ProjectDir: dir, Kind: scaffold.KindHandler, Name: "Review"}
 
 	if _, err := scaffold.Generate(base); err != nil {
@@ -359,7 +430,7 @@ func TestGenerateWithTests(t *testing.T) {
 		name     string
 		features []string
 	}{
-		{"bun", []string{"bun"}},
+		{"gorm", []string{"gorm"}},
 		{"in_memory", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -388,7 +459,7 @@ func TestGenerateWithTests(t *testing.T) {
 				"internal/adapters/http/web/v1/order_handler_test.go",
 			}
 			if tc.features != nil {
-				want = append(want, "internal/adapters/persistence/bun/order_repository_test.go")
+				want = append(want, "internal/adapters/persistence/gorm/order_repository_test.go")
 			}
 			for _, rel := range want {
 				if !exists(dir, rel) {
@@ -413,7 +484,7 @@ func TestGenerateWithTests(t *testing.T) {
 }
 
 func TestGenerateWithoutTestsOmitsTestFiles(t *testing.T) {
-	dir := newProject(t, []string{"bun"})
+	dir := newProject(t, []string{"gorm"})
 
 	if _, err := scaffold.Generate(scaffold.Options{
 		ProjectDir: dir,

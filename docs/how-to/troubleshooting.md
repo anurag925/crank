@@ -167,20 +167,6 @@ Then use the exact feature name, for example:
 crank add qdrant --project ./myapp
 ```
 
-## GORM and Bun conflict
-
-A project cannot have both ORM features.
-
-Use one of:
-
-```bash
-crank init myapp --features=base,auth
-crank init myapp --features=base,auth --use-bun
-crank init myapp --features=base,auth,bun
-```
-
-Do not pass both `gorm` and `bun`.
-
 ## `crank doctor` reports module path mismatch
 
 Compare `.crank.yaml` and `go.mod`:

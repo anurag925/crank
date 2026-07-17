@@ -41,12 +41,12 @@ func (*tool) LongDescription() string {
 
   1. manifest parses       — .crank.yaml is valid YAML with required fields
   2. module path matches   — go.mod's module line equals .crank.yaml's module_path
-  3. handlers are wired    — every *_handler.go in internal/adapters/http/web/ has
-                             a corresponding field+Register() call in routes.go
+  3. handlers are wired    — every *_handler.go in internal/adapters/http/web/v1/
+                             has a corresponding field+Register() call in routes.go
   4. services are wired    — every directory in internal/application/ is imported
                              and its NewCommandHandler is called in cmd/server/main.go
-  5. migrations ordered    — files in db/migrations/ are uniquely timestamped and
-                             lexically sorted
+  5. migrations ordered    — files in db/migrations/ have unique version prefixes
+                             (up/down pairs sharing a version are allowed)
 
 Each check prints ✔ or ✘ with a one-line detail on failure. Exit 0 when all
 checks pass, 1 otherwise. Use --fail-fast to stop at the first failure.
@@ -173,13 +173,13 @@ var handlerFileRE = regexp.MustCompile(`^([a-z][a-z0-9_]*_handler)\.go$`)
 // Register() call in Mount() for it. Missing either means the handler is
 // dead code at runtime.
 func checkHandlerWiring(projectDir string) bootstrap.CheckResult {
-	webDir := filepath.Join(projectDir, "internal/adapters/http/web")
+	webDir := filepath.Join(projectDir, "internal/adapters/http/web/v1")
 	entries, err := os.ReadDir(webDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			// No web dir at all is not necessarily wrong (a project
 			// might disable HTTP), but treat it as a warning.
-			return bootstrap.CheckResult{Summary: "handlers are wired", Detail: "internal/adapters/http/web/ does not exist"}
+			return bootstrap.CheckResult{Summary: "handlers are wired", Detail: "internal/adapters/http/web/v1/ does not exist"}
 		}
 		return bootstrap.CheckResult{Summary: "handlers are wired", Detail: err.Error()}
 	}
@@ -210,18 +210,24 @@ func checkHandlerWiring(projectDir string) bootstrap.CheckResult {
 	}
 	routes := string(routesData)
 
+	// Some base handlers (e.g. the audit handler) are assembled directly in
+	// the composition root rather than through the routes.go MountConfig, so
+	// consult main.go as a fallback wiring signal.
+	mainData, _ := os.ReadFile(filepath.Join(projectDir, "cmd/server/main.go"))
+	mainGo := string(mainData)
+
 	var missing []string
 	for _, h := range handlerNames {
-		// The generated field is `<Pascal>Handler *<Pascal>Handler`
-		// and the registration is `cfg.<Pascal>Handler.Register(`. We
-		// just look for the file's basename (lowercase) being present
-		// in routes.go — that's enough to catch a totally missing
-		// registration, which is the failure mode we care about.
 		base := strings.TrimSuffix(h, "_handler")
 		pascal := snakeToPascal(base)
-		fieldRef := pascal + "Handler *"
-		regRef := "cfg." + pascal + "Handler.Register("
-		if !strings.Contains(routes, fieldRef) || !strings.Contains(routes, regRef) {
+		// Wired via routes.go: a `*<Pascal>Handler` field (matched without a
+		// hard-coded space so gofmt's field alignment does not defeat it) plus
+		// a `cfg.<Pascal>Handler.Register(` call.
+		routesWired := strings.Contains(routes, "*"+pascal+"Handler") &&
+			strings.Contains(routes, "cfg."+pascal+"Handler.Register(")
+		// Wired via the composition root: the handler is constructed in main.go.
+		mainWired := strings.Contains(mainGo, "New"+pascal+"Handler(")
+		if !routesWired && !mainWired {
 			missing = append(missing, h)
 		}
 	}
@@ -234,10 +240,16 @@ func checkHandlerWiring(projectDir string) bootstrap.CheckResult {
 	return bootstrap.CheckResult{OK: true, Summary: "handlers are wired"}
 }
 
-// checkServiceWiring verifies that every directory under internal/application/
-// is referenced from cmd/server/main.go (imported and used). A service that
-// no longer compiles into the composition root is the most common silent
+// checkServiceWiring verifies that every application service exposed over HTTP
+// is assembled into cmd/server/main.go (imported and used). A service that no
+// longer compiles into the composition root is the most common silent
 // regression after a refactor.
+//
+// Only services that have a corresponding HTTP handler are required to be
+// wired: a standalone service generated via `crank make service` (with no
+// `crank make handler`) has no HTTP surface, so it cannot — and should not — be
+// constructed in main.go (doing so would be an unused variable). Infrastructure
+// packages such as `uow` are likewise skipped.
 func checkServiceWiring(projectDir string) bootstrap.CheckResult {
 	appDir := filepath.Join(projectDir, "internal/application")
 	entries, err := os.ReadDir(appDir)
@@ -247,9 +259,27 @@ func checkServiceWiring(projectDir string) bootstrap.CheckResult {
 		}
 		return bootstrap.CheckResult{Summary: "services are wired", Detail: err.Error()}
 	}
+	handlerDir := filepath.Join(projectDir, "internal/adapters/http/web/v1")
 	var serviceDirs []string
 	for _, e := range entries {
 		if !e.IsDir() {
+			continue
+		}
+		// Only directories that actually contain a CQRS handler are
+		// application services. Infrastructure packages under
+		// internal/application — notably `uow`, which holds the UnitOfWork
+		// port and TxRepositories interface — are not assembled via
+		// NewCommandHandler and must not be flagged as un-wired.
+		sub := filepath.Join(appDir, e.Name())
+		if !fileExists(filepath.Join(sub, "command_handler.go")) &&
+			!fileExists(filepath.Join(sub, "query_handler.go")) {
+			continue
+		}
+		// A service is only expected in the composition root when it is
+		// exposed over HTTP. A handler-less standalone service is a valid
+		// intermediate state (no route to mount), so it is not required to be
+		// wired into main.go.
+		if !fileExists(filepath.Join(handlerDir, e.Name()+"_handler.go")) {
 			continue
 		}
 		serviceDirs = append(serviceDirs, e.Name())
@@ -286,9 +316,10 @@ func checkServiceWiring(projectDir string) bootstrap.CheckResult {
 	return bootstrap.CheckResult{OK: true, Summary: "services are wired"}
 }
 
-// checkMigrations verifies that all files in db/migrations/ are uniquely
-// timestamp-prefixed and lexically sorted (i.e. will apply in the order the
-// developer intended).
+// checkMigrations verifies that all files in db/migrations/ have unique
+// version prefixes. An up/down pair sharing the same version is correct for
+// golang-migrate and is NOT flagged; only two distinct migration *names*
+// colliding on the same version is a real error.
 func checkMigrations(projectDir string) bootstrap.CheckResult {
 	migDir := filepath.Join(projectDir, "db/migrations")
 	entries, err := os.ReadDir(migDir)
@@ -309,39 +340,45 @@ func checkMigrations(projectDir string) bootstrap.CheckResult {
 		return bootstrap.CheckResult{OK: true, Summary: "migrations ordered"}
 	}
 
-	prefixRE := regexp.MustCompile(`^(\d+)_`)
-	seenPrefixes := map[string]string{} // prefix -> filename
-	var dup []string
-	var outOfOrder []string
-	prev := ""
+	// Capture the version and the migration name, dropping the up/down
+	// direction so a pair does not look like a collision.
+	migRE := regexp.MustCompile(`^(\d+)_(.+)\.(up|down)\.sql$`)
+	versionNames := map[string]map[string]bool{} // version -> set of distinct names
 	for _, f := range files {
-		m := prefixRE.FindStringSubmatch(f)
+		m := migRE.FindStringSubmatch(f)
 		if m == nil {
 			continue
 		}
-		if existing, ok := seenPrefixes[m[1]]; ok {
-			dup = append(dup, fmt.Sprintf("%s and %s share timestamp %s", existing, f, m[1]))
+		version, name := m[1], m[2]
+		if versionNames[version] == nil {
+			versionNames[version] = map[string]bool{}
 		}
-		seenPrefixes[m[1]] = f
-		if prev != "" && f < prev {
-			outOfOrder = append(outOfOrder, f)
+		versionNames[version][name] = true
+	}
+
+	var dup []string
+	for version, names := range versionNames {
+		if len(names) <= 1 {
+			continue
 		}
-		if f > prev {
-			prev = f
+		var ns []string
+		for n := range names {
+			ns = append(ns, n)
 		}
+		sort.Strings(ns)
+		dup = append(dup, fmt.Sprintf("version %s is used by multiple migrations: %s", version, strings.Join(ns, ", ")))
 	}
 	sort.Strings(dup)
-	sort.Strings(outOfOrder)
 	if len(dup) > 0 {
 		return bootstrap.CheckResult{Summary: "migrations ordered", Detail: strings.Join(dup, "; ")}
 	}
-	if len(outOfOrder) > 0 {
-		return bootstrap.CheckResult{
-			Summary: "migrations ordered",
-			Detail:  "db/migrations/ is not lexically sorted by filename: " + strings.Join(outOfOrder, ", ") + " — rename to apply in order",
-		}
-	}
 	return bootstrap.CheckResult{OK: true, Summary: "migrations ordered"}
+}
+
+// fileExists reports whether path names an existing regular file.
+func fileExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
 }
 
 // snakeToPascal converts `order_item` → `OrderItem`. It is a small purpose-

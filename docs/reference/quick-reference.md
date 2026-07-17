@@ -8,7 +8,6 @@ title: Quick Reference
 
 ```bash
 crank init myapp --features=base,auth
-crank init myapp --features=base,auth --use-bun
 crank add redis --project ./myapp
 crank update-skill --project ./myapp
 crank list
@@ -41,7 +40,6 @@ crank doctor --project ./myapp
 | --- | --- |
 | `base` | Core DDD service layout, Echo v5, config, validation, logging, `uuid.UUID` domain IDs, `TxRepositories` UoW |
 | `gorm` | PostgreSQL with GORM — row DTO pattern, database factory, migrations |
-| `bun` | PostgreSQL with Bun — row DTO pattern, database factory, migrations |
 | `auth` | JWT auth with token revocation, bcrypt in `pkg/crypto/`, `/auth/logout` |
 | `crypto` | AES-256-GCM cipher in `pkg/crypto/` |
 | `redis` | Redis cache adapter in `internal/adapters/cache/redis/` |
@@ -66,7 +64,6 @@ crank doctor --project ./myapp
 | `internal/adapters/http/web/api/` | `api.Error` envelope |
 | `internal/adapters/http/web/server.go` | Echo server with HTTP error handler and exported `EchoBinder` |
 | `internal/adapters/persistence/gorm/` | GORM repos (row DTO pattern) |
-| `internal/adapters/persistence/bun/` | Bun repos (row DTO pattern) |
 | `internal/adapters/outbox/` | Transactional UoW + worker |
 | `internal/adapters/auth/jwt/` | JWT token service |
 | `pkg/crypto/` | bcrypt hasher + AES-256-GCM cipher |

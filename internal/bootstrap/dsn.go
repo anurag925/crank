@@ -3,6 +3,8 @@ package bootstrap
 import (
 	"bytes"
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -58,7 +60,20 @@ func DSNFromConfig(projectDir string) (string, error) {
 	pass := Pick(db, "password", "postgres")
 	name := Pick(db, "name", filepath.Base(projectDir))
 	mode := Pick(db, "sslmode", "disable")
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s", user, pass, host, port, name, mode), nil
+
+	// Build the DSN with net/url so that credentials containing reserved
+	// characters (@ : / ? # and friends) are percent-encoded rather than
+	// silently corrupting the connection string.
+	u := url.URL{
+		Scheme: "postgres",
+		User:   url.UserPassword(user, pass),
+		Host:   net.JoinHostPort(host, port),
+		Path:   "/" + name,
+	}
+	q := url.Values{}
+	q.Set("sslmode", mode)
+	u.RawQuery = q.Encode()
+	return u.String(), nil
 }
 
 // Pick returns the value for key from m if present and non-empty, otherwise def.

@@ -4,7 +4,7 @@ title: GORM Feature
 
 # GORM feature
 
-The `gorm` feature adds PostgreSQL persistence using **GORM**. This is the default ORM — if you don't specify `--use-bun`, GORM is added automatically.
+The `gorm` feature adds PostgreSQL persistence using **GORM**. This is the sole ORM and is added automatically by `crank init`.
 
 ## What it provides
 
@@ -38,5 +38,4 @@ The repository saves the row DTO via `db.Save(rowFromAggregate(u))` and scans in
 
 ## Notes
 
-- GORM and Bun are **mutually exclusive**.
 - `crank make scaffold` generates a GORM-backed repository with the row DTO pattern plus an in-memory adapter.

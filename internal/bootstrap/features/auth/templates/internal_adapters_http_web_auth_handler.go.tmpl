@@ -1,7 +1,6 @@
 package web
 
 import (
-	"errors"
 	"log/slog"
 	"net/http"
 
@@ -73,13 +72,14 @@ func (h *AuthHandler) RegisterUser(c *echo.Context) error {
 	}
 	ctx := c.Request().Context()
 	out, err := h.cmd.HandleCreate(ctx, user.CreateUserCommand{
-		Name:  in.Name,
-		Email: in.Email,
+		Name:     in.Name,
+		Email:    in.Email,
+		Password: in.Password,
 	})
 	if err != nil {
 		return c.JSON(http.StatusUnprocessableEntity, api.Error{Error: err.Error()})
 	}
-	tokens, err := h.tokens.Issue(out.ID().String())
+	tokens, err := h.tokens.Issue(out.ID.String())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.Error{Error: err.Error()})
 	}
@@ -107,15 +107,15 @@ func (h *AuthHandler) Login(c *echo.Context) error {
 		return err
 	}
 	ctx := c.Request().Context()
-	u, err := h.qry.HandleGet(ctx, user.GetUserQuery{ID: in.Email})
+	u, err := h.cmd.HandleAuthenticate(ctx, user.AuthenticateUserCommand{
+		Email:    in.Email,
+		Password: in.Password,
+	})
 	if err != nil {
-		slog.WarnContext(ctx, "login failed", "email", in.Email, "error", err)
+		slog.WarnContext(ctx, "login failed", "email", in.Email)
 		return c.JSON(http.StatusUnauthorized, api.Error{Error: "invalid credentials"})
 	}
-	if u.Email() != in.Email {
-		return c.JSON(http.StatusUnauthorized, api.Error{Error: "invalid credentials"})
-	}
-	tokens, err := h.tokens.Issue(u.ID().String())
+	tokens, err := h.tokens.Issue(u.ID.String())
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, api.Error{Error: err.Error()})
 	}
@@ -190,5 +190,3 @@ func (h *AuthHandler) Me(c *echo.Context) error {
 	uid, _ := c.Get("user_id").(string)
 	return c.JSON(http.StatusOK, map[string]interface{}{"user_id": uid})
 }
-
-var errAuthInvalid = errors.New("invalid credentials")

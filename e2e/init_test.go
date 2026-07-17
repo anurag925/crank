@@ -143,15 +143,15 @@ func TestE2E_Init_DuplicateFeatureErrors(t *testing.T) {
 }
 
 // TestE2E_Init_InvalidFeatureErrors covers the most common typo: the user
-// spells a real feature name wrong (e.g. "postgresq" instead of "bun").
+// spells a real feature name wrong (e.g. "postgresq" instead of "gorm").
 // The error must mention the unknown name and ideally list valid options.
 func TestE2E_Init_InvalidFeatureErrors(t *testing.T) {
 	dir := t.TempDir()
-	out, err := runCrankRaw(t, dir, "init", "myapp", "--features=base,bunq")
+	out, err := runCrankRaw(t, dir, "init", "myapp", "--features=base,gormq")
 	if err == nil {
 		t.Fatalf("expected unknown-feature error, got success:\n%s", out)
 	}
-	if !strings.Contains(out, "bunq") {
+	if !strings.Contains(out, "gormq") {
 		t.Errorf("error should mention the bad feature name, got:\n%s", out)
 	}
 }
@@ -190,7 +190,7 @@ func TestE2E_Init_NonInteractive_AllFlags(t *testing.T) {
 	}
 	// Run init from the OUTER directory with --target to point at the inner.
 	runCrank(t, dir, "init", "myapp",
-		"--features=base,bun",
+		"--features=base,gorm",
 		"--module=github.com/anurag925/e2e_init_allflags",
 		"--target", target,
 		"--force",
@@ -212,7 +212,7 @@ func TestE2E_Init_DefaultBaseOnly(t *testing.T) {
 	if !strings.Contains(manifest, "- base") {
 		t.Errorf("default init should include base:\n%s", manifest)
 	}
-	for _, f := range []string{"bun", "auth", "redis", "mongodb", "crypto", "temporal"} {
+	for _, f := range []string{"auth", "redis", "mongodb", "crypto", "temporal"} {
 		if strings.Contains(manifest, "- "+f) {
 			t.Errorf("default init should not include %s:\n%s", f, manifest)
 		}
@@ -224,7 +224,7 @@ func TestE2E_Init_DefaultBaseOnly(t *testing.T) {
 // builds. Runs against every single feature as a "minimum-viable build"
 // check.
 func TestE2E_Init_GeneratedProjectCompiles(t *testing.T) {
-	for _, feature := range []string{"base", "auth", "crypto", "bun", "redis", "mongodb", "temporal"} {
+	for _, feature := range []string{"base", "auth", "crypto", "gorm", "redis", "mongodb", "temporal"} {
 		feature := feature
 		t.Run(feature, func(t *testing.T) {
 			projectDir := scaffoldProject(t, "init_compile_"+feature, []string{feature})

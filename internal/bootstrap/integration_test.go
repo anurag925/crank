@@ -11,7 +11,6 @@ import (
 	// Register all features via init().
 	_ "github.com/anurag925/crank/internal/bootstrap/features/auth"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/base"
-	_ "github.com/anurag925/crank/internal/bootstrap/features/bun"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/crypto"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/gorm"
 	_ "github.com/anurag925/crank/internal/bootstrap/features/mongodb"
@@ -120,7 +119,6 @@ func TestGlobalRegistry_HasAllFeatures(t *testing.T) {
 		"base":     true,
 		"auth":     true,
 		"crypto":   true,
-		"bun":      true,
 		"gorm":     true,
 		"redis":    true,
 		"mongodb":  true,
@@ -446,6 +444,35 @@ func TestAuth_HandlerAuth(t *testing.T) {
 	assertContains(t, content, `validate:"required,email"`, "credentials email validation tag")
 	assertContains(t, content, `validate:"required,min=8"`, "credentials password validation tag")
 	assertContains(t, content, `validate:"omitempty,min=2,max=100"`, "credentials name validation tag")
+
+	// Login must actually verify the password through the application layer,
+	// not just look a user up by email. Guards against the regression where
+	// the endpoint issued tokens without ever checking the password (and where
+	// it misused the id-based query for an email lookup, so login could never
+	// succeed).
+	assertContains(t, content, "HandleAuthenticate", "login verifies credentials via the application layer")
+	assertContains(t, content, "AuthenticateUserCommand", "login uses the authenticate command")
+	assertNotContains(t, content, "GetUserQuery{ID: in.Email}", "login no longer misuses the id query for an email lookup")
+	// Registration must forward the plaintext password so it can be hashed.
+	assertContains(t, content, "Password: in.Password", "register forwards the password to be hashed")
+}
+
+func TestAuth_CommandHandler_HashesAndVerifies(t *testing.T) {
+	// The application command handler is the single place that hashes on
+	// create and verifies on authenticate, both through the ports.Hasher
+	// abstraction. This test guards the wiring that makes auth actually work.
+	r := generateProject(t, "authcmd", []string{"auth"})
+	content := readFile(t, r.ProjectDir, "internal/application/user/command_handler.go")
+	assertContains(t, content, "hasher ports.Hasher", "command handler depends on the Hasher port")
+	assertContains(t, content, "h.hasher.Hash(cmd.Password)", "create hashes the supplied password")
+	assertContains(t, content, "SetPasswordHash(hash)", "create stores the hash on the aggregate")
+	assertContains(t, content, "func (h *CommandHandler) HandleAuthenticate", "handler exposes an authenticate method")
+	assertContains(t, content, "h.hasher.Verify", "authenticate verifies the password through the port")
+	assertContains(t, content, "ErrInvalidCredentials", "authenticate returns a generic credentials error")
+
+	// The composition root must inject the hasher into the command handler.
+	main := readFile(t, r.ProjectDir, "cmd/server/main.go")
+	assertContains(t, main, "NewCommandHandler(userRepo, uow, hasher)", "main.go injects the hasher into the user command handler")
 }
 
 func TestAuth_UserModel_HasPassword(t *testing.T) {
@@ -482,169 +509,6 @@ func TestAuth_BootstrapManifest(t *testing.T) {
 	r := generateProject(t, "authmanifest", []string{"auth"})
 	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "- auth", "manifest includes auth")
-}
-
-// ==========================================================================
-// POSTGRES feature
-// ==========================================================================
-
-func TestBun_FilesExist(t *testing.T) {
-	r := generateProject(t, "pgtest", []string{"bun"})
-	dir := r.ProjectDir
-
-	expectedFiles := []string{
-		"internal/adapters/persistence/bun/db.go",
-		"internal/adapters/persistence/bun/migrate.go",
-		"internal/domain/user/user.go",
-		"internal/adapters/persistence/memory/user_repository.go",
-		"db/migrations/000001_init.up.sql",
-		"db/migrations/000001_init.down.sql",
-	}
-	for _, f := range expectedFiles {
-		assertFileExists(t, dir, f)
-	}
-}
-
-func TestBun_GoMod_Deps(t *testing.T) {
-	r := generateProject(t, "pggomod", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "go.mod")
-	assertContains(t, content, "module", "go.mod")
-	// Dependencies are returned via Result and installed via go get.
-	assertDepsContains(t, r.Dependencies, "github.com/uptrace/bun", "bun deps")
-	assertDepsContains(t, r.Dependencies, "github.com/uptrace/bun/dialect/pgdialect", "bun deps")
-	assertDepsContains(t, r.Dependencies, "github.com/uptrace/bun/driver/pgdriver", "bun deps")
-	assertDepsContains(t, r.Dependencies, "github.com/golang-migrate/migrate/v4", "bun deps")
-}
-
-func TestBun_Config_HasDatabaseSection(t *testing.T) {
-	r := generateProject(t, "pgcfg", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "configs/config.yaml")
-	assertContains(t, content, "database:", "config.yaml database section")
-	assertContains(t, content, "host:", "config.yaml db host")
-	assertContains(t, content, "port: 5432", "config.yaml db port")
-	assertContains(t, content, "sslmode:", "config.yaml db sslmode")
-}
-
-func TestBun_ConfigGo_HasDatabaseConfig(t *testing.T) {
-	r := generateProject(t, "pgcfggo", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "internal/config/config.go")
-	assertContains(t, content, "DatabaseConfig", "config.go DatabaseConfig struct")
-	assertContains(t, content, "func (d DatabaseConfig) DSN()", "config.go DSN method")
-}
-
-func TestBun_DatabaseBun(t *testing.T) {
-	r := generateProject(t, "pgdb", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/persistence/bun/db.go")
-	assertContains(t, content, "func NewDB(", "db.go NewDB function")
-	assertContains(t, content, "pgdriver", "db.go uses pgdriver")
-	assertContains(t, content, "bun.NewDB", "db.go creates bun.DB")
-}
-
-func TestBun_DatabaseMigrate(t *testing.T) {
-	r := generateProject(t, "pgmigrate", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/persistence/bun/migrate.go")
-	assertContains(t, content, "func MigrateUp(", "migrate.go MigrateUp function")
-	assertContains(t, content, "func MigrateDown(", "migrate.go MigrateDown function")
-	assertContains(t, content, "migrate.New", "migrate.go uses migrate.New")
-}
-
-func TestBun_MigrationUp(t *testing.T) {
-	r := generateProject(t, "pgmigup", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "db/migrations/000001_init.up.sql")
-	assertContains(t, content, "CREATE TABLE IF NOT EXISTS users", "migration up creates users table")
-	assertContains(t, content, "UUID PRIMARY KEY", "migration up has uuid pk")
-	assertContains(t, content, "email TEXT NOT NULL UNIQUE", "migration up email unique")
-}
-
-func TestBun_MigrationDown(t *testing.T) {
-	r := generateProject(t, "pgmigdown", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "db/migrations/000001_init.down.sql")
-	assertContains(t, content, "DROP TABLE IF EXISTS users", "migration down drops users")
-}
-
-func TestBun_UserModel_HasBunTags(t *testing.T) {
-	// Bun tags live in the bun adapter's row DTO, not on the domain
-	// aggregate. The aggregate stays tag-free.
-	r := generateProject(t, "pgmodel", []string{"bun"})
-	aggregate := readFile(t, r.ProjectDir, "internal/domain/user/user.go")
-	assertNotContains(t, aggregate, `bun:"`, "domain aggregate has no bun tags")
-	row := readFile(t, r.ProjectDir, "internal/adapters/persistence/bun/user_repository.go")
-	assertContains(t, row, "type userRow struct", "bun row DTO is private")
-	assertContains(t, row, `bun:"id,pk,type:uuid"`, "row DTO carries bun tags")
-	assertContains(t, row, "toAggregate", "row DTO has toAggregate")
-}
-
-func TestBun_UserModel_NoAuth_NoPassword(t *testing.T) {
-	r := generateProject(t, "pgmodelnopw", []string{"bun"})
-	row := readFile(t, r.ProjectDir, "internal/adapters/persistence/bun/user_repository.go")
-	assertNotContains(t, row, `Password`, "row DTO without auth has no password column")
-}
-
-func TestBun_RepositoryUser_BunBacked(t *testing.T) {
-	r := generateProject(t, "pgrepo", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "internal/adapters/persistence/bun/user_repository.go")
-	assertContains(t, content, "bun.IDB", "repo uses bun.IDB")
-	assertContains(t, content, "func NewUserRepository(db bun.IDB)", "repo constructor takes bun.IDB")
-	assertContains(t, content, "GetByEmail", "repo has GetByEmail method")
-}
-
-func TestBun_HandlerUser_UsesRepo(t *testing.T) {
-	// The HTTP handler does not depend on the repository directly; it
-	// delegates to the application command/query handlers. The composition
-	// root wires the repository into the application layer.
-	r := generateProject(t, "pghandler", []string{"bun"})
-	handler := readFile(t, r.ProjectDir, "internal/adapters/http/web/v1/user_handler.go")
-	assertNotContains(t, handler, "repo *repository.UserRepository", "handler has no repo dep")
-	assertContains(t, handler, "h.cmd.HandleCreate(", "handler delegates to command handler")
-	main := readFile(t, r.ProjectDir, "cmd/server/main.go")
-	assertContains(t, main, "bun.NewUserRepository", "main wires the bun repo into the app layer")
-}
-
-func TestBun_HandlerHandler_HasDBDep(t *testing.T) {
-	// Routes.go is DB-agnostic. The DB dependency lives in main.go where the
-	// bun connection is opened and passed to the bun adapter.
-	r := generateProject(t, "pghandlerdep", []string{"bun"})
-	routes := readFile(t, r.ProjectDir, "internal/adapters/http/web/v1/routes.go")
-	assertNotContains(t, routes, "*bun.DB", "routes.go has no DB dep")
-	main := readFile(t, r.ProjectDir, "cmd/server/main.go")
-	assertContains(t, main, "bun.NewDB", "main opens the bun DB")
-}
-
-func TestBun_MainGo_ImportsDatabase(t *testing.T) {
-	r := generateProject(t, "pgmain", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
-	assertContains(t, content, "bun.NewDB", "main.go creates Bun connection")
-	assertContains(t, content, "db.Close()", "main.go defers db close")
-}
-
-func TestBun_Makefile_NoMigrateTargets(t *testing.T) {
-	// Common commands (including migrate) are provided by the crank CLI, not
-	// duplicated in the Makefile.
-	r := generateProject(t, "pgmake", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "Makefile")
-	assertNotContains(t, content, "migrate-up:", "Makefile no longer defines migrate-up target")
-	assertNotContains(t, content, "migrate-down:", "Makefile no longer defines migrate-down target")
-	assertNotContains(t, content, "migrate-create:", "Makefile no longer defines migrate-create target")
-}
-
-func TestBun_Gitignore_HasDataDir(t *testing.T) {
-	r := generateProject(t, "pggitignore", []string{"bun"})
-	content := readFile(t, r.ProjectDir, ".gitignore")
-	assertContains(t, content, "data/", "gitignore with bun has data/")
-}
-
-func TestBun_BootstrapManifest(t *testing.T) {
-	r := generateProject(t, "pgmanifest", []string{"bun"})
-	content := readFile(t, r.ProjectDir, ".crank.yaml")
-	assertContains(t, content, "- bun", "manifest includes bun")
-}
-
-func TestBun_Readme_HasDBInfo(t *testing.T) {
-	r := generateProject(t, "pgreadme", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "README.md")
-	assertContains(t, content, "Bun", "README mentions Bun")
-	assertContains(t, content, "golang-migrate", "README mentions migrate")
-	assertContains(t, content, "crank migrate", "README documents the crank migrate command")
 }
 
 // ==========================================================================
@@ -714,6 +578,10 @@ func TestGorm_MigrationUp(t *testing.T) {
 	assertContains(t, content, "CREATE TABLE IF NOT EXISTS users", "migration up creates users table")
 	assertContains(t, content, "UUID PRIMARY KEY", "migration up has uuid pk")
 	assertContains(t, content, "email TEXT NOT NULL UNIQUE", "migration up email unique")
+	// id, created_at and updated_at are grouped together at the top of the table.
+	assertContains(t, content,
+		"id UUID PRIMARY KEY,\n    created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,\n    updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,",
+		"migration groups id/created_at/updated_at at the top")
 }
 
 func TestGorm_UserRepository_GormBacked(t *testing.T) {
@@ -723,19 +591,18 @@ func TestGorm_UserRepository_GormBacked(t *testing.T) {
 	assertContains(t, content, "func NewUserRepository(db *gorm.DB)", "repo constructor takes gorm.DB")
 	assertContains(t, content, "GetByEmail", "repo has GetByEmail method")
 	assertContains(t, content, "gorm.ErrRecordNotFound", "repo maps ErrRecordNotFound")
-	assertContains(t, content, "TableName", "row DTO declares table name")
 }
 
 func TestGorm_UserModel_HasGormTags(t *testing.T) {
-	// GORM tags live in the gorm adapter's row DTO, not on the domain
-	// aggregate. The aggregate stays tag-free.
+	// GORM tags are on the domain aggregate itself — the same struct is
+	// used as both the domain model and the persistence row.
 	r := generateProject(t, "gormmodel", []string{"gorm"})
 	aggregate := readFile(t, r.ProjectDir, "internal/domain/user/user.go")
-	assertNotContains(t, aggregate, `gorm:"`, "domain aggregate has no gorm tags")
+	assertContains(t, aggregate, `gorm:"column:id;primaryKey;type:uuid"`, "aggregate carries gorm tags")
+	assertContains(t, aggregate, "func (u *User) TableName() string", "aggregate declares table name")
 	row := readFile(t, r.ProjectDir, "internal/adapters/persistence/gorm/user_repository.go")
-	assertContains(t, row, "type userRow struct", "gorm row DTO is private")
-	assertContains(t, row, `gorm:"column:id;type:uuid;primaryKey"`, "row DTO carries gorm tags")
-	assertContains(t, row, "toAggregate", "row DTO has toAggregate")
+	assertNotContains(t, row, "userRow", "gorm repo has no row DTO")
+	assertNotContains(t, row, "toAggregate", "gorm repo has no toAggregate")
 }
 
 func TestGorm_MainGo_ImportsGorm(t *testing.T) {
@@ -768,14 +635,6 @@ func TestGorm_NotPresent_NoBunImports(t *testing.T) {
 	assertNotContains(t, content, "bun.NewUserRepository", "gorm-only main has no bun user repo")
 }
 
-func TestBun_NotPresent_NoGormImports(t *testing.T) {
-	// A base + bun project should not have any gorm references in main.go.
-	r := generateProject(t, "bunnogorm", []string{"bun"})
-	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
-	assertNotContains(t, content, "gorm.NewDB", "bun-only main has no gorm init")
-	assertNotContains(t, content, "gorm.NewUserRepository", "bun-only main has no gorm user repo")
-}
-
 func TestGorm_Scaffold_GormRepository(t *testing.T) {
 	// A gorm-based project should get a GORM-backed repository via `crank make`.
 	r := generateProject(t, "gormscaff", []string{"gorm"})
@@ -800,13 +659,13 @@ func TestGorm_Scaffold_GormRepository(t *testing.T) {
 	// In-memory adapter always ships.
 	assertFileExists(t, dir, "internal/adapters/persistence/memory/order_repository.go")
 
-	// Repository uses gorm.DB and GORM tags.
+	// Repository uses gorm.DB and operates on the domain aggregate directly.
 	repo := readFile(t, dir, "internal/adapters/persistence/gorm/order_repository.go")
 	assertContains(t, repo, "*gorm.DB", "gorm repo uses *gorm.DB")
-	assertContains(t, repo, `gorm:"column:id;primaryKey;type:uuid"`, "row DTO carries gorm tags")
-	assertContains(t, repo, "TableName()", "row DTO declares table name")
 	assertContains(t, repo, "func (r *OrderRepository) Save(", "gorm repo has Save")
 	assertContains(t, repo, "gorm.ErrRecordNotFound", "gorm repo maps ErrRecordNotFound")
+	assertNotContains(t, repo, "toAggregate", "gorm repo has no toAggregate")
+	assertNotContains(t, repo, "OrderRow", "gorm repo has no Row DTO")
 
 	// A create-table migration was produced.
 	matches, _ := filepath.Glob(filepath.Join(dir, "db/migrations", "*_create_orders.up.sql"))
@@ -818,6 +677,40 @@ func TestGorm_Scaffold_GormRepository(t *testing.T) {
 	if !res.Wired {
 		t.Errorf("expected handler to be wired")
 	}
+
+	// The generated handler must also be assembled into the composition root
+	// (main.go), not just registered in routes.go — otherwise its MountConfig
+	// field stays nil and every route nil-panics at runtime.
+	main := readFile(t, dir, "cmd/server/main.go")
+	assertContains(t, main, "orderRepo := gorm.NewOrderRepository(gormDB)", "main.go constructs the order repo")
+	assertContains(t, main, "uow.WithOrderRepo(orderRepo)", "main.go shares the order repo with the in-memory UoW")
+	assertContains(t, main, "orderHandler := v1.NewOrderHandler(", "main.go constructs the order handler")
+	assertContains(t, main, "OrderHandler: orderHandler", "main.go passes the order handler to MountConfig")
+}
+
+// TestGormOutbox_Scaffold_WiresCompositionRoot verifies that with the outbox
+// feature (GORM UnitOfWork path) a generated handler is still assembled into
+// main.go. The outbox path does not use the in-memory UoW option, so no
+// WithXxxRepo call is expected — the GORM UoW builds tx-scoped repositories
+// internally.
+func TestGormOutbox_Scaffold_WiresCompositionRoot(t *testing.T) {
+	r := generateProject(t, "outboxscaff", []string{"gorm", "outbox"})
+	dir := r.ProjectDir
+
+	if _, err := scaffold.Generate(scaffold.Options{
+		ProjectDir: dir,
+		Kind:       scaffold.KindHandler,
+		Name:       "Order",
+		Fields:     []string{"customer:string", "total:float"},
+	}); err != nil {
+		t.Fatalf("Generate handler on outbox project: %v", err)
+	}
+
+	main := readFile(t, dir, "cmd/server/main.go")
+	assertContains(t, main, "orderRepo := gorm.NewOrderRepository(gormDB)", "main.go constructs the order repo")
+	assertContains(t, main, "orderHandler := v1.NewOrderHandler(", "main.go constructs the order handler")
+	assertContains(t, main, "OrderHandler: orderHandler", "main.go passes the order handler to MountConfig")
+	assertNotContains(t, main, "uow.WithOrderRepo", "outbox path does not use the in-memory UoW option")
 }
 
 func TestGorm_Outbox_FilesExist(t *testing.T) {
@@ -854,28 +747,8 @@ func TestGorm_Outbox_FilesExist(t *testing.T) {
 	assertNotContains(t, main, "bun.NewOutboxRepository", "main.go has no bun outbox")
 }
 
-func TestBun_Outbox_FilesExist(t *testing.T) {
-	// A base + bun + outbox project should have bun outbox files, not gorm ones.
-	r := generateProject(t, "bunoutbox", []string{"bun", "outbox"})
-	dir := r.ProjectDir
-
-	// Bun outbox adapter exists.
-	assertFileExists(t, dir, "internal/adapters/persistence/bun/outbox_repository.go")
-	assertFileExists(t, dir, "internal/adapters/outbox/bun_uow.go")
-
-	// GORM outbox adapter should NOT exist.
-	assertFileNotExists(t, dir, "internal/adapters/persistence/gorm/outbox_repository.go")
-	assertFileNotExists(t, dir, "internal/adapters/outbox/gorm_uow.go")
-
-	// Main.go wires the bun outbox.
-	main := readFile(t, dir, "cmd/server/main.go")
-	assertContains(t, main, "bun.NewOutboxRepository", "main.go wires bun outbox repo")
-	assertContains(t, main, "outboxadapter.NewBunUoW", "main.go wires bun UoW")
-	assertNotContains(t, main, "gorm.NewOutboxRepository", "main.go has no gorm outbox")
-}
-
 func TestOutbox_NoORM_Fails(t *testing.T) {
-	// Trying to add outbox without either bun or gorm must fail.
+	// Trying to add outbox without gorm must fail.
 	_, err := bootstrap.Generate(bootstrap.GlobalRegistry, bootstrap.Options{
 		ProjectName: "noormoutbox",
 		ModulePath:  "github.com/example/noormoutbox",
@@ -885,24 +758,8 @@ func TestOutbox_NoORM_Fails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Generate to refuse outbox without an ORM")
 	}
-	if !strings.Contains(err.Error(), "requires a database ORM") {
+	if !strings.Contains(err.Error(), "requires") {
 		t.Errorf("expected ORM requirement error, got: %v", err)
-	}
-}
-
-func TestBunAndGorm_MutuallyExclusive(t *testing.T) {
-	// Both ORM features in the same project is a hard error.
-	_, err := bootstrap.Generate(bootstrap.GlobalRegistry, bootstrap.Options{
-		ProjectName: "tworms",
-		ModulePath:  "github.com/example/tworms",
-		TargetDir:   t.TempDir(),
-		Features:    []string{"base", "bun", "gorm"},
-	})
-	if err == nil {
-		t.Fatal("expected Generate to refuse when both bun and gorm are selected")
-	}
-	if !strings.Contains(err.Error(), "mutually exclusive") {
-		t.Errorf("expected 'mutually exclusive' in error, got: %v", err)
 	}
 }
 
@@ -1053,57 +910,73 @@ func TestValidator_AuthHandler_RefreshStruct(t *testing.T) {
 }
 
 // ==========================================================================
-// AUTH + POSTGRES together
+// AUTH + GORM together
 // ==========================================================================
 
-func TestAuthBun_MigrationUp_HasPassword(t *testing.T) {
-	r := generateProject(t, "authpg", []string{"auth", "bun"})
+func TestAuthGorm_MigrationUp_HasPassword(t *testing.T) {
+	r := generateProject(t, "authpg", []string{"auth", "gorm"})
 	content := readFile(t, r.ProjectDir, "db/migrations/000001_init.up.sql")
 	assertContains(t, content, "password TEXT NOT NULL", "migration has password column")
 }
 
-func TestAuthBun_UserModel_HasBunAndPassword(t *testing.T) {
-	// Password is on the domain aggregate (as an unexported field) and the
-	// bun row DTO carries the bun:"password,notnull" tag. The
-	// aggregate itself stays free of ORM tags.
-	r := generateProject(t, "authpgmodel", []string{"auth", "bun"})
-	agg := readFile(t, r.ProjectDir, "internal/domain/user/user.go")
-	assertNotContains(t, agg, `bun:"`, "domain aggregate has no bun tags")
-	assertContains(t, agg, "PasswordHash", "domain aggregate has PasswordHash accessor")
-	row := readFile(t, r.ProjectDir, "internal/adapters/persistence/bun/user_repository.go")
-	assertContains(t, row, `bun:"password,notnull"`, "row DTO has password bun tag")
+func TestAuthGorm_RevokedTokenDomainModel(t *testing.T) {
+	// The token denylist is backed by a domain aggregate (token.RevokedToken)
+	// that doubles as the GORM model — the adapter carries no private row DTO.
+	r := generateProject(t, "authpgtoken", []string{"auth", "gorm"})
+
+	domainModel := readFile(t, r.ProjectDir, "internal/domain/token/revoked_token.go")
+	assertContains(t, domainModel, "type RevokedToken struct", "revoked token aggregate exists")
+	assertContains(t, domainModel, `gorm:"column:jti;primaryKey"`, "aggregate carries gorm tags")
+	assertContains(t, domainModel, `func (RevokedToken) TableName() string`, "aggregate maps to a table")
+
+	adapter := readFile(t, r.ProjectDir, "internal/adapters/persistence/gorm/token_denylist.go")
+	assertContains(t, adapter, "token.RevokedToken", "adapter uses the domain aggregate directly")
+	assertNotContains(t, adapter, "revokedTokenRow", "adapter has no private row DTO")
+
+	// The init migration creates the backing table (gated on auth).
+	migration := readFile(t, r.ProjectDir, "db/migrations/000001_init.up.sql")
+	assertContains(t, migration, "CREATE TABLE IF NOT EXISTS revoked_tokens", "migration creates revoked_tokens table")
 }
 
-func TestAuthBun_MainGo_HasBothDeps(t *testing.T) {
-	r := generateProject(t, "authpgmain", []string{"auth", "bun"})
+func TestAuthGorm_UserModel_HasPassword(t *testing.T) {
+	// The aggregate carries GORM tags and an exported Password field that
+	// doubles as the persistence column.
+	r := generateProject(t, "authpgmodel", []string{"auth", "gorm"})
+	agg := readFile(t, r.ProjectDir, "internal/domain/user/user.go")
+	assertContains(t, agg, "PasswordHash", "domain aggregate has PasswordHash accessor")
+	assertContains(t, agg, `gorm:`, "domain aggregate carries gorm tags")
+}
+
+func TestAuthGorm_MainGo_HasBothDeps(t *testing.T) {
+	r := generateProject(t, "authpgmain", []string{"auth", "gorm"})
 	content := readFile(t, r.ProjectDir, "cmd/server/main.go")
-	assertContains(t, content, "bun.NewDB", "main.go creates bun db")
+	assertContains(t, content, "gorm.NewDB", "main.go creates gorm db")
 	assertContains(t, content, "jwt.NewTokenService", "main.go creates jwt")
 	assertContains(t, content, "web.NewAuthHandler", "main.go creates auth handler")
 }
 
-func TestAuthBun_ConfigGo_HasBothConfigs(t *testing.T) {
-	r := generateProject(t, "authpgcfg", []string{"auth", "bun"})
+func TestAuthGorm_ConfigGo_HasBothConfigs(t *testing.T) {
+	r := generateProject(t, "authpgcfg", []string{"auth", "gorm"})
 	content := readFile(t, r.ProjectDir, "internal/config/config.go")
 	assertContains(t, content, "DatabaseConfig", "config has DatabaseConfig")
 	assertContains(t, content, "JWTConfig", "config has JWTConfig")
 }
 
-func TestAuthBun_GoMod_HasAllDeps(t *testing.T) {
-	r := generateProject(t, "authpggomod", []string{"auth", "bun"})
+func TestAuthGorm_GoMod_HasAllDeps(t *testing.T) {
+	r := generateProject(t, "authpggomod", []string{"auth", "gorm"})
 	content := readFile(t, r.ProjectDir, "go.mod")
 	assertContains(t, content, "module", "go.mod")
 	assertDepsContains(t, r.Dependencies, "golang-jwt/jwt/v5", "auth+pg deps")
 	assertDepsContains(t, r.Dependencies, "golang.org/x/crypto", "auth+pg deps")
-	assertDepsContains(t, r.Dependencies, "uptrace/bun", "auth+pg deps")
+	assertDepsContains(t, r.Dependencies, "gorm.io", "auth+pg deps")
 	assertDepsContains(t, r.Dependencies, "golang-migrate/migrate/v4", "auth+pg deps")
 }
 
-func TestAuthBun_BootstrapManifest(t *testing.T) {
-	r := generateProject(t, "authpgmanifest", []string{"auth", "bun"})
+func TestAuthGorm_BootstrapManifest(t *testing.T) {
+	r := generateProject(t, "authpgmanifest", []string{"auth", "gorm"})
 	content := readFile(t, r.ProjectDir, ".crank.yaml")
 	assertContains(t, content, "- auth", "manifest has auth")
-	assertContains(t, content, "- bun", "manifest has bun")
+	assertContains(t, content, "- gorm", "manifest has gorm")
 }
 
 // ==========================================================================
@@ -1273,13 +1146,13 @@ func TestCrypto_AuthCombined_CryptoConfigPresent(t *testing.T) {
 	assertContains(t, cfgGo, "JWTConfig", "config.go has JWTConfig")
 }
 
-func TestCrypto_BunCombined_AllSections(t *testing.T) {
-	r := generateProject(t, "cryptopg", []string{"crypto", "bun"})
+func TestCrypto_GormCombined_AllSections(t *testing.T) {
+	r := generateProject(t, "cryptopg", []string{"crypto", "gorm"})
 	cfg := readFile(t, r.ProjectDir, "configs/config.yaml")
 	assertContains(t, cfg, "crypto:", "config has crypto section")
 	assertContains(t, cfg, "database:", "config has database section")
 	assertFileExists(t, r.ProjectDir, "pkg/crypto/aesgcm_cipher.go")
-	assertFileExists(t, r.ProjectDir, "internal/adapters/persistence/bun/db.go")
+	assertFileExists(t, r.ProjectDir, "internal/adapters/persistence/gorm/db.go")
 }
 
 // ==========================================================================
@@ -1492,17 +1365,10 @@ func TestTemporal_NotPresent_NoWorker(t *testing.T) {
 // ==========================================================================
 
 func TestAll_Features(t *testing.T) {
-	// bun and gorm are mutually exclusive, so the "all features" matrix uses
-	// bun (the older ORM) and exercises every other feature.
+	// GORM is the sole ORM, so the "all features" matrix exercises every
+	// registered feature together.
 	names := allFeatures(t)
-	allButGorm := make([]string, 0, len(names))
-	for _, n := range names {
-		if n == "gorm" {
-			continue
-		}
-		allButGorm = append(allButGorm, n)
-	}
-	r := generateProject(t, "allfeatures", allButGorm)
+	r := generateProject(t, "allfeatures", names)
 	dir := r.ProjectDir
 
 	// base files
@@ -1524,9 +1390,9 @@ func TestAll_Features(t *testing.T) {
 	assertFileExists(t, dir, "internal/adapters/auth/jwt/token_service.go")
 	assertFileExists(t, dir, "internal/adapters/http/web/auth_handler.go")
 
-	// bun files
-	assertFileExists(t, dir, "internal/adapters/persistence/bun/db.go")
-	assertFileExists(t, dir, "internal/adapters/persistence/bun/migrate.go")
+	// gorm files
+	assertFileExists(t, dir, "internal/adapters/persistence/gorm/db.go")
+	assertFileExists(t, dir, "internal/adapters/persistence/gorm/migrate.go")
 	assertFileExists(t, dir, "db/migrations/000001_init.up.sql")
 	assertFileExists(t, dir, "db/migrations/000001_init.down.sql")
 
@@ -1556,7 +1422,7 @@ func TestAll_Features(t *testing.T) {
 
 	// Verify deps are returned via Result
 	assertDepsContains(t, r.Dependencies, "golang-jwt", "all features deps")
-	assertDepsContains(t, r.Dependencies, "uptrace/bun", "all features deps")
+	assertDepsContains(t, r.Dependencies, "gorm.io", "all features deps")
 	assertDepsContains(t, r.Dependencies, "golang-migrate", "all features deps")
 	assertDepsContains(t, r.Dependencies, "go-playground/validator", "all features deps")
 	assertDepsContains(t, r.Dependencies, "go.temporal.io/sdk", "all features deps")
@@ -1571,10 +1437,9 @@ func TestAll_Features(t *testing.T) {
 	assertContains(t, cfg, "qdrant:", "config qdrant")
 	assertContains(t, cfg, "temporal:", "config temporal")
 
-	// Verify manifest has all features (gorm is excluded from this matrix —
-	// see comment at the top of TestAll_Features).
+	// Verify manifest has all features.
 	manifest := readFile(t, dir, ".crank.yaml")
-	for _, name := range allButGorm {
+	for _, name := range names {
 		assertContains(t, manifest, "- "+name, "manifest "+name)
 	}
 }
@@ -1617,35 +1482,35 @@ func TestAdd_AuthToBaseProject(t *testing.T) {
 	assertDepsContains(t, r2.Dependencies, "golang-jwt/jwt/v5", "add auth deps")
 }
 
-func TestAdd_BunToBaseProject(t *testing.T) {
+func TestAdd_GormToBaseProject(t *testing.T) {
 	tmp := t.TempDir()
 	r, err := bootstrap.Generate(bootstrap.GlobalRegistry, bootstrap.Options{
-		ProjectName: "addbun",
-		ModulePath:  "github.com/example/addbun",
+		ProjectName: "addgorm",
+		ModulePath:  "github.com/example/addgorm",
 		TargetDir:   tmp,
 	})
 	if err != nil {
 		t.Fatalf("Generate: %v", err)
 	}
 
-	// Add bun
-	r2, err := bootstrap.Add(bootstrap.GlobalRegistry, r.ProjectDir, "bun")
+	// Add gorm
+	r2, err := bootstrap.Add(bootstrap.GlobalRegistry, r.ProjectDir, "gorm")
 	if err != nil {
-		t.Fatalf("Add bun: %v", err)
+		t.Fatalf("Add gorm: %v", err)
 	}
 
-	// bun files should exist
-	assertFileExists(t, r2.ProjectDir, "internal/adapters/persistence/bun/db.go")
-	assertFileExists(t, r2.ProjectDir, "internal/adapters/persistence/bun/migrate.go")
+	// gorm files should exist
+	assertFileExists(t, r2.ProjectDir, "internal/adapters/persistence/gorm/db.go")
+	assertFileExists(t, r2.ProjectDir, "internal/adapters/persistence/gorm/migrate.go")
 	assertFileExists(t, r2.ProjectDir, "db/migrations/000001_init.up.sql")
 
-	// Manifest should include bun
+	// Manifest should include gorm
 	manifest := readFile(t, r2.ProjectDir, ".crank.yaml")
-	assertContains(t, manifest, "- bun", "manifest after add bun")
+	assertContains(t, manifest, "- gorm", "manifest after add gorm")
 
 	// Config should be re-rendered with database section
 	cfgGo := readFile(t, r2.ProjectDir, "internal/config/config.go")
-	assertContains(t, cfgGo, "DatabaseConfig", "config.go has DatabaseConfig after add bun")
+	assertContains(t, cfgGo, "DatabaseConfig", "config.go has DatabaseConfig after add gorm")
 	assertNotContains(t, cfgGo, "JWTConfig", "config.go has no JWTConfig before adding auth")
 }
 
@@ -1837,11 +1702,6 @@ func TestAudit_FilesExist(t *testing.T) {
 	}
 }
 
-func TestAudit_BunRepository(t *testing.T) {
-	project := generateProject(t, "auditbun", []string{"base", "bun", "audit"}).ProjectDir
-	assertFileExists(t, project, "internal/adapters/persistence/bun/audit_repository.go")
-}
-
 func TestAudit_NoORM_Fails(t *testing.T) {
 	_, err := bootstrap.Generate(bootstrap.GlobalRegistry, bootstrap.Options{
 		ProjectName: "auditnoorm",
@@ -1852,7 +1712,7 @@ func TestAudit_NoORM_Fails(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected Generate to refuse audit without an ORM")
 	}
-	if !strings.Contains(err.Error(), "requires a database ORM") {
+	if !strings.Contains(err.Error(), "requires") {
 		t.Errorf("expected ORM requirement error, got: %v", err)
 	}
 }

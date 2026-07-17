@@ -15,13 +15,22 @@ import (
 // JSON-marshalled domain event recorded by the aggregate. After the
 // worker publishes it to the event bus, it stamps PublishedAt and the
 // publisher skips it on subsequent passes.
+//
+// GORM tags live on the aggregate itself — the same struct is used as both
+// the domain value and the persistence row, so the adapter needs no separate
+// row DTO or mapping.
 type Event struct {
-	ID          string
-	AggregateID string
-	EventType   string
-	Payload     []byte
-	CreatedAt   time.Time
-	PublishedAt *time.Time
+	ID          string     `gorm:"column:id;primaryKey;type:uuid"`
+	AggregateID string     `gorm:"column:aggregate_id;not null"`
+	EventType   string     `gorm:"column:event_type;not null"`
+	Payload     []byte     `gorm:"column:payload;not null"`
+	CreatedAt   time.Time  `gorm:"column:created_at;not null;default:current_timestamp"`
+	PublishedAt *time.Time `gorm:"column:published_at"`
+}
+
+// TableName maps the Event aggregate to the outbox_events table.
+func (Event) TableName() string {
+	return "outbox_events"
 }
 
 // AsDomainEvent unmarshals the JSON payload back into a shared.DomainEvent

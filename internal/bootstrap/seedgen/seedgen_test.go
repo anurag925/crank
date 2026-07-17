@@ -34,18 +34,18 @@ type Product struct {
 		t.Fatal(err)
 	}
 
-	bunDir := filepath.Join(dir, "internal/adapters/persistence/bun")
-	if err := os.MkdirAll(bunDir, 0o755); err != nil {
+	gormDir := filepath.Join(dir, "internal/adapters/persistence/gorm")
+	if err := os.MkdirAll(gormDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bunDir, "product_repository.go"), []byte(`package bun
+	if err := os.WriteFile(filepath.Join(gormDir, "product_repository.go"), []byte(`package gorm
 
 import "github.com/google/uuid"
 
 type productRow struct {
-	ID    uuid.UUID `+"`"+`bun:"id,pk,type:uuid"`+"`"+`
-	Name  string    `+"`"+`bun:"name,notnull"`+"`"+`
-	Price float64   `+"`"+`bun:"price"`+"`"+`
+	ID    uuid.UUID `+"`"+`gorm:"column:id;type:uuid;primaryKey"`+"`"+`
+	Name  string    `+"`"+`gorm:"column:name"`+"`"+`
+	Price float64   `+"`"+`gorm:"column:price"`+"`"+`
 }
 `), 0o644); err != nil {
 		t.Fatal(err)
@@ -175,11 +175,11 @@ type Other struct {
 
 func TestParseStruct_GormTagColumnName(t *testing.T) {
 	dir := t.TempDir()
-	bunDir := filepath.Join(dir, "internal/adapters/persistence/gorm")
-	if err := os.MkdirAll(bunDir, 0o755); err != nil {
+	gormDir := filepath.Join(dir, "internal/adapters/persistence/gorm")
+	if err := os.MkdirAll(gormDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(bunDir, "user_repository.go"), []byte(`package gorm
+	if err := os.WriteFile(filepath.Join(gormDir, "user_repository.go"), []byte(`package gorm
 
 type UserRow struct {
 	UserID    string `+"`"+`gorm:"column:user_id;primaryKey"`+"`"+`
@@ -315,13 +315,13 @@ func TestExtractTagValue(t *testing.T) {
 		key  string
 		want string
 	}{
-		{`bun:"id,pk"`, "bun:", "id,pk"},
-		{`bun:"name,notnull" gorm:"column:name"`, "bun:", "name,notnull"},
-		{`bun:"name,notnull" gorm:"column:name"`, "gorm:", "column:name"},
+		{`gorm:"column:id;primaryKey"`, "gorm:", "column:id;primaryKey"},
+		{`gorm:"column:name" json:"name"`, "gorm:", "column:name"},
+		{`gorm:"column:name" json:"name"`, "json:", "name"},
 		{`gorm:"column:user_id;primaryKey"`, "gorm:", "column:user_id;primaryKey"},
-		{`json:"name"`, "bun:", ""},
-		{``, "bun:", ""},
-		{`bun:""`, "bun:", ""},
+		{`json:"name"`, "gorm:", ""},
+		{``, "gorm:", ""},
+		{`gorm:""`, "gorm:", ""},
 	}
 	for _, c := range cases {
 		got := extractTagValue(c.tag, c.key)
@@ -345,12 +345,12 @@ func TestColumnName(t *testing.T) {
 		tag       *ast.BasicLit
 		want      string
 	}{
-		{"UserID", makeTag(`bun:"user_id,pk"`), "user_id"},
+		{"UserID", makeTag(`gorm:"column:user_id;primaryKey"`), "user_id"},
 		{"UserName", makeTag(`gorm:"column:user_name"`), "user_name"},
-		{"Email", makeTag(`bun:"-"`), "email"},
+		{"Email", makeTag(`gorm:"-"`), "email"},
 		{"CreatedAt", nil, "created_at"},
 		{"ID", nil, "id"},
-		{"MyField", makeTag(`bun:"my_field,notnull"`), "my_field"},
+		{"MyField", makeTag(`gorm:"column:my_field"`), "my_field"},
 	}
 	for _, c := range cases {
 		got := columnName(c.fieldName, c.tag)
@@ -373,10 +373,9 @@ func TestOrmType(t *testing.T) {
 		tag  *ast.BasicLit
 		want string
 	}{
-		{makeTag(`bun:"id,pk,type:uuid"`), "uuid"},
 		{makeTag(`gorm:"column:id;type:uuid;primaryKey"`), "uuid"},
-		{makeTag(`bun:"name,notnull,type:TEXT"`), "TEXT"},
-		{makeTag(`bun:"name,notnull"`), ""},
+		{makeTag(`gorm:"column:name;type:TEXT"`), "TEXT"},
+		{makeTag(`gorm:"column:name"`), ""},
 		{nil, ""},
 		{makeTag(`json:"name"`), ""},
 	}
@@ -400,7 +399,6 @@ func TestShortenImport(t *testing.T) {
 		{"github.com/google/uuid", "uuid"},
 		{"github.com/gofrs/uuid", "uuid"},
 		{"time", "time"},
-		{"github.com/uptrace/bun", "bun"},
 		{"gorm.io/gorm", "gorm"},
 	}
 	for _, c := range cases {
@@ -518,7 +516,6 @@ type Product struct {
 		ModelName:  "Product",
 		Count:      3,
 		ModulePath: "example.com/myapp",
-		Orm:        "gorm",
 	}
 	_, err := GenerateSeed(opts)
 	if err != nil {
@@ -587,7 +584,6 @@ func TestGenerateSeed_ScaffoldOnly(t *testing.T) {
 		ModelName:  "",
 		Count:      0,
 		ModulePath: "example.com/myapp",
-		Orm:        "gorm",
 	}
 	files, err := GenerateSeed(opts)
 	if err != nil {
@@ -643,7 +639,6 @@ func TestGenerateSeed_MissingModulePath(t *testing.T) {
 	_, err := GenerateSeed(Options{
 		ProjectDir: dir,
 		ModelName:  "User",
-		Orm:        "gorm",
 	})
 	if err == nil {
 		t.Fatal("expected error for missing module path")
@@ -659,7 +654,6 @@ func TestGenerateSeed_ModelNotFound(t *testing.T) {
 		ProjectDir: dir,
 		ModelName:  "NonExistent",
 		ModulePath: "example.com/myapp",
-		Orm:        "gorm",
 	})
 	if err == nil {
 		t.Fatal("expected error for non-existent model")
@@ -690,7 +684,6 @@ type Item struct {
 		ModelName:  "Item",
 		Count:      0, // should default to 10
 		ModulePath: "example.com/myapp",
-		Orm:        "gorm",
 	}
 	_, err := GenerateSeed(opts)
 	if err != nil {
@@ -730,7 +723,6 @@ type Item struct {
 		ModelName:  "Item",
 		Count:      1,
 		ModulePath: "example.com/myapp",
-		Orm:        "gorm",
 	}
 
 	// First generation.
@@ -807,7 +799,6 @@ type Product struct {
 		ProjectDir: dir,
 		Count:      2,
 		ModulePath: "example.com/myapp",
-		Orm:        "gorm",
 	}
 
 	// Generate User seed.
@@ -854,60 +845,6 @@ type Product struct {
 	seederStr2 := string(seederData2)
 	if strings.Count(seederStr2, `{"products", SeedProductsUp}`) > 1 {
 		t.Error("seeder.go should not have duplicate entries for Product")
-	}
-}
-
-func TestGenerateSeed_BunGeneration(t *testing.T) {
-	dir := t.TempDir()
-	domainDir := filepath.Join(dir, "internal/domain/product")
-	if err := os.MkdirAll(domainDir, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(domainDir, "product.go"), []byte(`package product
-
-type Product struct {
-	ID    string
-	Name  string
-	Price float64
-}
-`), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	opts := Options{
-		ProjectDir: dir,
-		ModelName:  "Product",
-		Count:      2,
-		ModulePath: "example.com/myapp",
-		Orm:        "bun",
-	}
-	_, err := GenerateSeed(opts)
-	if err != nil {
-		t.Fatalf("GenerateSeed bun: %v", err)
-	}
-
-	seedData, err := os.ReadFile(filepath.Join(dir, "db/seeds/bun/seed_products.go"))
-	if err != nil {
-		t.Fatal("bun seed_products.go not generated:", err)
-	}
-	seedStr := string(seedData)
-	if !strings.Contains(seedStr, "package bun") {
-		t.Error("bun seed should use package bun")
-	}
-	if !strings.Contains(seedStr, `"github.com/uptrace/bun"`) {
-		t.Error("bun seed should import bun")
-	}
-	if !strings.Contains(seedStr, "bun.BaseModel") {
-		t.Error("bun seed should use bun.BaseModel")
-	}
-	if !strings.Contains(seedStr, `bun:"id`) {
-		t.Error("bun seed should use bun tags")
-	}
-	if !strings.Contains(seedStr, "db.NewInsert()") {
-		t.Error("bun seed should use db.NewInsert()")
-	}
-	if !strings.Contains(seedStr, "CONFLICT (id) DO NOTHING") {
-		t.Error("bun seed should use ON CONFLICT clause")
 	}
 }
 
@@ -979,7 +916,6 @@ func TestGoValueForField_Enum(t *testing.T) {
 func TestGenerateMain(t *testing.T) {
 	content := generateMain(Options{
 		ModulePath: "example.com/myapp",
-		Orm:        "gorm",
 	})
 	if !strings.Contains(content, "package main") {
 		t.Error("missing package main")
@@ -996,7 +932,7 @@ func TestGenerateMain(t *testing.T) {
 }
 
 func TestGenerateSeeder(t *testing.T) {
-	content := generateSeeder(Options{Orm: "gorm"})
+	content := generateSeeder(Options{})
 	if !strings.Contains(content, "package gorm") {
 		t.Error("missing package gorm")
 	}
@@ -1008,13 +944,6 @@ func TestGenerateSeeder(t *testing.T) {
 	}
 }
 
-func TestGenerateSeeder_Bun(t *testing.T) {
-	content := generateSeeder(Options{Orm: "bun"})
-	if !strings.Contains(content, "package bun") {
-		t.Error("bun seeder should use package bun")
-	}
-}
-
 // ---------------------------------------------------------------------------
 // updateSeeder tests
 // ---------------------------------------------------------------------------
@@ -1023,7 +952,7 @@ func TestUpdateSeeder(t *testing.T) {
 	dir := t.TempDir()
 	seederPath := filepath.Join(dir, "seeder.go")
 
-	initial := generateSeeder(Options{Orm: "gorm"})
+	initial := generateSeeder(Options{})
 	if err := os.WriteFile(seederPath, []byte(initial), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -1032,7 +961,7 @@ func TestUpdateSeeder(t *testing.T) {
 		Name:      "Product",
 		TableName: "products",
 	}
-	opts := Options{Orm: "gorm"}
+	opts := Options{}
 
 	if err := updateSeeder(seederPath, info, opts); err != nil {
 		t.Fatal(err)

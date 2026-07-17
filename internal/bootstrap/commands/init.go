@@ -22,7 +22,6 @@ func NewInitCmd(reg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *cobra
 		module   string
 		target   string
 		force    bool
-		useBun   bool
 	)
 
 	cmd := &cobra.Command{
@@ -36,14 +35,12 @@ When run without explicit flags, init enters interactive mode and prompts you
 for each setting step by step. Pass flags to skip the wizard and run
 non-interactively.
 
-By default, the project is scaffolded with GORM as the database ORM. Pass
---use-bun to use Bun (uptrace) instead. To skip the database entirely (e.g.
-for an in-memory-only project) pass --features=base and crank will not add
-any ORM feature.
+By default, the project is scaffolded with GORM as the database ORM. To skip
+the database entirely (e.g. for an in-memory-only project) pass
+--features=base and crank will not add any ORM feature.
 
 Examples:
-  crank init myapp --features=base,auth                       # gorm (default)
-  crank init myapp --use-bun --features=base,auth             # bun
+  crank init myapp --features=base,auth                       # gorm
   crank init myapp --module=github.com/org/myapp --features=base,redis`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			interactive := shouldRunInteractive(cmd)
@@ -76,29 +73,14 @@ Examples:
 				}
 				module = moduleInput
 
-				// Step 3: ORM choice. GORM is the default; bun is opt-in.
-				defaultORM := "gorm"
-				if useBun {
-					defaultORM = "bun"
-				}
-				ormInput := prompt(reader, fmt.Sprintf("Default ORM (gorm/bun, default: %s)", defaultORM))
-				switch strings.ToLower(strings.TrimSpace(ormInput)) {
-				case "bun":
-					useBun = true
-				case "gorm", "":
-					useBun = false
-				default:
-					return fmt.Errorf("unknown ORM %q (expected gorm or bun)", ormInput)
-				}
-
-				// Step 4: Select features.
+				// Step 3: Select features.
 				fmt.Println()
 				fmt.Println("Available features:")
 				allFeatures := reg.All()
 				var optional []bootstrap.Feature
 				for _, f := range allFeatures {
-					if f.Name() == "base" || f.Name() == "gorm" || f.Name() == "bun" {
-						// base is always-on; bun/gorm are added by the ORM step.
+					if f.Name() == "base" || f.Name() == "gorm" {
+						// base is always-on; gorm is added automatically.
 						continue
 					}
 					optional = append(optional, f)
@@ -107,15 +89,11 @@ Examples:
 				fmt.Println()
 				featInput := prompt(reader, "Select features (comma-separated numbers, e.g. 2,3 or 'all')")
 				featList = parseFeatureSelection(featInput, optional)
-				// base is always first; default ORM is added after.
+				// base is always first; gorm is added after.
 				featList = append([]string{"base"}, featList...)
-				if useBun {
-					featList = append(featList, "bun")
-				} else {
-					featList = append(featList, "gorm")
-				}
+				featList = append(featList, "gorm")
 
-				// Step 5: Target directory.
+				// Step 4: Target directory.
 				defaultTarget := target
 				if defaultTarget == "" {
 					defaultTarget = "."
@@ -125,7 +103,7 @@ Examples:
 					target = targetInput
 				}
 
-				// Step 6: Force overwrite.
+				// Step 5: Force overwrite.
 				projectDir := filepath.Join(target, projectName)
 				if utils.PathExists(projectDir) && !force {
 					force = confirm(reader, "Directory already exists. Overwrite")
@@ -136,11 +114,10 @@ Examples:
 				}
 				projectName = args[0]
 				featList = splitCSV(features)
-				// Ensure base is included, then auto-add the default ORM if the
-				// user did not explicitly pick one. Passing --use-bun flips the
-				// default to bun.
+				// Ensure base is included, then auto-add GORM if the user did
+				// not explicitly pick an ORM.
 				featList = ensureBase(featList)
-				featList = ensureDefaultORM(featList, useBun)
+				featList = ensureDefaultORM(featList)
 			}
 
 			result, err := bootstrap.Generate(reg, bootstrap.Options{
@@ -174,35 +151,21 @@ Examples:
 		},
 	}
 
-	cmd.Flags().StringVar(&features, "features", "base", "comma-separated list of features to install (e.g. base,auth,redis). GORM is added by default unless --use-bun is passed or another ORM is in the list.")
+	cmd.Flags().StringVar(&features, "features", "base", "comma-separated list of features to install (e.g. base,auth,redis). GORM is added by default unless it is already in the list.")
 	cmd.Flags().StringVar(&module, "module", "", "Go module path (defaults to the project name)")
 	cmd.Flags().StringVar(&target, "target", ".", "parent directory in which to create the project")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing non-empty target directory")
-	cmd.Flags().BoolVar(&useBun, "use-bun", false, "use Bun (uptrace) as the default ORM instead of GORM")
 
 	return cmd
 }
 
-// ensureDefaultORM injects a default ORM into the feature list when none is
-// present. GORM is the default; --use-bun flips it to bun. Calling with an
-// explicit ORM in the list is a no-op so the user can override the default
-// (e.g. `crank init myapp --features=base,bun`).
-func ensureDefaultORM(features []string, useBun bool) []string {
-	hasBun := false
-	hasGorm := false
+// ensureDefaultORM injects GORM into the feature list when no ORM is present.
+// Calling with gorm already in the list is a no-op.
+func ensureDefaultORM(features []string) []string {
 	for _, f := range features {
-		if f == "bun" {
-			hasBun = true
-		}
 		if f == "gorm" {
-			hasGorm = true
+			return features
 		}
-	}
-	if hasBun || hasGorm {
-		return features
-	}
-	if useBun {
-		return append(features, "bun")
 	}
 	return append(features, "gorm")
 }
@@ -228,8 +191,7 @@ func shouldRunInteractive(cmd *cobra.Command) bool {
 	if cmd.Flags().Changed("features") ||
 		cmd.Flags().Changed("module") ||
 		cmd.Flags().Changed("target") ||
-		cmd.Flags().Changed("force") ||
-		cmd.Flags().Changed("use-bun") {
+		cmd.Flags().Changed("force") {
 		return false
 	}
 	return term.IsTerminal(int(os.Stdin.Fd()))

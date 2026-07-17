@@ -19,7 +19,7 @@ type FieldInfo struct {
 	// Name is the Go field name (exported, PascalCase).
 	Name string
 	// ColumnName is the SQL column name (snake_case), derived from the ORM
-	// tag (bun/gorm) or the field name.
+	// tag (gorm) or the field name.
 	ColumnName string
 	// GoType is the unqualified Go type name (e.g. "string", "int",
 	// "uuid.UUID", "Status").
@@ -48,7 +48,7 @@ type StructInfo struct {
 // FindStruct looks for a struct matching modelName in the project's domain
 // layer (internal/domain/<snake>/). If the domain struct exists but has no
 // exported fields (as is typical for DDD aggregates), it additionally searches
-// the bun and gorm adapter directories for a corresponding Row DTO struct
+// the gorm adapter directory for a corresponding Row DTO struct
 // (which always has exported fields with ORM tags).
 //
 // Returns (nil, nil) when no matching struct is found.
@@ -76,9 +76,8 @@ func FindStruct(projectDir, modelName string) (*StructInfo, error) {
 	}
 
 	// No exported fields on the domain aggregate (or domain dir didn't exist).
-	// Look for a Row DTO in the bun or gorm adapter directory.
+	// Look for a Row DTO in the gorm adapter directory.
 	for _, adapterDir := range []string{
-		filepath.Join(projectDir, "internal/adapters/persistence/bun"),
 		filepath.Join(projectDir, "internal/adapters/persistence/gorm"),
 	} {
 		rowPkg, rowErr := parsePackage(adapterDir)
@@ -271,7 +270,7 @@ func resolveColumns(fields []*ast.Field, pi *packageInfo, enumTypes map[string]b
 		name := f.Names[0].Name
 		goType := typeString(f.Type, pi)
 
-		// Extract column name from bun/gorm struct tag.
+		// Extract column name from the gorm struct tag.
 		colName := columnName(name, f.Tag)
 
 		fi := FieldInfo{
@@ -344,24 +343,17 @@ func shortenImport(path string) string {
 	return parts[len(parts)-1]
 }
 
-// columnName extracts the SQL column name from a struct tag (bun or gorm),
+// columnName extracts the SQL column name from a gorm struct tag,
 // falling back to snake_case of the field name.
 //
-// Bun uses comma-separated options: `bun:"id,pk,type:uuid"`
 // GORM uses semicolon-separated options: `gorm:"column:id;primaryKey;type:uuid"`
-// Both conventions are supported here.
 func columnName(fieldName string, tag *ast.BasicLit) string {
 	if tag != nil {
 		raw := strings.Trim(tag.Value, "`")
-		for _, prefix := range []string{"bun:", "gorm:"} {
+		for _, prefix := range []string{"gorm:"} {
 			if tagVal := extractTagValue(raw, prefix); tagVal != "" {
-				// Try comma-separated (bun convention) first.
-				parts := splitTagOptions(tagVal, ",")
-				if len(parts) > 0 && parts[0] != "-" && !strings.HasPrefix(parts[0], "column:") {
-					return parts[0]
-				}
-				// Try semicolon-separated (gorm convention) or look for column: prefix.
-				parts = splitTagOptions(tagVal, ";")
+				// Look for the column: option (gorm convention).
+				parts := splitTagOptions(tagVal, ";")
 				for _, p := range parts {
 					p = strings.TrimSpace(p)
 					if strings.HasPrefix(p, "column:") {
@@ -390,23 +382,19 @@ func splitTagOptions(val, sep string) []string {
 	return out
 }
 
-// ormType extracts the SQL type from the ORM struct tag (e.g. "uuid" from
-// `bun:"type:uuid"` or `gorm:"type:uuid"`). Returns empty string when no
-// type hint is found.
+// ormType extracts the SQL type from the gorm struct tag (e.g. "uuid" from
+// `gorm:"type:uuid"`). Returns empty string when no type hint is found.
 func ormType(tag *ast.BasicLit) string {
 	if tag == nil {
 		return ""
 	}
 	raw := strings.Trim(tag.Value, "`")
-	for _, prefix := range []string{"bun:", "gorm:"} {
+	for _, prefix := range []string{"gorm:"} {
 		if tagVal := extractTagValue(raw, prefix); tagVal != "" {
-			// Try both comma and semicolon separators.
-			for _, sep := range []string{",", ";"} {
-				parts := splitTagOptions(tagVal, sep)
-				for _, p := range parts {
-					if strings.HasPrefix(p, "type:") {
-						return strings.TrimPrefix(p, "type:")
-					}
+			parts := splitTagOptions(tagVal, ";")
+			for _, p := range parts {
+				if strings.HasPrefix(p, "type:") {
+					return strings.TrimPrefix(p, "type:")
 				}
 			}
 		}
@@ -415,7 +403,7 @@ func ormType(tag *ast.BasicLit) string {
 }
 
 // extractTagValue extracts the value portion of a struct tag key-value pair.
-// e.g. extractTagValue(`bun:"id,pk" gorm:"column:id"`, "bun:") -> "id,pk"
+// e.g. extractTagValue(`gorm:"column:id;primaryKey"`, "gorm:") -> "column:id;primaryKey"
 func extractTagValue(tag, key string) string {
 	idx := strings.Index(tag, key)
 	if idx < 0 {

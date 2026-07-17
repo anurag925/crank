@@ -102,7 +102,6 @@ Examples:
 | Feature | What agents can expect |
 | --- | --- |
 | `gorm` | GORM-backed database support and migrations. |
-| `bun` | Bun-backed database support and migrations. |
 | `auth` | Authentication routes, middleware, and JWT configuration. |
 | `redis` | Redis client/configuration. |
 | `mongodb` | MongoDB client/configuration. |

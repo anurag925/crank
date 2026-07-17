@@ -73,14 +73,13 @@ Feature behavior:
 |---|---|
 | `base` | Always present — DDD layout, config, logging, validator |
 | `gorm` | GORM is the ORM; repos live under `internal/adapters/persistence/gorm/` |
-| `bun` | Bun is the ORM; repos live under `internal/adapters/persistence/bun/` |
 | `auth` | JWT auth at `internal/adapters/auth/jwt/`, password hashing at `pkg/crypto/`, token denylist in GORM adapter, `/auth/*` endpoints |
 | `redis` | Redis cache adapter at `internal/adapters/cache/redis/`, Cache port at `internal/ports/cache.go` |
 | `mongodb` | MongoDB client at `internal/adapters/persistence/mongodb/` |
 | `qdrant` | Qdrant port at `internal/ports/qdrant.go`, gRPC + HTTP clients at `internal/adapters/persistence/qdrant/` |
 | `temporal` | Workflows/activities at `internal/adapters/temporal/`, worker at `cmd/worker/main.go` |
 | `otel` | OpenTelemetry tracing at `internal/adapters/telemetry/` |
-| `outbox` | Transactional outbox at `internal/adapters/outbox/`, outbox_events table, GORM/Bun UoW with TxRepositories |
+| `outbox` | Transactional outbox at `internal/adapters/outbox/`, outbox_events table, GORM UoW with TxRepositories |
 | `crypto` | AES-256-GCM cipher at `pkg/crypto/`, Cipher port at `internal/ports/cipher.go` |
 | `audit` | Audit trail at `internal/adapters/audit/`, audit_events table, `/api/v1/audit/events` endpoint |
 
@@ -97,7 +96,7 @@ internal/
   application/{aggregate}/   — command/query handlers, CQRS
   adapters/http/web/v1/      — Echo HTTP handlers (versioned at /api/v1)
   adapters/http/web/api/     — api.Error envelope
-  adapters/persistence/      — GORM/Bun repos (row DTO pattern, never scan into aggregate)
+  adapters/persistence/      — GORM repos (aggregate doubles as row; no DTO mapping)
   ports/                     — cross-cutting interfaces
   application/uow/           — UnitOfWork + TxRepositories port
 configs/                     — YAML config (non-secrets)
@@ -108,15 +107,15 @@ pkg/                         — shared packages (logging, crypto)
 
 All aggregates use `uuid.UUID` from `github.com/google/uuid`. Commands carry `ID string` which is parsed to `uuid.UUID` in the command handler. Generates a new UUID when empty on create.
 
-### Row DTO pattern
+### Exported domain fields
 
-Persistence adapters use a private `{name}Row` struct with GORM/Bun tags and `toAggregate()`/`rowFromAggregate()` conversion functions. Domain aggregates have no ORM tags. Constructors (`NewAggregate()`) validate invariants; `Rehydrate()` bypasses validation for persistence round-trips.
+Aggregate fields are exported (`ID`, `Name`, `CreatedAt`) with GORM tags directly on the struct. The same struct is used as both the domain model and the persistence row — no separate Row DTO, no `toAggregate()`/`rowFromAggregate()` conversion functions. Constructors (`NewAggregate()`) validate invariants; `Rehydrate()` bypasses validation for persistence round-trips.
 
 ### Unit of Work
 
 Writes go through `uow.SaveAndPublish(ctx, func(ctx, repos TxRepositories) error { ... }, events)`. The save closure receives a `TxRepositories` that hands out transaction-scoped repositories. Command handlers never import persistence adapters or `*gorm.DB`.
 
-With the `outbox` feature, the UoW runs in a GORM/Bun transaction and appends outbox rows atomically. Without outbox, it uses an in-memory UoW that is non-transactional.
+With the `outbox` feature, the UoW runs in a GORM transaction and appends outbox rows atomically. Without outbox, it uses an in-memory UoW that is non-transactional.
 
 ### Handlers
 

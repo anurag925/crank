@@ -29,14 +29,13 @@ func (feature) Dependencies() []string {
 	}
 }
 
-func (feature) Requirements() []string { return []string{"bun", "gorm"} }
+func (feature) Requirements() []string { return []string{"gorm"} }
 
 func (feature) Files() []bootstrap.FileMapping {
 	return []bootstrap.FileMapping{
 		{TemplatePath: "templates/internal_domain_audit_event.go.tmpl", OutputPath: "internal/domain/audit/event.go"},
 		{TemplatePath: "templates/internal_domain_audit_repository.go.tmpl", OutputPath: "internal/domain/audit/repository.go"},
 		{TemplatePath: "templates/internal_ports_audit.go.tmpl", OutputPath: "internal/ports/audit.go"},
-		{TemplatePath: "templates/internal_adapters_persistence_bun_audit_repository.go.tmpl", OutputPath: "internal/adapters/persistence/bun/audit_repository.go", Requires: "bun"},
 		{TemplatePath: "templates/internal_adapters_persistence_gorm_audit_repository.go.tmpl", OutputPath: "internal/adapters/persistence/gorm/audit_repository.go", Requires: "gorm"},
 		{TemplatePath: "templates/internal_adapters_audit_logger.go.tmpl", OutputPath: "internal/adapters/audit/logger.go"},
 		{TemplatePath: "templates/internal_application_audit_query_handler.go.tmpl", OutputPath: "internal/application/audit/query_handler.go"},

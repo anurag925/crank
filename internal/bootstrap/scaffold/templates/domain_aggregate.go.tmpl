@@ -7,20 +7,24 @@ import (
 	"{{.Module}}/internal/domain/shared"
 )
 
-// {{.R.Pascal}} is the aggregate root for {{.R.SnakePlural}}. It is plain Go:
-// no JSON, DB or validation tags. The HTTP and persistence adapters own their
-// own DTOs for those concerns. CreatedAt/UpdatedAt are exported so persistence
-// adapters can rehydrate the aggregate from a row; constructors and the Update
-// method remain the only sanctioned way to mutate them in the application
-// layer.
+// {{.R.Pascal}} is the aggregate root for {{.R.SnakePlural}}. GORM tags live on
+// the aggregate itself — the same struct is used as both the domain model and
+// the persistence row. The constructor (New{{.R.Pascal}}) and the Update method
+// remain the only sanctioned way to mutate the aggregate in the application
+// layer; persistence adapters use Rehydrate to bypass validation when loading
+// existing rows.
 type {{.R.Pascal}} struct {
-	id        uuid.UUID
+	ID        uuid.UUID `gorm:"column:id;primaryKey;type:uuid"`
+	CreatedAt time.Time `gorm:"column:created_at;not null"`
+	UpdatedAt time.Time `gorm:"column:updated_at;not null"`
 {{- range .Fields}}
-	{{.Camel}} {{.GoType}}
+	{{.GoName}} {{.GoType}} `{{.GormTag}}`
 {{- end}}
-	createdAt time.Time
-	updatedAt time.Time
-	events    []shared.DomainEvent
+	events    []shared.DomainEvent `gorm:"-"`
+}
+
+func (o *{{.R.Pascal}}) TableName() string {
+	return "{{.R.SnakePlural}}"
 }
 
 // New{{.R.Pascal}} constructs a new {{.R.Pascal}} aggregate, validates its
@@ -40,12 +44,12 @@ func New{{.R.Pascal}}(id uuid.UUID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end
 {{- end}}
 	now := time.Now().UTC()
 	o := &{{.R.Pascal}}{
-		id:        id,
+		ID:        id,
+		CreatedAt: now,
+		UpdatedAt: now,
 {{- range .Fields}}
-		{{.Camel}}: {{.Camel}},
+		{{.GoName}}: {{.Camel}},
 {{- end}}
-		createdAt: now,
-		updatedAt: now,
 	}
 	o.recordEvent({{.R.Pascal}}Created{
 		ID:         id,
@@ -54,29 +58,17 @@ func New{{.R.Pascal}}(id uuid.UUID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end
 	return o, nil
 }
 
-// ID returns the aggregate's identifier.
-func (o *{{.R.Pascal}}) ID() uuid.UUID { return o.id }
-
-// CreatedAt returns the time the aggregate was first persisted.
-func (o *{{.R.Pascal}}) CreatedAt() time.Time { return o.createdAt }
-
-// UpdatedAt returns the time the aggregate was last mutated.
-func (o *{{.R.Pascal}}) UpdatedAt() time.Time { return o.updatedAt }
-{{range .Fields}}
-// {{.GoName}} returns the {{.Name}} field of the aggregate.
-func (o *{{$.R.Pascal}}) {{.GoName}}() {{.GoType}} { return o.{{.Camel}} }
-{{end}}
 // Update replaces the aggregate's mutable fields and records a
 // {{.R.Pascal}}Updated event. Callers must Save the aggregate afterwards and
 // then publish the pulled events.
 func (o *{{.R.Pascal}}) Update({{range .Fields}}{{.Camel}} {{.GoType}}, {{end}}) {
 	now := time.Now().UTC()
 {{- range .Fields}}
-	o.{{.Camel}} = {{.Camel}}
+	o.{{.GoName}} = {{.Camel}}
 {{- end}}
-	o.updatedAt = now
+	o.UpdatedAt = now
 	o.recordEvent({{.R.Pascal}}Updated{
-		ID:         o.id,
+		ID:         o.ID,
 		occurredAt: now,
 	})
 }
@@ -85,21 +77,21 @@ func (o *{{.R.Pascal}}) Update({{range .Fields}}{{.Camel}} {{.GoType}}, {{end}})
 // layer to rehydrate an aggregate from a row whose created_at and updated_at
 // columns were set at write time.
 func (o *{{.R.Pascal}}) SetTimestamps(created, updated time.Time) {
-	o.createdAt = created
-	o.updatedAt = updated
+	o.CreatedAt = created
+	o.UpdatedAt = updated
 }
 
 // Rehydrate reconstructs an aggregate from a persistence row, bypassing the
-// validation done by New{{.R.Pascal}}. It is intended for use by the postgres
+// validation done by New{{.R.Pascal}}. It is intended for use by the GORM
 // and in-memory adapters only. Callers must guarantee that id is non-zero.
 func Rehydrate(id uuid.UUID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end}}, created, updated time.Time) *{{.R.Pascal}} {
 	return &{{.R.Pascal}}{
-		id:        id,
+		ID:        id,
+		CreatedAt: created,
+		UpdatedAt: updated,
 {{- range .Fields}}
-		{{.Camel}}: {{.Camel}},
+		{{.GoName}}: {{.Camel}},
 {{- end}}
-		createdAt: created,
-		updatedAt: updated,
 	}
 }
 
@@ -108,7 +100,7 @@ func Rehydrate(id uuid.UUID{{range .Fields}}, {{.Camel}} {{.GoType}}{{end}}, cre
 // and then publishing the pulled events.
 func (o *{{.R.Pascal}}) MarkDeleted() {
 	o.recordEvent({{.R.Pascal}}Deleted{
-		ID:         o.id,
+		ID:         o.ID,
 		occurredAt: time.Now().UTC(),
 	})
 }

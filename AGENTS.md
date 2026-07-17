@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-A modular CLI tool that scaffolds production-ready Go backend services using DDD patterns and wraps common development tools as subcommands. Generated projects use `uuid.UUID` domain aggregates with private fields, CQRS application handlers, v1 Echo handlers with self-scoping, and a `TxRepositories`-based Unit of Work that never leaks ORM types into the application layer.
+A modular CLI tool that scaffolds production-ready Go backend services using DDD patterns and wraps common development tools as subcommands. Generated projects use `uuid.UUID` domain aggregates with exported fields, CQRS application handlers, v1 Echo handlers with self-scoping, and a `TxRepositories`-based Unit of Work that never leaks ORM types into the application layer.
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@ A modular CLI tool that scaffolds production-ready Go backend services using DDD
 | CLI Framework | Cobra |
 | HTTP (generated) | Echo v5 |
 | Config (generated) | Viper + caarlos0/env |
-| ORM (generated) | GORM (default) or Bun |
+| ORM (generated) | GORM |
 | IDs | google/uuid |
 | Logging (generated) | log/slog with redaction + context enrichment |
 | Migrations | golang-migrate |
@@ -22,8 +22,7 @@ A modular CLI tool that scaffolds production-ready Go backend services using DDD
 
 ```bash
 # Project lifecycle
-crank init myapp --features=base,auth            # GORM (default)
-crank init myapp --features=base,auth --use-bun   # Bun
+crank init myapp --features=base,auth            # GORM
 crank add redis --project ./myapp
 crank update-skill --project ./myapp             # refresh agent SKILL.md
 crank list
@@ -104,7 +103,7 @@ type Tool interface {
 Tools self-register via `init()`. In-process tools (doctor) implement `InProcessTool`.
 
 ### Generator (`crank make`)
-Scaffolds DDD-layered code: domain aggregates (uuid.UUID), CQRS handlers, v1 HTTP handlers, row DTO repos. Auto-wires handlers into `web/v1/routes.go` and repos into `TxRepositories` interfaces. All idempotent via marker comments.
+Scaffolds DDD-layered code: domain aggregates (uuid.UUID with GORM tags), CQRS handlers, v1 HTTP handlers, GORM-backed repos (aggregate doubles as row; no DTO mapping). Auto-wires handlers into `web/v1/routes.go` and repos into `TxRepositories` interfaces. All idempotent via marker comments.
 
 ## Generated Project Architecture
 
@@ -114,13 +113,13 @@ myapp/
 ├── internal/
 │   ├── adapters/
 │   │   ├── http/web/v1/             # Versioned handlers
-│   │   ├── persistence/gorm/        # Row DTO repos
+│   │   ├── persistence/gorm/        # Repos (aggregate doubles as row; no DTO mapping)
 │   │   ├── outbox/                  # Transactional UoW
 │   │   └── auth/jwt/                # JWT service
 │   ├── application/
 │   │   ├── user/                    # CQRS handlers
 │   │   └── uow/                     # TxRepositories + UnitOfWork
-│   ├── domain/user/                 # uuid.UUID aggregate
+│   ├── domain/user/                 # uuid.UUID aggregate with GORM tags
 │   ├── ports/                       # Interfaces
 │   └── config/                      # Viper loading
 ├── pkg/
@@ -132,12 +131,13 @@ myapp/
 
 ## Key Patterns
 
-- **uuid.UUID IDs** — all aggregates, private fields with getters
-- **Row DTO** — private `{name}Row` with `toAggregate()`/`rowFromAggregate()`, zero ORM tags on aggregates
-- **TxRepositories** — save closure receives `repos.Users().Save(ctx, u)`, zero GORM imports
-- **v1 handlers** — `api.Error` envelope, self-scoped user endpoints
-- **Graceful degradation** — optional services warn + skip if unavailable
-- **Token revocation** — `ports.TokenDenylist` with GORM adapter, `/auth/logout`
+- **Exported domain fields** — aggregate fields are exported (`ID`, `Name`, `CreatedAt`) with GORM tags directly on the struct. No separate Row DTO, no `toAggregate()`/`rowFromAggregate()` conversion functions.
+- **uuid.UUID IDs** — aggregates use raw `uuid.UUID` (no typed `{{Pascal}}ID` wrapper). Validation of `uuid.Nil` happens in the constructor.
+- **Single ORM adapter** — GORM is the sole persistence adapter (covers postgres). The aggregate is used directly as the GORM model.
+- **TxRepositories** — save closure receives `repos.Users().Save(ctx, u)`, zero GORM imports at the application layer.
+- **v1 handlers** — `api.Error` envelope, self-scoped user endpoints.
+- **Graceful degradation** — optional services warn + skip if unavailable.
+- **Token revocation** — `ports.TokenDenylist` with GORM adapter, `/auth/logout`.
 
 ## Testing
 
@@ -155,7 +155,7 @@ Run: `go test ./internal/...` for fast suite, `go test -tags e2e ./e2e/` for ful
 | Config (generated) | Viper + YAML + .env |
 | HTTP (generated) | Echo v5 |
 | Docs (generated) | Swagger via [swaggo/swag](https://github.com/swaggo/swag) + [echo-swagger v2](https://github.com/swaggo/echo-swagger) |
-| ORM (generated) | GORM (default) or Bun (`--use-bun`) |
+| ORM (generated) | GORM |
 | Logging (generated) | `log/slog` (stdlib) |
 | Migrations (generated) | golang-migrate |
 | Templating | `text/template` + `embed.FS` |
@@ -166,7 +166,6 @@ Run: `go test ./internal/...` for fast suite, `go test -tags e2e ./e2e/` for ful
 ```bash
 # Scaffold a new project (tools are checked/installed automatically)
 ./crank init myapp --features=base,auth          # GORM (default ORM)
-./crank init myapp --features=base,auth --use-bun  # Bun ORM
 
 # List available features
 ./crank list
@@ -185,7 +184,7 @@ Run: `go test ./internal/...` for fast suite, `go test -tags e2e ./e2e/` for ful
 
 # Generate application code (Rails/Laravel-style generators)
 ./crank make model Order customer:string total:float --project=./myapp
-./crank make handler Product title:string price:float --project=./myapp   # handler + model + repo/service + route wiring (+ migration if bun)
+./crank make handler Product title:string price:float --project=./myapp   # handler + model + repo/service + route wiring (+ migration)
 ./crank make handler Product --only --project=./myapp                     # just the handler
 ./crank make scaffold Invoice number:string amount:float --project=./myapp # the full stack
 ./crank make scaffold Invoice number:string --tests --project=./myapp      # the full stack + _test.go files
@@ -270,15 +269,14 @@ crank/
 │   │       ├── base/                      # Echo + Viper + slog + dev tooling
 │   │       ├── auth/                      # JWT middleware + auth handlers
 │   │       ├── crypto/                    # AES-256-GCM encrypt/decrypt helpers
-│   │       ├── bun/                       # Bun ORM + migrations
 │   │       ├── gorm/                      # GORM (default ORM)
 │   │       ├── redis/                     # Redis client (placeholder)
 │   │       ├── mongodb/                   # MongoDB client (placeholder)
 │   │       ├── qdrant/                    # Qdrant vector DB client
 │   │       ├── temporal/                  # Temporal client + worker + example workflow/activity
 │   │       ├── otel/                      # OpenTelemetry tracing + metrics
-│   │       ├── outbox/                    # Transaction outbox pattern (requires bun or gorm)
-│   │       └── views/                     # Database views (requires bun)
+│   │       ├── outbox/                    # Transaction outbox pattern (requires gorm)
+│   │       └── views/                     # Database views (requires gorm)
 │   └── utils/
 │       ├── fileutil.go                    # EnsureDir, WriteFile, PathExists, etc.
 │       └── exec.go                        # FindBinary, RunExternal, ShellJoin
@@ -304,12 +302,12 @@ type Feature interface {
 }
 ```
 
-- `Name()` — short identifier used in `--features` lists (e.g. `"base"`, `"auth"`, `"bun"`, `"gorm"`)
+- `Name()` — short identifier used in `--features` lists (e.g. `"base"`, `"auth"`, `"gorm"`)
 - `Description()` — shown by `crank list`
 - `Dependencies()` — Go module paths fetched via `go get` after scaffolding
 - `Files()` — template-to-output path mappings
 - `Templates()` — the `embed.FS` containing `.tmpl` files
-- `Requirements()` — names of other features that must be installed alongside this one (e.g. `outbox` requires `bun` or `gorm`); `crank add`/`crank init` refuse to install if any requirement is missing
+- `Requirements()` — names of other features that must be installed alongside this one (e.g. `outbox` requires `gorm`); `crank add`/`crank init` refuse to install if any requirement is missing
 
 ### Tool Interface (`internal/bootstrap/tool.go`)
 
@@ -332,7 +330,7 @@ type Tool interface {
 - `Name()` — the subcommand name (e.g. `"migrate"` → `crank migrate`)
 - `BinaryName()` — the executable to look up on PATH (e.g. `"migrate"`, `"swag"`)
 - `InstallCmd()` — shown when the tool is missing; also used by `crank init` for auto-install
-- `RequiresFeatures()` — e.g. `migrate` requires `"bun"` or `"gorm"`; empty means always available
+- `RequiresFeatures()` — e.g. `migrate` requires `"gorm"`; empty means always available
 - `AddFlags()` — lets tools register custom flags (e.g. `--database-url`, `--steps`)
 - `Prepare()` — builds the `ToolInvocation` (args, working dir, stdin, env); receives `extraArgs` (unknown flags/positional args) to forward to the underlying binary
 - `Install()` — downloads/installs the tool (usually via `go install`)
@@ -390,7 +388,7 @@ Passed to every template during rendering:
 - `ModulePath` — Go module path for `go.mod` / imports
 - `PackageName` — last segment of module path
 - `Features` — list of enabled feature names
-- `Has(name string) bool` — check if a feature is active (used in templates with `{{if .Has "bun"}}...{{end}}`)
+- `Has(name string) bool` — check if a feature is active (used in templates with `{{if .Has "redis"}}...{{end}}`)
 - `Require(names ...string) error` — fail if a feature is missing
 - `CrankVersion` — the crank CLI version that generated this project
 
@@ -435,20 +433,13 @@ Passed to every template during rendering:
    _ "github.com/anurag925/crank/internal/bootstrap/features/<name>"
    ```
 
-crank ships two ORM features (`gorm` and `bun`) that are mutually exclusive:
-one of them is automatically added by `crank init` (GORM by default, bun when
-`--use-bun` is passed). The user can also explicitly pass
-`--features=base,bun,auth` to pick bun without the flag. If neither is
-specified, the `ensureDefaultORM` helper in `commands/init.go` adds GORM
-automatically. Both features must not be present at the same time — a mutual
-exclusion check in `generator.go` (`validateMutuallyExclusive`) enforces
-this at generation time.
+crank ships GORM as the sole ORM feature. It is automatically added by
+`crank init` when no ORM is specified: the `ensureDefaultORM` helper in
+`commands/init.go` adds `gorm` for you. GORM covers postgres persistence.
 
-Features that don't care which ORM is used (e.g. `outbox`) can list both
-`"bun"` and `"gorm"` in `Requirements()`. When both are listed, they are
-treated as alternatives — at least one must be present, but both are not
-required. This is enforced by `validateRequirements` during `crank init`
-and by `checkRequirements` during `crank add`.
+Features that need a database (e.g. `outbox`) list `"gorm"` in
+`Requirements()`. This is enforced by `validateRequirements` during
+`crank init` and by `checkRequirements` during `crank add`.
 
 ### Adding a New Tool Wrapper
 
@@ -483,13 +474,12 @@ application code inside an existing project, Rails/Laravel style. Kinds:
 
 Key behaviors to preserve when modifying this subsystem:
 
-- **Bun-aware.** `scaffold.Generate` reads the project manifest via
-  `bootstrap.LoadProjectInfo`. When the `bun` feature is present it emits a
-  Bun-backed `repository` plus a create-table migration; otherwise it emits an
-  in-memory `service`. Both layers expose the same method set
-  (`List/Get/Create/Update/Delete`) so handlers depend on either uniformly.
-  (GORM projects fall back to the in-memory scaffold — GORM-backed repository
-  generation is on the roadmap.)
+- **GORM-backed repositories.** `scaffold.Generate` reads the project manifest
+  via `bootstrap.LoadProjectInfo`. When `gorm` is present it
+  emits a GORM-backed `repository` plus a create-table migration; otherwise it
+  emits an in-memory `service`. GORM is the single supported persistence
+  adapter and covers postgres. The domain aggregate doubles as the GORM model
+  — no separate Row DTO is generated.
 - **Dependency pull-in.** A `handler`/`scaffold` generates its model and
   repository/service too (unless `--only` is passed). Generators never overwrite
   existing dependency files — they are skipped. The explicitly requested
@@ -497,9 +487,10 @@ Key behaviors to preserve when modifying this subsystem:
 - **Test generation.** `--tests` adds a `_test.go` beside every generated Go
   layer (template suffix `*_test.go.tmpl`). Test artifacts are expanded from the
   base plan in `withTestArtifacts` and are always non-primary (skipped, never
-  errored, if they already exist). For bun-backed projects, repository/handler tests are
+  errored, if they already exist). GORM-backed repository tests are
   route/sentinel-only (no live DB); the in-memory path exercises full CRUD,
-  using per-type sample literals (`Field.Sample`) so request bodies satisfy the
+  using per-type sample literals (`Field.Sample` for aggregate types,
+  `Field.DTOSample` for DTO types) so request bodies satisfy the
   generated validation tags.
 - **Name inflection** lives in `names.go` (`NewResource`): it singularizes the
   input and derives Pascal/camel/snake/kebab + plural forms used across the
@@ -584,7 +575,7 @@ Config files live in a top-level `configs/` directory, following the
 - Viper searches `./configs` first, then `.` as fallback
 - Viper priority: env vars > .env > configs/config.yaml
 
-All feature configs (bun, gorm, auth, crypto, redis, mongodb, qdrant, temporal, otel, outbox, views) are
+All feature configs (gorm, auth, crypto, redis, mongodb, qdrant, temporal, otel, outbox, views) are
 consolidated in the base `config.go` template using `{{if .Has "feature"}}`
 conditional sections. Feature-specific packages (e.g. `internal/redis`,
 `internal/temporal`) do **not** define their own Config structs — they import
@@ -638,8 +629,8 @@ file is left untouched and an error is returned.
 
 | Subcommand | Wraps | Binary | Requires |
 |------------|-------|--------|----------|
-| `crank migrate` | golang-migrate | `migrate` | `bun` or `gorm` feature |
-| `crank seed` | golang-migrate + seed generate | `migrate` | `bun` or `gorm` feature |
+| `crank migrate` | golang-migrate | `migrate` | `gorm` feature |
+| `crank seed` | golang-migrate + seed generate | `migrate` | `gorm` feature |
 | `crank swag` | swaggo/swag | `swag` | — |
 | `crank build` | `go build` | `go` | — |
 | `crank run` | `go run ./cmd/server` | `go` | — |
@@ -731,4 +722,4 @@ Direct dependencies (from `go.mod`):
 - `golang.org/x/term v0.44.0` — terminal detection
 - `gopkg.in/yaml.v3 v3.0.1` — YAML manifest parsing
 
-Generated projects pull in their own dependencies (Echo, Bun, Viper, etc.) via their `go.mod` templates.
+Generated projects pull in their own dependencies (Echo, Viper, etc.) via their `go.mod` templates.

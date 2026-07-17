@@ -17,16 +17,6 @@ crank run
 
 This uses GORM by default.
 
-## Create a Bun-backed API
-
-```bash
-crank init api --features=base,auth --use-bun
-cd api
-cp .env.example .env
-crank migrate up
-crank run
-```
-
 ## Add Redis to an existing project
 
 ```bash

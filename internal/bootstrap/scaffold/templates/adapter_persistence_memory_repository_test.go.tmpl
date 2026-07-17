@@ -9,6 +9,7 @@ import (
 
 	"{{.Module}}/internal/domain/{{.R.Snake}}"
 
+	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -29,8 +30,7 @@ func Test{{.R.Pascal}}Repository_CRUD(t *testing.T) {
 	assert.Empty(t, items)
 
 	// Save a fresh aggregate.
-	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID("123e4567-e89b-12d3-a456-426614174000")
-	require.NoError(t, err)
+	id := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 	x, err := {{.R.Snake}}.New{{.R.Pascal}}(id{{range .Fields}}, {{.Sample}}{{end}})
 	require.NoError(t, err)
 	require.NoError(t, repo.Save(ctx, x))
@@ -38,7 +38,7 @@ func Test{{.R.Pascal}}Repository_CRUD(t *testing.T) {
 	// Get returns the stored aggregate.
 	got, err := repo.Get(ctx, id)
 	require.NoError(t, err)
-	assert.Equal(t, id, got.ID())
+	assert.Equal(t, id, got.ID)
 
 	// List returns it.
 	items, err = repo.List(ctx)
@@ -58,10 +58,9 @@ func Test{{.R.Pascal}}Repository_NotFound(t *testing.T) {
 	repo := New{{.R.Pascal}}Repository()
 	ctx := context.Background()
 
-	id, err := {{.R.Snake}}.New{{.R.Pascal}}ID("123e4567-e89b-12d3-a456-426614174000")
-	require.NoError(t, err)
+	id := uuid.MustParse("123e4567-e89b-12d3-a456-426614174000")
 
-	_, err = repo.Get(ctx, id)
+	_, err := repo.Get(ctx, id)
 	assert.ErrorIs(t, err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound)
 	assert.ErrorIs(t, repo.Delete(ctx, id), {{.R.Snake}}.Err{{.R.Pascal}}NotFound)
 }

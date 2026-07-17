@@ -52,9 +52,6 @@ curl -fsSL https://raw.githubusercontent.com/anurag925/crank/main/install.sh | s
 # 2. Scaffold a service. GORM is the default ORM.
 crank init myapp --features=base,auth
 
-# Use Bun instead of GORM when desired.
-crank init myapp --features=base,auth --use-bun
-
 # 3. Run it
 cd myapp
 cp .env.example .env
@@ -81,7 +78,6 @@ crank doctor --project ./myapp
 | --- | --- |
 | `base` | DDD layout, Echo HTTP server, config, validation, logging, Swagger plumbing, in-memory adapters, Dockerfile, `.air.toml`, and Makefile. |
 | `gorm` | PostgreSQL persistence with GORM. Default ORM. |
-| `bun` | PostgreSQL persistence with Bun. |
 | `auth` | JWT auth, bcrypt password hashing, auth endpoints, and protected route middleware. |
 | `crypto` | AES-256-GCM encryption/decryption helper. |
 | `redis` | Redis cache port and go-redis client. |
@@ -89,7 +85,7 @@ crank doctor --project ./myapp
 | `qdrant` | Qdrant vector database client. |
 | `temporal` | Temporal client, worker, workflows, and activities. |
 | `otel` | OpenTelemetry tracing. |
-| `outbox` | Transactional outbox for domain events. Requires `gorm` or `bun`. |
+| `outbox` | Transactional outbox for domain events. Requires `gorm`. |
 | `views` | React SPA with Vite, embedded by the Go binary. |
 
 ## Development

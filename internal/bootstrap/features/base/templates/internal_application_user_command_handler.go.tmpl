@@ -2,12 +2,18 @@ package user
 
 import (
 	"context"
+{{- if .Has "auth"}}
+	"errors"
+{{- end}}
 	"fmt"
 
 	"github.com/google/uuid"
 
 	"{{.ModulePath}}/internal/application/uow"
 	"{{.ModulePath}}/internal/domain/user"
+{{- if .Has "auth"}}
+	"{{.ModulePath}}/internal/ports"
+{{- end}}
 )
 
 // CommandHandler is the application service that mutates user aggregates in
@@ -17,12 +23,15 @@ import (
 type CommandHandler struct {
 	repo user.Repository
 	uow  uow.UnitOfWork
+{{- if .Has "auth"}}
+	hasher ports.Hasher
+{{- end}}
 }
 
 // NewCommandHandler wires a CommandHandler against the given repository and
 // unit of work.
-func NewCommandHandler(repo user.Repository, uow uow.UnitOfWork) *CommandHandler {
-	return &CommandHandler{repo: repo, uow: uow}
+func NewCommandHandler(repo user.Repository, uow uow.UnitOfWork{{if .Has "auth"}}, hasher ports.Hasher{{end}}) *CommandHandler {
+	return &CommandHandler{repo: repo, uow: uow{{if .Has "auth"}}, hasher: hasher{{end}}}
 }
 
 // HandleCreate creates a new user aggregate, persists it through the unit of
@@ -39,6 +48,17 @@ func (h *CommandHandler) HandleCreate(ctx context.Context, cmd CreateUserCommand
 	if err != nil {
 		return nil, fmt.Errorf("create user: %w", err)
 	}
+{{- if .Has "auth"}}
+	// When a password is supplied, hash it through the Hasher port and store
+	// only the hash on the aggregate. The plaintext never leaves this method.
+	if cmd.Password != "" {
+		hash, hashErr := h.hasher.Hash(cmd.Password)
+		if hashErr != nil {
+			return nil, fmt.Errorf("create user: hash password: %w", hashErr)
+		}
+		u.SetPasswordHash(hash)
+	}
+{{- end}}
 	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context, repos uow.TxRepositories) error {
 		return repos.Users().Save(ctx, u)
 	}, u.PullEvents()); err != nil {
@@ -46,6 +66,31 @@ func (h *CommandHandler) HandleCreate(ctx context.Context, cmd CreateUserCommand
 	}
 	return u, nil
 }
+{{- if .Has "auth"}}
+
+// ErrInvalidCredentials is returned by HandleAuthenticate when the supplied
+// email/password pair does not match a stored user. It is deliberately vague
+// so callers cannot distinguish "no such user" from "wrong password".
+var ErrInvalidCredentials = errors.New("invalid credentials")
+
+// HandleAuthenticate verifies an email/password pair and returns the matching
+// user aggregate. It returns ErrInvalidCredentials for both an unknown email
+// and a wrong password so the two cases are indistinguishable to a caller.
+//
+// Note: timing-based user enumeration is not mitigated here. It should be
+// handled at an outer layer (e.g. rate limiting, WAF, captcha) where abusive
+// clients can be blocked regardless of the attack vector.
+func (h *CommandHandler) HandleAuthenticate(ctx context.Context, cmd AuthenticateUserCommand) (*user.User, error) {
+	u, err := h.repo.GetByEmail(ctx, cmd.Email)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+	if !h.hasher.Verify(u.PasswordHash(), cmd.Password) {
+		return nil, ErrInvalidCredentials
+	}
+	return u, nil
+}
+{{- end}}
 
 // HandleUpdate loads an existing user aggregate, mutates it through the
 // domain's Update method, and routes the save+publish through the unit of

@@ -8,61 +8,86 @@ import (
 {{- end}}
 
 	"{{.Module}}/internal/adapters/persistence/memory"
+	"{{.Module}}/internal/application/uow"
+	"{{.Module}}/internal/domain/shared"
 	"{{.Module}}/internal/domain/{{.R.Snake}}"
 
+{{- if .HasUUID}}
+	"github.com/google/uuid"
+{{- end}}
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestNewCommandHandler(t *testing.T) {
+// fakeUoW is a test double for uow.UnitOfWork. It runs the save closure
+// synchronously against an in-memory TxRepositories and treats the recorded
+// events as published, so command handler tests can exercise the full
+// save path without a real database or transaction.
+type fakeUoW struct{ repo {{.R.Snake}}.Repository }
+
+func (u fakeUoW) SaveAndPublish(ctx context.Context, save func(context.Context, uow.TxRepositories) error, _ []shared.DomainEvent) error {
+	return save(ctx, fakeTxRepos{repo: u.repo})
+}
+
+// fakeTxRepos satisfies uow.TxRepositories by embedding the interface (which
+// supplies the accessors this handler does not use) and overriding the one it
+// does. Embedding keeps the double stable as new resources are scaffolded.
+type fakeTxRepos struct {
+	uow.TxRepositories
+	repo {{.R.Snake}}.Repository
+}
+
+func (f fakeTxRepos) {{.R.PascalPlural}}() {{.R.Snake}}.Repository { return f.repo }
+
+func newTestCommandHandler() (*CommandHandler, *memory.{{.R.Pascal}}Repository) {
 	repo := memory.New{{.R.Pascal}}Repository()
-	h := NewCommandHandler(repo, nil)
+	return NewCommandHandler(repo, fakeUoW{repo: repo}), repo
+}
+
+func TestNewCommandHandler(t *testing.T) {
+	h, _ := newTestCommandHandler()
 	require.NotNil(t, h)
 }
 
 func Test{{.R.Pascal}}CommandHandler_HandleCreate(t *testing.T) {
-	repo := memory.New{{.R.Pascal}}Repository()
-	h := NewCommandHandler(repo, nil)
+	h, repo := newTestCommandHandler()
 	ctx := context.Background()
 
 	out, err := h.HandleCreate(ctx, buildCreateCmd("123e4567-e89b-12d3-a456-426614174000"))
 	require.NoError(t, err)
-	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", out.ID().String())
+	assert.Equal(t, "123e4567-e89b-12d3-a456-426614174000", out.ID.String())
 
-	got, err := repo.Get(ctx, out.ID())
+	got, err := repo.Get(ctx, out.ID)
 	require.NoError(t, err)
-	assert.Equal(t, out.ID(), got.ID())
+	assert.Equal(t, out.ID, got.ID)
 }
 
 func Test{{.R.Pascal}}CommandHandler_HandleUpdate(t *testing.T) {
-	repo := memory.New{{.R.Pascal}}Repository()
-	h := NewCommandHandler(repo, nil)
+	h, _ := newTestCommandHandler()
 	ctx := context.Background()
 
 	created, err := h.HandleCreate(ctx, buildCreateCmd("123e4567-e89b-12d3-a456-426614174000"))
 	require.NoError(t, err)
 
-	updated, err := h.HandleUpdate(ctx, buildUpdateCmd(created.ID().String()))
+	updated, err := h.HandleUpdate(ctx, buildUpdateCmd(created.ID.String()))
 	require.NoError(t, err)
-	assert.Equal(t, created.ID(), updated.ID())
+	assert.Equal(t, created.ID, updated.ID)
 }
 
 func Test{{.R.Pascal}}CommandHandler_HandleDelete(t *testing.T) {
-	repo := memory.New{{.R.Pascal}}Repository()
-	h := NewCommandHandler(repo, nil)
+	h, repo := newTestCommandHandler()
 	ctx := context.Background()
 
 	created, err := h.HandleCreate(ctx, buildCreateCmd("123e4567-e89b-12d3-a456-426614174000"))
 	require.NoError(t, err)
 
-	require.NoError(t, h.HandleDelete(ctx, Delete{{.R.Pascal}}Command{ID: created.ID().String()}))
-	_, err = repo.Get(ctx, created.ID())
+	require.NoError(t, h.HandleDelete(ctx, Delete{{.R.Pascal}}Command{ID: created.ID.String()}))
+	_, err = repo.Get(ctx, created.ID)
 	assert.ErrorIs(t, err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound)
 }
 
 func Test{{.R.Pascal}}CommandHandler_HandleCreate_InvalidID(t *testing.T) {
-	repo := memory.New{{.R.Pascal}}Repository()
-	h := NewCommandHandler(repo, nil)
+	h, _ := newTestCommandHandler()
 	_, err := h.HandleCreate(context.Background(), buildCreateCmd(""))
 	assert.Error(t, err)
 }

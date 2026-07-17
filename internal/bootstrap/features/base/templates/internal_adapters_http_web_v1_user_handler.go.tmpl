@@ -11,8 +11,7 @@ import (
 	"{{.ModulePath}}/internal/domain/user"
 )
 
-// userDTO is the input/output DTO for user HTTP endpoints. The HTTP layer
-// owns validation tags; the domain aggregate stays tag-free.
+// userDTO is the input/output DTO for user HTTP endpoints.
 type userDTO struct {
 	ID    string `json:"id"    validate:"omitempty"`
 	Name  string `json:"name"  validate:"required,min=2,max=100"`
@@ -30,7 +29,7 @@ func (d userDTO) toUpdateCommand() appuser.UpdateUserCommand {
 }
 
 func toUserDTO(u *user.User) userDTO {
-	return userDTO{ID: u.ID().String(), Name: u.Name(), Email: u.Email()}
+	return userDTO{ID: u.ID.String(), Name: u.Name, Email: u.Email}
 }
 
 // UserHandler exposes HTTP endpoints for users. It depends only on the
