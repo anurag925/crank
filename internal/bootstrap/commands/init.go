@@ -12,6 +12,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/anurag925/crank/internal/bootstrap"
+	"github.com/anurag925/crank/internal/bootstrap/scaffold"
 	"github.com/anurag925/crank/internal/utils"
 )
 
@@ -130,6 +131,28 @@ Examples:
 			if err != nil {
 				return err
 			}
+
+			// Generate the initial User resource via the canonical resource generator.
+			// This uses the same code path as `crank make scaffold`, ensuring the
+			// generated User code is identical to any resource added later via `make`.
+			userFields := []string{"name:string", "email:email"}
+			userRes := scaffold.NewResource("User")
+			userOpts := scaffold.Options{
+				ProjectDir:    result.ProjectDir,
+				Kind:          scaffold.KindScaffold,
+				Name:          "User",
+				Fields:        userFields,
+				SkipMigration: true, // init provides the 000001_init baseline
+			}
+			info, infoErr := bootstrap.LoadProjectInfo(result.ProjectDir)
+			if infoErr != nil {
+				return fmt.Errorf("load project info: %w", infoErr)
+			}
+			userParsed, _ := scaffold.ParseFields(userFields)
+			if _, err := scaffold.GenerateResource(userRes, userParsed, userOpts, info); err != nil {
+				return fmt.Errorf("generate user resource: %w", err)
+			}
+
 			fmt.Printf("✔ Created %s with features: %s\n", result.ProjectDir, strings.Join(result.FeaturesUsed(), ", "))
 			fmt.Printf("  %d files written.\n", len(result.Files))
 			fmt.Println()

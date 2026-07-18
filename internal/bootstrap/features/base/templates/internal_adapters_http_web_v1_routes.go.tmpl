@@ -7,7 +7,6 @@ import "github.com/labstack/echo/v5"
 // `crank make scaffold`) are spliced into this struct at the field-splice
 // marker.
 type MountConfig struct {
-	UserHandler *UserHandler
 	// crank:http-fields (do not remove — `crank make handler` splices new fields here)
 }
 
@@ -15,7 +14,5 @@ type MountConfig struct {
 // Generated handlers are spliced in at the register-splice marker.
 func Mount(e *echo.Echo, cfg MountConfig) {
 	g := e.Group("/api/v1")
-	ug := g.Group("/users")
-	cfg.UserHandler.Register(ug)
 	// crank:http-register (do not remove — `crank make handler` splices new route registrations here)
 }

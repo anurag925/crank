@@ -15,6 +15,11 @@ type Repository interface {
 	// Get returns a {{.R.Snake}} aggregate by id. Returns Err{{.R.Pascal}}NotFound
 	// when no aggregate with that id is stored.
 	Get(ctx context.Context, id uuid.UUID) (*{{.R.Pascal}}, error)
+{{- if and .Auth (eq .R.Pascal "User")}}
+	// GetByEmail returns a {{.R.Snake}} aggregate by email address, or
+	// Err{{.R.Pascal}}NotFound.
+	GetByEmail(ctx context.Context, email string) (*{{.R.Pascal}}, error)
+{{- end}}
 	// List returns every {{.R.Snake}} aggregate, in unspecified order.
 	List(ctx context.Context) ([]*{{.R.Pascal}}, error)
 	// Delete removes a {{.R.Snake}} aggregate by id. Returns

@@ -75,6 +75,7 @@ func wireCompositionRoot(projectDir string, r Resource) error {
 	}
 	module := info.ModulePath
 	hasGorm := info.Has("gorm")
+	hasAuth := info.Has("auth")
 
 	appAlias := r.Camel + "app"
 	repoVar := r.Camel + "Repo"
@@ -101,9 +102,13 @@ func wireCompositionRoot(projectDir string, r Resource) error {
 	}
 
 	// 4. command/query/handler construction.
+	hasherParam := ""
+	if hasAuth && r.Pascal == "User" {
+		hasherParam = ", hasher"
+	}
 	rootBlock := fmt.Sprintf(
-		"%sCmd := %s.NewCommandHandler(%s, uow)\n\t%sQry := %s.NewQueryHandler(%s)\n\t%s := v1.New%sHandler(%sCmd, %sQry)\n\t",
-		r.Camel, appAlias, repoVar,
+		"%sCmd := %s.NewCommandHandler(%s, uow%s)\n\t%sQry := %s.NewQueryHandler(%s)\n\t%s := v1.New%sHandler(%sCmd, %sQry)\n\t",
+		r.Camel, appAlias, repoVar, hasherParam,
 		r.Camel, appAlias, repoVar,
 		handlerVar, r.Pascal, r.Camel, r.Camel,
 	)

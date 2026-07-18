@@ -179,6 +179,9 @@ Run: `go test ./internal/...` for fast suite, `go test -tags e2e ./e2e/` for ful
 # Update a generated project to the latest crank version
 ./crank update --project=./myapp
 
+# Refresh the project's agent SKILL.md from the bundled template
+./crank update-skill --project=./myapp
+
 # Run health checks on a generated project
 ./crank doctor --project=./myapp
 
@@ -243,12 +246,14 @@ crank/
 │   │   │   ├── update.go                  # `crank update` (bump crank_version in manifest)
 │   │   │   ├── list.go                    # `crank list`
 │   │   │   ├── make.go                    # `crank make` (migration + code generators)
-│   │   │   └── tools.go                   # Generic tool command factory + `crank tools`
+│   │   │   ├── tools.go                   # Generic tool command factory + `crank tools`
+│   │   │   ├── update_skill.go            # `crank update-skill` (regenerate .agents/skills)
 	│   │   ├── scaffold/                      # `crank make` code generators (model/repo/service/handler/scaffold)
 	│   │   │   ├── scaffold.go                # Generate() orchestration + artifact planning
 	│   │   │   ├── names.go                   # Resource name inflection (singular/plural, cases)
 	│   │   │   ├── fields.go                  # "name:type" field-spec parsing
 	│   │   │   ├── wire.go                    # Auto-registers generated handlers in handler.go
+	│   │   │   ├── wire_main.go               # Auto-wires handlers into cmd/server/main.go composition root
 	│   │   │   ├── wire_temporal.go           # Auto-registers Temporal workflows/activities in worker.go
 	│   │   │   └── templates/                 # model/repository/service/handler/migration .tmpl files
 	│   │   ├── seedgen/                       # `crank seed generate` Go parser + fake data generator
@@ -268,10 +273,11 @@ crank/
 │   │   └── features/                      # One package per installable module
 │   │       ├── base/                      # Echo + Viper + slog + dev tooling
 │   │       ├── auth/                      # JWT middleware + auth handlers
+│   │       ├── audit/                     # Audit trail: persists domain events to DB, queryable by entity
 │   │       ├── crypto/                    # AES-256-GCM encrypt/decrypt helpers
 │   │       ├── gorm/                      # GORM (default ORM)
-│   │       ├── redis/                     # Redis client (placeholder)
-│   │       ├── mongodb/                   # MongoDB client (placeholder)
+│   │       ├── redis/                     # Redis client
+│   │       ├── mongodb/                   # MongoDB client
 │   │       ├── qdrant/                    # Qdrant vector DB client
 │   │       ├── temporal/                  # Temporal client + worker + example workflow/activity
 │   │       ├── otel/                      # OpenTelemetry tracing + metrics
@@ -575,7 +581,7 @@ Config files live in a top-level `configs/` directory, following the
 - Viper searches `./configs` first, then `.` as fallback
 - Viper priority: env vars > .env > configs/config.yaml
 
-All feature configs (gorm, auth, crypto, redis, mongodb, qdrant, temporal, otel, outbox, views) are
+All feature configs (gorm, auth, audit, crypto, redis, mongodb, qdrant, temporal, otel, outbox, views) are
 consolidated in the base `config.go` template using `{{if .Has "feature"}}`
 conditional sections. Feature-specific packages (e.g. `internal/redis`,
 `internal/temporal`) do **not** define their own Config structs — they import

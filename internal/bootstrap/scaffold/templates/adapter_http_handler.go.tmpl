@@ -9,9 +9,9 @@ import (
 {{- end}}
 	"github.com/labstack/echo/v5"
 
-	"{{.Module}}/internal/adapters/http/web/api"
-	app{{.R.Pascal}} "{{.Module}}/internal/application/{{.R.Snake}}"
-	"{{.Module}}/internal/domain/{{.R.Snake}}"
+	"{{.ModulePath}}/internal/adapters/http/web/api"
+	app{{.R.Pascal}} "{{.ModulePath}}/internal/application/{{.R.Snake}}"
+	"{{.ModulePath}}/internal/domain/{{.R.Snake}}"
 )
 
 // {{.R.Snake}}DTO is the input/output DTO for {{.R.Snake}} HTTP endpoints.
@@ -72,7 +72,9 @@ func New{{.R.Pascal}}Handler(cmd *app{{.R.Pascal}}.CommandHandler, qry *app{{.R.
 func (h *{{.R.Pascal}}Handler) Register(g *echo.Group) {
 	g.POST("", h.Create)
 	g.GET("/:id", h.Get)
+{{- if not (and .Auth (eq .R.Pascal "User"))}}
 	g.GET("", h.List)
+{{- end}}
 	g.PUT("/:id", h.Update)
 	g.DELETE("/:id", h.Delete)
 }
@@ -114,6 +116,15 @@ func (h *{{.R.Pascal}}Handler) Create(c *echo.Context) error {
 //	@Failure      404  {object}  api.Error
 //	@Router       /v1/{{.R.KebabPlural}}/{id} [get]
 func (h *{{.R.Pascal}}Handler) Get(c *echo.Context) error {
+{{- if and .Auth (eq .R.Pascal "User")}}
+	userID, ok := c.Get("user_id").(string)
+	if !ok || userID == "" {
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: "unauthenticated"})
+	}
+	if c.Param("id") != userID {
+		return c.JSON(http.StatusNotFound, api.Error{Error: "{{.R.Snake}} not found"})
+	}
+{{- end}}
 	out, err := h.qry.HandleGet(c.Request().Context(), app{{.R.Pascal}}.Get{{.R.Pascal}}Query{ID: c.Param("id")})
 	if errors.Is(err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound) {
 		return c.JSON(http.StatusNotFound, api.Error{Error: "{{.R.Snake}} not found"})
@@ -124,6 +135,7 @@ func (h *{{.R.Pascal}}Handler) Get(c *echo.Context) error {
 	return c.JSON(http.StatusOK, to{{.R.Pascal}}DTO(out))
 }
 
+{{- if not (and .Auth (eq .R.Pascal "User"))}}
 // List godoc
 //
 //	@Summary      List {{.R.SnakePlural}}
@@ -144,6 +156,7 @@ func (h *{{.R.Pascal}}Handler) List(c *echo.Context) error {
 	}
 	return c.JSON(http.StatusOK, out)
 }
+{{- end}}
 
 // Update godoc
 //
@@ -159,6 +172,15 @@ func (h *{{.R.Pascal}}Handler) List(c *echo.Context) error {
 //	@Failure      422  {object}  api.Error
 //	@Router       /v1/{{.R.KebabPlural}}/{id} [put]
 func (h *{{.R.Pascal}}Handler) Update(c *echo.Context) error {
+{{- if and .Auth (eq .R.Pascal "User")}}
+	userID, ok := c.Get("user_id").(string)
+	if !ok || userID == "" {
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: "unauthenticated"})
+	}
+	if c.Param("id") != userID {
+		return c.JSON(http.StatusNotFound, api.Error{Error: "{{.R.Snake}} not found"})
+	}
+{{- end}}
 	var in {{.R.Snake}}DTO
 	if err := c.Bind(&in); err != nil {
 		return c.JSON(http.StatusBadRequest, api.Error{Error: err.Error()})
@@ -185,6 +207,15 @@ func (h *{{.R.Pascal}}Handler) Update(c *echo.Context) error {
 //	@Failure      404  {object}  api.Error
 //	@Router       /v1/{{.R.KebabPlural}}/{id} [delete]
 func (h *{{.R.Pascal}}Handler) Delete(c *echo.Context) error {
+{{- if and .Auth (eq .R.Pascal "User")}}
+	userID, ok := c.Get("user_id").(string)
+	if !ok || userID == "" {
+		return c.JSON(http.StatusUnauthorized, api.Error{Error: "unauthenticated"})
+	}
+	if c.Param("id") != userID {
+		return c.JSON(http.StatusNotFound, api.Error{Error: "{{.R.Snake}} not found"})
+	}
+{{- end}}
 	err := h.cmd.HandleDelete(c.Request().Context(), app{{.R.Pascal}}.Delete{{.R.Pascal}}Command{ID: c.Param("id")})
 	if errors.Is(err, {{.R.Snake}}.Err{{.R.Pascal}}NotFound) {
 		return c.JSON(http.StatusNotFound, api.Error{Error: "{{.R.Snake}} not found"})

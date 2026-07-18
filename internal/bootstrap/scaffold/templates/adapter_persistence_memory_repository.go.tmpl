@@ -6,7 +6,7 @@ import (
 
 	"github.com/google/uuid"
 
-	"{{.Module}}/internal/domain/{{.R.Snake}}"
+	"{{.ModulePath}}/internal/domain/{{.R.Snake}}"
 )
 
 // {{.R.Pascal}}Repository is the in-memory implementation of
@@ -16,11 +16,21 @@ import (
 type {{.R.Pascal}}Repository struct {
 	mu    sync.RWMutex
 	items map[uuid.UUID]*{{.R.Snake}}.{{.R.Pascal}}
+{{- if and .Auth (eq .R.Pascal "User")}}
+	byEml map[string]*{{.R.Snake}}.{{.R.Pascal}}
+{{- end}}
 }
 
 // New{{.R.Pascal}}Repository constructs an empty in-memory {{.R.Pascal}}Repository.
 func New{{.R.Pascal}}Repository() *{{.R.Pascal}}Repository {
+{{- if and .Auth (eq .R.Pascal "User")}}
+	return &{{.R.Pascal}}Repository{
+		items: make(map[uuid.UUID]*{{.R.Snake}}.{{.R.Pascal}}),
+		byEml: make(map[string]*{{.R.Snake}}.{{.R.Pascal}}),
+	}
+{{- else}}
 	return &{{.R.Pascal}}Repository{items: make(map[uuid.UUID]*{{.R.Snake}}.{{.R.Pascal}})}
+{{- end}}
 }
 
 // Save stores (or overwrites) a {{.R.Snake}} aggregate.
@@ -28,6 +38,9 @@ func (r *{{.R.Pascal}}Repository) Save(_ context.Context, x *{{.R.Snake}}.{{.R.P
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	r.items[x.ID] = x
+{{- if and .Auth (eq .R.Pascal "User")}}
+	r.byEml[x.Email] = x
+{{- end}}
 	return nil
 }
 
@@ -54,14 +67,37 @@ func (r *{{.R.Pascal}}Repository) List(_ context.Context) ([]*{{.R.Snake}}.{{.R.
 	return out, nil
 }
 
+{{- if and .Auth (eq .R.Pascal "User")}}
+
+// GetByEmail returns a {{.R.Snake}} aggregate by email address, or
+// domain/{{.R.Snake}}.Err{{.R.Pascal}}NotFound.
+func (r *{{.R.Pascal}}Repository) GetByEmail(_ context.Context, email string) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	x, ok := r.byEml[email]
+	if !ok {
+		return nil, {{.R.Snake}}.Err{{.R.Pascal}}NotFound
+	}
+	return x, nil
+}
+{{- end}}
+
 // Delete removes a {{.R.Snake}} aggregate by id, mapping a missing key to
 // domain/{{.R.Snake}}.Err{{.R.Pascal}}NotFound.
 func (r *{{.R.Pascal}}Repository) Delete(_ context.Context, id uuid.UUID) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-	if _, ok := r.items[id]; !ok {
+{{- if and .Auth (eq .R.Pascal "User")}}
+	x, ok := r.items[id]
+{{- else}}
+	_, ok := r.items[id]
+{{- end}}
+	if !ok {
 		return {{.R.Snake}}.Err{{.R.Pascal}}NotFound
 	}
 	delete(r.items, id)
+{{- if and .Auth (eq .R.Pascal "User")}}
+	delete(r.byEml, x.Email)
+{{- end}}
 	return nil
 }

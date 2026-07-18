@@ -103,6 +103,7 @@ Examples:
 | --- | --- |
 | `gorm` | GORM-backed database support and migrations. |
 | `auth` | Authentication routes, middleware, and JWT configuration. |
+| `audit` | Audit trail: persisted domain events queryable by entity type and ID. |
 | `redis` | Redis client/configuration. |
 | `mongodb` | MongoDB client/configuration. |
 | `qdrant` | Qdrant vector database client/configuration. |

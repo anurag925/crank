@@ -276,20 +276,34 @@ func spliceInMemTxRepos(projectDir string, r Resource, accessorName string) erro
 		return fmt.Errorf("read %s: %w", inMemUoWFile, err)
 	}
 	s := string(content)
-	if strings.Contains(s, accessorName+"()") {
-		return nil
+
+	// Check for the option function to avoid short-circuiting when the accessor
+	// method already exists in the template (as it does for the built-in User
+	// resource) but the WithXxxRepo option function does not.
+	optCheck := "With" + r.Pascal + "Repo("
+	if strings.Contains(s, optCheck) {
+		return nil // already fully wired
 	}
 
-	fieldLine := fmt.Sprintf("\t%sRepo %s.Repository\n", r.Camel, r.Snake)
-	methodLine := fmt.Sprintf("func (r *inMemoryTxRepositories) %s() %s.Repository { return r.%sRepo }\n", accessorName, r.Snake, r.Camel)
-	optionFunc := fmt.Sprintf("func With%sRepo(r %s.Repository) Option {\n\treturn func(repos *inMemoryTxRepositories) { repos.%sRepo = r }\n}\n", r.Pascal, r.Snake, r.Camel)
 	importLine := fmt.Sprintf("\t\"%s/internal/domain/%s\"\n", modulePathFromProject(projectDir), r.Snake)
-
 	if !strings.Contains(s, importLine) {
 		s = strings.Replace(s, markerTxRepoImports, importLine+"\t"+markerTxRepoImports, 1)
 	}
-	s = strings.Replace(s, markerTxRepoFields, fieldLine+"\t"+markerTxRepoFields, 1)
-	s = strings.Replace(s, markerTxRepoMethods, "\n"+methodLine+"\t"+markerTxRepoMethods, 1)
+
+	// Only splice the field and method when they don't already exist (e.g. the
+	// built-in User resource already has them in the template).
+	fieldLine := fmt.Sprintf("\t%sRepo %s.Repository\n", r.Camel, r.Snake)
+	if !strings.Contains(s, r.Camel+"Repo ") {
+		s = strings.Replace(s, markerTxRepoFields, fieldLine+"\t"+markerTxRepoFields, 1)
+	}
+
+	methodCheck := accessorName + "()"
+	methodLine := fmt.Sprintf("func (r *inMemoryTxRepositories) %s() %s.Repository { return r.%sRepo }\n", accessorName, r.Snake, r.Camel)
+	if !strings.Contains(s, methodCheck) {
+		s = strings.Replace(s, markerTxRepoMethods, "\n"+methodLine+"\t"+markerTxRepoMethods, 1)
+	}
+
+	optionFunc := fmt.Sprintf("func With%sRepo(r %s.Repository) Option {\n\treturn func(repos *inMemoryTxRepositories) { repos.%sRepo = r }\n}\n", r.Pascal, r.Snake, r.Camel)
 	s = strings.Replace(s, markerInMemOptions, "\n"+optionFunc+"\n"+markerInMemOptions, 1)
 
 	formatted, err := format.Source([]byte(s))

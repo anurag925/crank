@@ -52,19 +52,11 @@ func (feature) Files() []bootstrap.FileMapping {
 		// HTTP API envelope
 		{TemplatePath: "templates/internal_adapters_http_web_api_error.go.tmpl", OutputPath: "internal/adapters/http/web/api/error.go"},
 
-		// Domain layer — shared kernel + seed aggregate
+		// Domain layer — shared kernel
 		{TemplatePath: "templates/internal_domain_shared_events.go.tmpl", OutputPath: "internal/domain/shared/events.go"},
 		{TemplatePath: "templates/internal_domain_shared_registry.go.tmpl", OutputPath: "internal/domain/shared/registry.go"},
-		{TemplatePath: "templates/internal_domain_user_user.go.tmpl", OutputPath: "internal/domain/user/user.go"},
-		{TemplatePath: "templates/internal_domain_user_events.go.tmpl", OutputPath: "internal/domain/user/events.go"},
-		{TemplatePath: "templates/internal_domain_user_errors.go.tmpl", OutputPath: "internal/domain/user/errors.go"},
-		{TemplatePath: "templates/internal_domain_user_repository.go.tmpl", OutputPath: "internal/domain/user/repository.go"},
 
-		// Application layer
-		{TemplatePath: "templates/internal_application_user_commands.go.tmpl", OutputPath: "internal/application/user/commands.go"},
-		{TemplatePath: "templates/internal_application_user_command_handler.go.tmpl", OutputPath: "internal/application/user/command_handler.go"},
-		{TemplatePath: "templates/internal_application_user_queries.go.tmpl", OutputPath: "internal/application/user/queries.go"},
-		{TemplatePath: "templates/internal_application_user_query_handler.go.tmpl", OutputPath: "internal/application/user/query_handler.go"},
+		// Application layer — Unit of Work abstraction
 		{TemplatePath: "templates/internal_application_uow_uow.go.tmpl", OutputPath: "internal/application/uow/uow.go"},
 
 		// Ports (cross-cutting interfaces)
@@ -72,11 +64,9 @@ func (feature) Files() []bootstrap.FileMapping {
 
 		// Adapters — eventbus, persistence, http, uow
 		{TemplatePath: "templates/internal_adapters_eventbus_in_memory_eventbus.go.tmpl", OutputPath: "internal/adapters/eventbus/in_memory_eventbus.go"},
-		{TemplatePath: "templates/internal_adapters_persistence_memory_user_repository.go.tmpl", OutputPath: "internal/adapters/persistence/memory/user_repository.go"},
 		{TemplatePath: "templates/internal_adapters_http_web_server.go.tmpl", OutputPath: "internal/adapters/http/web/server.go"},
 		{TemplatePath: "templates/internal_adapters_uow_in_memory_uow.go.tmpl", OutputPath: "internal/adapters/uow/in_memory_uow.go"},
 		{TemplatePath: "templates/internal_adapters_http_web_v1_routes.go.tmpl", OutputPath: "internal/adapters/http/web/v1/routes.go"},
-		{TemplatePath: "templates/internal_adapters_http_web_v1_user_handler.go.tmpl", OutputPath: "internal/adapters/http/web/v1/user_handler.go"},
 		{TemplatePath: "templates/internal_adapters_http_web_middleware_logging.go.tmpl", OutputPath: "internal/adapters/http/web/middleware/logging.go"},
 
 		// Validator

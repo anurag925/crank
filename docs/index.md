@@ -19,7 +19,7 @@ A generated `crank` project gives you:
 - Request validation with `go-playground/validator` via automatic binder validation.
 - Swagger/OpenAPI generation with `swaggo/swag`.
 - Optional PostgreSQL persistence through GORM, where the domain aggregate doubles as the GORM model.
-- Optional modules for auth (JWT with token revocation), Redis, MongoDB, Qdrant, Temporal, OpenTelemetry, React views, crypto helpers, transactional outbox, and audit trailing.
+- Optional modules for auth (JWT with token revocation), audit, Redis, MongoDB, Qdrant, Temporal, OpenTelemetry, React views, crypto helpers, and transactional outbox.
 - `TxRepositories` — transaction-scoped domain repos so application handlers never import persistence adapters.
 - Versioned HTTP handlers at `/api/v1` with self-scoped user endpoints.
 - One CLI surface for build, run, test, format, vet, migrations, Swagger, live reload, health checks, and code generation.
@@ -63,6 +63,7 @@ curl http://localhost:8080/health
 | | [Feature: Base](./explanation/features/base.md) | Foundation — Echo, Viper, config, validation, logging, in-memory adapters. |
 | | [Feature: GORM](./explanation/features/gorm.md) | PostgreSQL persistence via GORM (default ORM). |
 | | [Feature: Auth](./explanation/features/auth.md) | JWT authentication, bcrypt hashing, auth endpoints. |
+| | [Feature: Audit](./explanation/features/audit.md) | Domain event audit trail, queryable by entity type and ID. |
 | | [Feature: Crypto](./explanation/features/crypto.md) | AES-256-GCM encryption helpers. |
 | | [Feature: Redis](./explanation/features/redis.md) | Redis caching client and port interface. |
 | | [Feature: MongoDB](./explanation/features/mongodb.md) | MongoDB document database client. |

@@ -90,6 +90,7 @@ myapp/
 | `uow.NewInMemoryUoW(bus, userRepo)` | No outbox |
 | `outboxadapter.NewGormUoW(gormDB)` | `outbox` + ORM |
 | `jwt.NewTokenService(cfg.JWT, denylist)` | `auth` feature |
+| `auditapp.NewQueryHandler(auditStore)` | `audit` feature (spliced by `crank make scaffold`) |
 | `redisclient.NewClient(cfg.Redis)` | `redis` feature |
 | `qdrantclient.NewClient(ctx, cfg.Qdrant)` | `qdrant` feature |
 | `temporal.NewClient(cfg.Temporal, logger)` | `temporal` feature |

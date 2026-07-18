@@ -32,7 +32,7 @@ GORM is added automatically. If you pass only `base`, the current CLI still adds
 
 ### Some features have requirements
 
-`outbox` requires an ORM-backed project, so it needs `gorm`.
+Features like `audit` and `outbox` require an ORM-backed project, so they need `gorm`.
 
 Temporal generators require the `temporal` feature:
 
@@ -48,6 +48,7 @@ crank make workflow OrderFulfillment --project ./myapp
 | `base` | DDD layout, Echo HTTP server, config, validation, logging, Swagger plumbing, in-memory adapters, Dockerfile, `.air.toml`, and Makefile. | Every generated project. |
 | `gorm` | PostgreSQL persistence with GORM, database factory, user repository, migrations, and golang-migrate integration. | Default relational database option. |
 | `auth` | JWT auth, bcrypt password hashing, auth endpoints, JWT middleware, protected `/me` route, token service, and password/email value objects. | APIs with login/session requirements. |
+| `audit` | Audit trail: persists domain events to a database table, queryable by entity type and ID. Requires `gorm`. | Compliance, activity logs, event sourcing queries. |
 | `crypto` | AES-256-GCM encryption/decryption helper backed by config-driven secret. | Encrypt sensitive values before storage or transport. |
 | `redis` | Redis cache port and go-redis client wired into the composition root. | Caching, sessions, rate limiting, distributed coordination. |
 | `mongodb` | MongoDB client wired into the composition root. | Document storage or workloads that fit MongoDB. |

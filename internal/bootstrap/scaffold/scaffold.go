@@ -68,7 +68,7 @@ type Result struct {
 // the per-run context (module path, enabled features, the resource) plus a
 // handful of derived flags templates consult to decide which sections to emit.
 type tmplData struct {
-	Module string
+	ModulePath string
 	// Gorm is true when the project has the gorm ORM feature enabled. When
 	// true, the scaffold emits a GORM-backed repository plus a migration.
 	Gorm     bool
@@ -83,6 +83,20 @@ type tmplData struct {
 	IDField *Field
 }
 
+// Has reports whether a named feature is enabled in the project context.
+func (d tmplData) Has(name string) bool {
+	switch name {
+	case "gorm":
+		return d.Gorm
+	case "auth":
+		return d.Auth
+	case "temporal":
+		return d.Temporal
+	default:
+		return false
+	}
+}
+
 // artifact is a single file to render and write.
 type artifact struct {
 	out      string // path relative to the project root
@@ -92,11 +106,9 @@ type artifact struct {
 	goFile   bool   // whether to gofmt the rendered output
 }
 
-// Generate runs a code generator according to opts. It reads the project's
-// manifest to decide between the GORM-backed adapter + migration and the
-// in-memory (always shipped) variants, renders the relevant templates,
-// writes the files and — for handler/scaffold kinds — wires the new handler
-// into the Echo router through `internal/adapters/http/web/routes.go`.
+// Generate runs a code generator according to opts. It parses the resource
+// name and field specs, loads the project manifest, and delegates to
+// GenerateResource for the actual generation.
 func Generate(opts Options) (*Result, error) {
 	if opts.Name == "" {
 		return nil, fmt.Errorf("a resource name is required\n\nUsage: crank make %s <Name> [field:type ...]\n\nExample: crank make %s Order", opts.Kind, opts.Kind)
@@ -114,9 +126,7 @@ func Generate(opts Options) (*Result, error) {
 	// When the user invokes `crank make handler|repository|service Foo`
 	// against a resource whose domain aggregate already exists, we
 	// reuse the existing field list so the generated handler/service/
-	// persistence signatures line up with the domain. Without this, the
-	// generated code calls e.g. `receipt.NewReceipt(id)` while the
-	// domain expects `NewReceipt(id, amount)`, breaking the build.
+	// persistence signatures line up with the domain.
 	if len(fields) == 0 && opts.Kind != KindModel {
 		if inferred, ferr := InferFieldsFromDomain(opts.ProjectDir, res); ferr == nil && len(inferred) > 0 {
 			fields = inferred
@@ -128,6 +138,38 @@ func Generate(opts Options) (*Result, error) {
 		return nil, fmt.Errorf("cannot load project: %w", err)
 	}
 
+	return GenerateResource(res, fields, opts, info)
+}
+
+// GenerateResource is the canonical resource generator. It produces the DDD
+// layers (domain aggregate, application commands/queries, persistence adapters,
+// HTTP handler, and optional migration) for a resource inside an existing crank
+// project, then wires the handlers and repository accessors into the project's
+// composition root and routes aggregator.
+//
+// Unlike Generate, this function expects a pre-parsed Resource and field list
+// and a loaded ProjectInfo, so it can be called directly by both `crank make`
+// and `crank init` (for the initial User resource).
+func GenerateResource(res Resource, fields []Field, opts Options, info *bootstrap.ProjectInfo) (*Result, error) {
+	// When generating the User resource with auth enabled, automatically add
+	// the password field so the aggregate carries the bcrypt hash column.
+	// The command handler applies hashing before persisting.
+	if info.Has("auth") && res.Pascal == "User" {
+		hasPassword := false
+		for _, f := range fields {
+			if f.Name == "password" {
+				hasPassword = true
+				break
+			}
+		}
+		if !hasPassword {
+			pwField, err := ParseFields([]string{"password:string"})
+			if err == nil && len(pwField) > 0 {
+				fields = append(fields, pwField[0])
+			}
+		}
+	}
+
 	if opts.Kind == KindWorkflow || opts.Kind == KindActivity {
 		if !info.Has("temporal") {
 			return nil, fmt.Errorf("the %s generator requires the temporal feature\n\nTo add it, run:\n  crank add temporal --project %s", opts.Kind, opts.ProjectDir)
@@ -136,15 +178,15 @@ func Generate(opts Options) (*Result, error) {
 
 	idField := uuidFieldOrNil(fields)
 	data := tmplData{
-		Module:   info.ModulePath,
-		Gorm:     info.Has("gorm"),
-		Auth:     info.Has("auth"),
-		Temporal: info.Has("temporal"),
-		R:        res,
-		Fields:   fields,
-		HasTime:  hasTimeField(fields),
-		HasUUID:  idField != nil,
-		IDField:  idField,
+		ModulePath: info.ModulePath,
+		Gorm:       info.Has("gorm"),
+		Auth:       info.Has("auth"),
+		Temporal:   info.Has("temporal"),
+		R:          res,
+		Fields:     fields,
+		HasTime:    hasTimeField(fields),
+		HasUUID:    idField != nil,
+		IDField:    idField,
 	}
 
 	plan, wantMigration, wire, err := buildPlan(opts, data)
@@ -199,7 +241,7 @@ func Generate(opts Options) (*Result, error) {
 		}
 		// A generated handler must also be assembled into the composition root
 		// (cmd/server/main.go), otherwise its MountConfig field stays nil and
-		// every route it registers nil-panics at request time.
+		// every route it registers nil-panics at runtime.
 		if wire == wireHandlerTarget {
 			if err := wireCompositionRoot(opts.ProjectDir, res); err != nil {
 				return nil, err
@@ -427,14 +469,14 @@ func renderTemplate(name string, data tmplData) (string, error) {
 func TmplDataFor(module string, Gorm, auth bool, r Resource, fields []Field) tmplData {
 	idField := uuidFieldOrNil(fields)
 	return tmplData{
-		Module:  module,
-		Gorm:    Gorm,
-		Auth:    auth,
-		R:       r,
-		Fields:  fields,
-		HasTime: hasTimeField(fields),
-		HasUUID: idField != nil,
-		IDField: idField,
+		ModulePath: module,
+		Gorm:       Gorm,
+		Auth:       auth,
+		R:          r,
+		Fields:     fields,
+		HasTime:    hasTimeField(fields),
+		HasUUID:    idField != nil,
+		IDField:    idField,
 	}
 }
 

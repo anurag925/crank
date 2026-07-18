@@ -36,3 +36,12 @@ type Update{{.R.Pascal}}Command struct {
 type Delete{{.R.Pascal}}Command struct {
 	ID string
 }
+{{- if and .Auth (eq .R.Pascal "User")}}
+
+// Authenticate{{.R.Pascal}}Command is the application-layer request to verify
+// a {{.R.Snake}}'s email/password credentials during login.
+type Authenticate{{.R.Pascal}}Command struct {
+	Email    string
+	Password string
+}
+{{- end}}

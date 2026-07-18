@@ -8,7 +8,7 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 
-	"{{.Module}}/internal/domain/{{.R.Snake}}"
+	"{{.ModulePath}}/internal/domain/{{.R.Snake}}"
 )
 
 // {{.R.Pascal}}Repository is the gorm-backed implementation of
@@ -41,6 +41,22 @@ func (r *{{.R.Pascal}}Repository) Get(ctx context.Context, id uuid.UUID) (*{{.R.
 	}
 	return row, nil
 }
+{{- if and .Auth (eq .R.Pascal "User")}}
+
+// GetByEmail returns a {{.R.Snake}} aggregate by email address, mapping
+// gorm.ErrRecordNotFound to domain/{{.R.Snake}}.Err{{.R.Pascal}}NotFound.
+func (r *{{.R.Pascal}}Repository) GetByEmail(ctx context.Context, email string) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
+	row := new({{.R.Snake}}.{{.R.Pascal}})
+	err := r.db.WithContext(ctx).Where("email = ?", email).First(row).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, {{.R.Snake}}.Err{{.R.Pascal}}NotFound
+	}
+	if err != nil {
+		return nil, err
+	}
+	return row, nil
+}
+{{- end}}
 
 // List returns every {{.R.Snake}} aggregate.
 func (r *{{.R.Pascal}}Repository) List(ctx context.Context) ([]*{{.R.Snake}}.{{.R.Pascal}}, error) {

@@ -6,8 +6,12 @@ import (
 
 	"github.com/google/uuid"
 
-	"{{.Module}}/internal/application/uow"
-	"{{.Module}}/internal/domain/{{.R.Snake}}"
+	"{{.ModulePath}}/internal/application/uow"
+	"{{.ModulePath}}/internal/domain/{{.R.Snake}}"
+{{- if and .Auth (eq .R.Pascal "User")}}
+	"errors"
+	"{{.ModulePath}}/internal/ports"
+{{- end}}
 )
 
 // CommandHandler is the application service that mutates {{.R.Snake}} aggregates
@@ -18,12 +22,15 @@ import (
 type CommandHandler struct {
 	repo {{.R.Snake}}.Repository
 	uow  uow.UnitOfWork
+{{- if and .Auth (eq .R.Pascal "User")}}
+	hasher ports.Hasher
+{{- end}}
 }
 
 // NewCommandHandler wires a CommandHandler against the given repository and
 // unit of work.
-func NewCommandHandler(repo {{.R.Snake}}.Repository, uow uow.UnitOfWork) *CommandHandler {
-	return &CommandHandler{repo: repo, uow: uow}
+func NewCommandHandler(repo {{.R.Snake}}.Repository, uow uow.UnitOfWork{{if and .Auth (eq .R.Pascal "User")}}, hasher ports.Hasher{{end}}) *CommandHandler {
+	return &CommandHandler{repo: repo, uow: uow{{if and .Auth (eq .R.Pascal "User")}}, hasher: hasher{{end}}}
 }
 
 // HandleCreate creates a new {{.R.Snake}} aggregate, persists it through the
@@ -38,6 +45,17 @@ func (h *CommandHandler) HandleCreate(ctx context.Context, cmd Create{{.R.Pascal
 	if err != nil {
 		return nil, fmt.Errorf("create {{.R.Snake}}: %w", err)
 	}
+{{- if and .Auth (eq .R.Pascal "User")}}
+	// When a password is supplied, hash it through the Hasher port and store
+	// only the hash on the aggregate. The plaintext never leaves this method.
+	if cmd.Password != "" {
+		hash, hashErr := h.hasher.Hash(cmd.Password)
+		if hashErr != nil {
+			return nil, fmt.Errorf("create user: hash password: %w", hashErr)
+		}
+		x.Password = hash
+	}
+{{- end}}
 	if err := h.uow.SaveAndPublish(ctx, func(ctx context.Context, repos uow.TxRepositories) error {
 		return repos.{{.R.PascalPlural}}().Save(ctx, x)
 	}, x.PullEvents()); err != nil {
@@ -46,7 +64,29 @@ func (h *CommandHandler) HandleCreate(ctx context.Context, cmd Create{{.R.Pascal
 	return x, nil
 }
 
-// HandleUpdate loads an existing {{.R.Snake}} aggregate, mutates it through
+{{- if and .Auth (eq .R.Pascal "User")}}
+
+// ErrInvalidCredentials is returned by HandleAuthenticate when the supplied
+// email/password pair does not match a stored user. It is deliberately vague
+// so callers cannot distinguish "no such user" from "wrong password".
+var ErrInvalidCredentials = errors.New("invalid credentials")
+
+// HandleAuthenticate verifies an email/password pair and returns the matching
+// {{.R.Snake}} aggregate. It returns ErrInvalidCredentials for both an unknown
+// email and a wrong password so the two cases are indistinguishable.
+func (h *CommandHandler) HandleAuthenticate(ctx context.Context, cmd Authenticate{{.R.Pascal}}Command) (*{{.R.Snake}}.{{.R.Pascal}}, error) {
+	u, err := h.repo.GetByEmail(ctx, cmd.Email)
+	if err != nil {
+		return nil, ErrInvalidCredentials
+	}
+	if !h.hasher.Verify(u.Password, cmd.Password) {
+		return nil, ErrInvalidCredentials
+	}
+	return u, nil
+}
+{{- end}}
+
+	// HandleUpdate loads an existing {{.R.Snake}} aggregate, mutates it through
 // the domain's Update method, and routes the save+publish through the unit
 // of work so the write and recorded event are committed atomically.
 func (h *CommandHandler) HandleUpdate(ctx context.Context, cmd Update{{.R.Pascal}}Command) (*{{.R.Snake}}.{{.R.Pascal}}, error) {

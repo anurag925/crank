@@ -7,8 +7,8 @@ import (
 	"time"
 {{- end}}
 
-	"{{.Module}}/internal/adapters/persistence/memory"
-	"{{.Module}}/internal/domain/{{.R.Snake}}"
+	"{{.ModulePath}}/internal/adapters/persistence/memory"
+	"{{.ModulePath}}/internal/domain/{{.R.Snake}}"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"

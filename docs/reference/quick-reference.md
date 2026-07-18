@@ -41,6 +41,7 @@ crank doctor --project ./myapp
 | `base` | Core DDD service layout, Echo v5, config, validation, logging, `uuid.UUID` domain IDs, `TxRepositories` UoW |
 | `gorm` | PostgreSQL with GORM — row DTO pattern, database factory, migrations |
 | `auth` | JWT auth with token revocation, bcrypt in `pkg/crypto/`, `/auth/logout` |
+| `audit` | Audit trail: persists domain events to DB, queryable by entity |
 | `crypto` | AES-256-GCM cipher in `pkg/crypto/` |
 | `redis` | Redis cache adapter in `internal/adapters/cache/redis/` |
 | `mongodb` | MongoDB client in `internal/adapters/persistence/mongodb/` |

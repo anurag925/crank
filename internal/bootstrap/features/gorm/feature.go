@@ -39,7 +39,6 @@ func (feature) Files() []bootstrap.FileMapping {
 		// Postgres persistence adapters
 		{TemplatePath: "templates/internal_adapters_persistence_gorm_db.go.tmpl", OutputPath: "internal/adapters/persistence/gorm/db.go"},
 		{TemplatePath: "templates/internal_adapters_persistence_gorm_migrate.go.tmpl", OutputPath: "internal/adapters/persistence/gorm/migrate.go"},
-		{TemplatePath: "templates/internal_adapters_persistence_gorm_user_repository.go.tmpl", OutputPath: "internal/adapters/persistence/gorm/user_repository.go"},
 		// Migrations
 		{TemplatePath: "templates/migrations_000001_init.up.sql.tmpl", OutputPath: "db/migrations/000001_init.up.sql"},
 		{TemplatePath: "templates/migrations_000001_init.down.sql.tmpl", OutputPath: "db/migrations/000001_init.down.sql"},

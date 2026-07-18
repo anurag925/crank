@@ -31,10 +31,8 @@ import (
 {{- if not (.Has "outbox")}}
 	"{{.ModulePath}}/internal/adapters/uow"
 {{- end}}
-	userapp "{{.ModulePath}}/internal/application/user"
 	// crank:composition-imports (do not remove — `crank make handler` splices new application imports here)
 	"{{.ModulePath}}/internal/config"
-	"{{.ModulePath}}/internal/domain/user"
 	"{{.ModulePath}}/pkg/logging"
 {{- if .Has "auth"}}
 	"{{.ModulePath}}/internal/adapters/auth/jwt"
@@ -168,11 +166,6 @@ func main() {
 
 	// ---- Composition root: explicit DDD wiring ----
 	bus := eventbus.NewInMemory()
-{{if .Has "gorm"}}
-	userRepo := gorm.NewUserRepository(gormDB)
-{{else}}
-	userRepo := memory.NewUserRepository()
-{{end}}
 	// crank:repos (do not remove — `crank make handler` splices new repository constructors here)
 {{if .Has "outbox"}}
 {{if .Has "gorm"}}
@@ -207,9 +200,6 @@ func main() {
 	auditQry := auditapp.NewQueryHandler(auditRepo)
 	auditHandler := v1.NewAuditHandler(auditQry)
 {{end}}
-	userCmd := userapp.NewCommandHandler(userRepo, uow{{if .Has "auth"}}, hasher{{end}})
-	userQry := userapp.NewQueryHandler(userRepo)
-	userHandler := v1.NewUserHandler(userCmd, userQry)
 	// crank:composition-root (do not remove — `crank make handler` splices new cmd/qry/handler wiring here)
 
 	e := web.NewServer(logger)
@@ -231,7 +221,6 @@ func main() {
 	e.GET("/health", web.Health)
 
 	mountCfg := v1.MountConfig{
-		UserHandler: userHandler,
 		// crank:mount-config (do not remove — `crank make handler` splices new handler fields here)
 	}
 	v1.Mount(e, mountCfg)
@@ -273,4 +262,4 @@ func main() {
 	logger.Info("server stopped")
 }
 
-var _ = user.ErrUserNotFound
+

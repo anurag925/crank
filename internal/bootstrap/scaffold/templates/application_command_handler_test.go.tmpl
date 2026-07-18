@@ -7,10 +7,10 @@ import (
 	"time"
 {{- end}}
 
-	"{{.Module}}/internal/adapters/persistence/memory"
-	"{{.Module}}/internal/application/uow"
-	"{{.Module}}/internal/domain/shared"
-	"{{.Module}}/internal/domain/{{.R.Snake}}"
+	"{{.ModulePath}}/internal/adapters/persistence/memory"
+	"{{.ModulePath}}/internal/application/uow"
+	"{{.ModulePath}}/internal/domain/shared"
+	"{{.ModulePath}}/internal/domain/{{.R.Snake}}"
 
 {{- if .HasUUID}}
 	"github.com/google/uuid"
