@@ -129,9 +129,11 @@ func TestE2E_Cross_MakeActivityAfterAdd_Temporal(t *testing.T) {
 	dir := scaffoldBase(t, "cross_make_after_temporal_act")
 	runCrank(t, "", "add", "temporal", "--project", dir)
 	runCrank(t, "", "make", "activity", "NotifyCustomer", "email:email", "--project", dir)
-	worker := readFile(t, dir, "internal/adapters/temporal/worker.go")
-	if !strings.Contains(worker, "activity.NotifyCustomerActivity") {
-		t.Errorf("worker.go missing NotifyCustomerActivity after add+make:\n%s", worker)
+	// Activities are registered in activities.go (inside package activity),
+	// so the reference is unqualified (no "activity." prefix).
+	activities := readFile(t, dir, "internal/adapters/temporal/activity/activities.go")
+	if !strings.Contains(activities, "NotifyCustomerActivity") {
+		t.Errorf("activities.go missing NotifyCustomerActivity after add+make:\n%s", activities)
 	}
 	compileProject(t, dir)
 }

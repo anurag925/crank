@@ -169,9 +169,11 @@ func TestE2E_Make_Activity_NoFields(t *testing.T) {
 	dir := scaffold(t, "make_activity_no_fields", []string{"temporal"})
 	runCrank(t, "", "make", "activity", "DoNothing", "--project", dir)
 	assertExists(t, dir, "internal/adapters/temporal/activity/do_nothing.go")
-	worker := readFile(t, dir, "internal/adapters/temporal/worker.go")
-	if !strings.Contains(worker, "activity.DoNothingActivity") {
-		t.Errorf("worker.go missing registration for DoNothingActivity:\n%s", worker)
+	// Activities are registered in activities.go (inside the activity package),
+	// so the reference is unqualified (no "activity." prefix).
+	activities := readFile(t, dir, "internal/adapters/temporal/activity/activities.go")
+	if !strings.Contains(activities, "DoNothingActivity") {
+		t.Errorf("activities.go missing registration for DoNothingActivity:\n%s", activities)
 	}
 	compileProject(t, dir)
 }

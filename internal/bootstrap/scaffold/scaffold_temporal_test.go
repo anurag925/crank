@@ -61,6 +61,7 @@ func TestGenerateWorkflowAndActivity(t *testing.T) {
 	assertParses(t, dir, "internal/adapters/temporal/worker.go")
 
 	// Activities are registered in the Activities container.
+	// The registration is unqualified because activities.go is inside package activity.
 	acts := read(t, dir, "internal/adapters/temporal/activity/activities.go")
 	if !strings.Contains(acts, "w.RegisterActivity(ChargeCardActivity)") {
 		t.Errorf("activities.go missing Activity registration:\n%s", acts)
