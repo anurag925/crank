@@ -314,18 +314,13 @@ func updateSeeder(seederPath string, info *StructInfo, opts Options) error {
 
 	// Inject into SeedUp (before // crank:seed-up-end).
 	upEndMarker := "// crank:seed-up-end"
-	if strings.Contains(text, upEndMarker) {
-		text = strings.Replace(text, upEndMarker,
-			"\t\t"+upEntry+"\n\t\t"+upEndMarker, 1)
-	}
+	text = strings.Replace(text, upEndMarker, "\t\t"+upEntry+"\n\t\t"+upEndMarker, 1)
 
 	// Inject into SeedDown (after // crank:seed-down-begin, so it's torn
 	// down first — safe default for new models).
 	downBeginMarker := "// crank:seed-down-begin"
-	if strings.Contains(text, downBeginMarker) {
-		text = strings.Replace(text, downBeginMarker,
-			downBeginMarker+"\n\t\t"+downEntry, 1)
-	}
+	text = strings.Replace(text, downBeginMarker,
+		downBeginMarker+"\n\t\t"+downEntry, 1)
 
 	return os.WriteFile(seederPath, []byte(text), 0o644)
 }
