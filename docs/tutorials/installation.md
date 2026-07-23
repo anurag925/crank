@@ -103,7 +103,7 @@ You should see the root help, the feature list, and the tool subcommand list.
 | Tool command | External binary | Auto-installed? |
 | --- | --- | --- |
 | `crank migrate` | `migrate` | Yes, via `go install` with PostgreSQL support. |
-| `crank swag` | `swag` | Yes. |
+| `crank make swag` | `swag` | Yes. |
 | `crank dev` | `air` | Yes. |
 | `crank build` | `go` | Comes from your Go installation. |
 | `crank run` | `go` | Comes from your Go installation. |

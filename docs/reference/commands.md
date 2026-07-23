@@ -81,12 +81,12 @@ Each listed tool is available as:
 crank <tool> [args] --project <dir>
 ```
 
-### `crank update-skill`
+### `crank make skill`
 
 Regenerate the agent skill file with the latest conventions:
 
 ```bash
-crank update-skill --project ./myapp
+crank make skill --project ./myapp
 ```
 
 This re-renders `.agents/skills/crank-project/SKILL.md` from the template bundled with the current `crank` CLI.
@@ -111,6 +111,9 @@ Supported kinds:
 | `workflow` | Temporal workflow. Requires the `temporal` feature. |
 | `activity` | Temporal activity. Requires the `temporal` feature. |
 | `migration` | Blank SQL migration pair. |
+| `seed` | Generate Go seed files with fake data for a domain model, or run seed up/down. |
+| `swag` | Generate Swagger/OpenAPI documentation via `swag init`. |
+| `skill` | Regenerate the crank-project agent SKILL.md. |
 
 Flags:
 
@@ -121,6 +124,8 @@ Flags:
 | `--force` | Overwrite the primary generated artifact if it exists. |
 | `--skip-migration` | Do not generate a table migration even when GORM is enabled. |
 | `--tests` | Generate `_test.go` files alongside generated layers. |
+| `--seed` | Also generate a seed file (used with scaffold/model/handler) |
+| `--count` | Number of seed rows to generate. Defaults to 10. |
 
 Examples:
 
@@ -129,10 +134,16 @@ crank make model Order customer:string total:float
 crank make handler Product title:string price:float
 crank make handler Product --only
 crank make scaffold Invoice number:string amount:float --tests
+crank make scaffold Product --seed
 crank make workflow OrderFulfillment order_id:uuid
 crank make activity ChargeCard amount:float --tests
 crank make repository Ticket
 crank make migration create_orders
+crank make seed User
+crank make seed User --count 20 --force
+crank make seed
+crank make swag
+crank make skill
 ```
 
 ## Tool wrappers
@@ -148,7 +159,6 @@ Tool commands accept `--project`. If omitted, the current directory is used.
 | `crank gofmt` | Run `gofmt -s -w .`; extra args can be used for alternate gofmt behavior. | `gofmt` |
 | `crank vet` | Run `go vet ./...`. | `go` |
 | `crank tidy` | Run `go mod tidy`. | `go` |
-| `crank swag` | Run `swag init` for Swagger/OpenAPI output. | `swag` |
 | `crank migrate` | Run database migrations through golang-migrate. | `migrate` |
 | `crank doctor` | Run project health checks. | none |
 
@@ -185,6 +195,40 @@ crank doctor
 crank doctor --fail-fast
 crank doctor --project ./myapp
 ```
+
+### `crank make seed`
+
+Generate seed data files or run seed operations. Requires the `gorm` feature.
+
+```bash
+crank make seed                       # Scaffold seed infrastructure (main.go + seeder.go)
+crank make seed User                  # Generate seed data for the User model
+crank make seed User --count 20       # Generate 20 rows
+crank make seed User --force          # Overwrite existing seed file
+crank make seed up                    # Apply seed data (go run db/seeds/main.go -dir up)
+crank make seed down                  # Roll back seed data
+```
+
+### `crank make swag`
+
+Generate Swagger/OpenAPI documentation:
+
+```bash
+crank make swag
+crank make swag --parseDepth 2
+```
+
+Runs `swag init -g cmd/server/main.go -o docs --parseInternal --parseDependency`.
+
+### `crank make skill`
+
+Regenerate the crank-project agent skill file:
+
+```bash
+crank make skill --project ./myapp
+```
+
+Re-renders `.agents/skills/crank-project/SKILL.md` from the bundled template.
 
 ## Makefile delegation
 

@@ -24,7 +24,7 @@ A modular CLI tool that scaffolds production-ready Go backend services using DDD
 # Project lifecycle
 crank init myapp --features=base,auth            # GORM
 crank add redis --project ./myapp
-crank update-skill --project ./myapp             # refresh agent SKILL.md
+crank make skill --project ./myapp               # refresh agent SKILL.md
 crank list
 crank tools
 
@@ -39,9 +39,9 @@ crank make activity ChargeCard --project ./myapp
 crank make migration create_orders --project ./myapp
 
 # Seed data
-crank seed up --project ./myapp
-crank seed generate --project ./myapp
-crank seed generate User --count 20 --project ./myapp
+crank make seed up --project ./myapp
+crank make seed --project ./myapp
+crank make seed User --count 20 --project ./myapp
 
 # Tool wrappers
 crank run --project ./myapp
@@ -49,7 +49,7 @@ crank build --project ./myapp
 crank test -v --project ./myapp
 crank dev --project ./myapp
 crank migrate up --project ./myapp
-crank swag --project ./myapp
+crank make swag --project ./myapp
 crank doctor --project ./myapp
 crank gofmt --project ./myapp
 crank vet --project ./myapp
@@ -180,7 +180,7 @@ Run: `go test ./internal/...` for fast suite, `go test -tags e2e ./e2e/` for ful
 ./crank update --project=./myapp
 
 # Refresh the project's agent SKILL.md from the bundled template
-./crank update-skill --project=./myapp
+./crank make skill --project=./myapp
 
 # Run health checks on a generated project
 ./crank doctor --project=./myapp
@@ -200,8 +200,8 @@ Run: `go test ./internal/...` for fast suite, `go test -tags e2e ./e2e/` for ful
 ./crank make migration create_orders --project=./myapp
 
 # Generate seed data
-./crank seed generate --project=./myapp                         # empty seed file
-./crank seed generate Order --count 20 --project=./myapp        # 20 rows of fake data
+./crank make seed --project=./myapp                             # empty seed file
+./crank make seed Order --count 20 --project=./myapp             # 20 rows of fake data
 
 # Run migrations (with --project or from inside the project directory)
 ./crank migrate up --project=./myapp
@@ -214,7 +214,7 @@ cd myapp && ./crank run
 # Other tool subcommands (all accept --project or use current directory)
 ./crank build --project=./myapp
 ./crank test -v --project=./myapp
-./crank swag --project=./myapp
+./crank make swag --project=./myapp
 ./crank dev --project=./myapp
 ./crank gofmt --project=./myapp
 ./crank vet --project=./myapp
@@ -636,8 +636,6 @@ file is left untouched and an error is returned.
 | Subcommand | Wraps | Binary | Requires |
 |------------|-------|--------|----------|
 | `crank migrate` | golang-migrate | `migrate` | `gorm` feature |
-| `crank seed` | golang-migrate + seed generate | `migrate` | `gorm` feature |
-| `crank swag` | swaggo/swag | `swag` | — |
 | `crank build` | `go build` | `go` | — |
 | `crank run` | `go run ./cmd/server` | `go` | — |
 | `crank dev` | air (live reload) | `air` | — |

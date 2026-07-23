@@ -20,13 +20,23 @@ projects generated with the `bun` feature.
 - `outbox` and `audit` now require `gorm` (previously `bun` or `gorm`); their
   Bun-backed adapter templates have been removed.
 - The `migrate` and `seed` tools now require the `gorm` feature.
-- The seed generator (`crank seed generate`) emits GORM-only seed files; the
+- The seed generator (`crank make seed`) emits GORM-only seed files; the
   Bun seed path and the `--orm` distinction are gone.
 - The `crank make` scaffold generator no longer has a Bun code path — the GORM
   adapter is generated for any project with the `gorm` feature.
 
 See [the migration guide](migration-v2.md) for step-by-step upgrade
 instructions.
+
+### Seed/swag/skill moved under `crank make` (breaking)
+
+The `seed`, `swag`, and `update-skill` subcommands have been moved from top-level commands to subcommands of `crank make`.
+
+**Migration:**
+- `crank seed generate User` → `crank make seed User`
+- `crank seed up/down` → `crank make seed up/down`
+- `crank swag` → `crank make swag`
+- `crank update-skill` → `crank make skill`
 
 ### Exported Domain Fields (Clean Cutover)
 

@@ -85,7 +85,7 @@ The `views` feature adds a React SPA powered by Vite and configures the Go binar
 ## Generate docs for your API
 
 ```bash
-crank swag --project ./api
+crank make swag --project ./api
 crank run --project ./api
 ```
 

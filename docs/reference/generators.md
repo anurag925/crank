@@ -102,6 +102,45 @@ Temporal workflow or activity. Requires `temporal` feature.
 
 Timestamped SQL up/down pair.
 
+### `seed`
+
+Generate seed data files or run seed up/down.
+
+```bash
+crank make seed                       # Scaffold seed infrastructure
+crank make seed User                  # Generate seed data for User model
+crank make seed User --count 20       # 20 rows of fake data
+crank make seed up                    # Apply seed data
+crank make seed down                  # Roll back seed data
+```
+
+The seed generator parses the domain aggregate's exported fields and Go struct tags, then produces a Go file with GORM-backed insert statements. Each seed file includes:
+
+- `Seed<Model>Up(db *gorm.DB) error` — inserts entries with `clause.OnConflict{DoNothing: true}` for idempotent re-runs
+- `Seed<Model>Down(db *gorm.DB) error` — deletes entries by a well-known UUID prefix
+
+The seed files import and use the real domain types directly — no DTOs.
+
+### `swag`
+
+Generate Swagger/OpenAPI documentation:
+
+```bash
+crank make swag
+```
+
+Runs `swag init -g cmd/server/main.go -o docs --parseInternal --parseDependency`.
+
+### `skill`
+
+Regenerate the `.agents/skills/crank-project/SKILL.md` file:
+
+```bash
+crank make skill
+```
+
+This keeps AI coding assistants in sync with the project's current architecture conventions.
+
 ## Flags
 
 | Flag | Description |
@@ -111,3 +150,5 @@ Timestamped SQL up/down pair.
 | `--force` | Overwrite primary artifact if it exists |
 | `--skip-migration` | Skip migration generation |
 | `--tests` | Generate `_test.go` files |
+| `--seed` | Also generate a seed file (used with scaffold/model/handler) |
+| `--count` | Number of seed rows to generate. Defaults to 10. |

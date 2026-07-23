@@ -9,7 +9,7 @@ title: Quick Reference
 ```bash
 crank init myapp --features=base,auth
 crank add redis --project ./myapp
-crank update-skill --project ./myapp
+crank make skill --project ./myapp
 crank list
 crank tools
 
@@ -29,9 +29,11 @@ crank test -v --project ./myapp
 crank gofmt --project ./myapp
 crank vet --project ./myapp
 crank tidy --project ./myapp
-crank swag --project ./myapp
+crank make swag --project ./myapp
 crank migrate up --project ./myapp
 crank doctor --project ./myapp
+crank make seed User --count 20
+crank make seed up
 ```
 
 ## Features

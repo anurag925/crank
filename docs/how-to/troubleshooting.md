@@ -100,7 +100,7 @@ crank migrate up
 Run:
 
 ```bash
-crank swag
+crank make swag
 ```
 
 Then restart the server and open:

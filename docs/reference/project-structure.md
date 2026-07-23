@@ -107,4 +107,4 @@ Shared bcrypt hasher (auth) and AES-256-GCM cipher (crypto).
 
 ## Agent guidance
 
-Use `crank update-skill` to refresh `.agents/skills/crank-project/SKILL.md` with the latest conventions.
+Use `crank make skill` to refresh `.agents/skills/crank-project/SKILL.md` with the latest conventions.

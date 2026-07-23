@@ -99,7 +99,7 @@ crank migrate up --database-url postgres://postgres:postgres@localhost:5432/myap
 Generate Swagger docs:
 
 ```bash
-crank swag
+crank make swag
 ```
 
 Start the server and open:
@@ -108,7 +108,7 @@ Start the server and open:
 http://localhost:8080/swagger/index.html
 ```
 
-`crank swag` runs `swag init` against the server entry point and writes generated docs into the generated application's `docs/` directory.
+`crank make swag` runs `swag init` against the server entry point and writes generated docs into the generated application's `docs/` directory.
 
 ## Health checks
 

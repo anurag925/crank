@@ -83,7 +83,7 @@ curl http://localhost:8080/health
 `crank` separates two concerns:
 
 1. **Project generation** — `crank init`, `crank add`, and `crank make` write code into a generated service.
-2. **Project operation** — commands like `crank run`, `crank test`, `crank migrate`, and `crank swag` wrap common tools consistently.
+2. **Project operation** — commands like `crank run`, `crank test`, `crank migrate`, and `crank make swag` wrap common tools consistently.
 
 That means teams can standardize on a familiar Go project shape while still keeping all generated code ordinary, editable Go.
 

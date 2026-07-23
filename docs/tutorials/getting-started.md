@@ -92,7 +92,7 @@ crank test
 ## 6. Generate Swagger docs
 
 ```bash
-crank swag
+crank make swag
 ```
 
 Then start the server and open:

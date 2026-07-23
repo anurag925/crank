@@ -59,7 +59,7 @@ The skill explains how to:
 - use Crank tool commands
 - use `crank make` generators
 - add features with `crank add`
-- use `crank update-skill` to refresh the skill file
+- use `crank
 - validate changes with `crank gofmt`, `crank test`, `crank vet`, and `crank doctor`
 
 ## Command expectations
@@ -73,7 +73,7 @@ crank test
 crank gofmt
 crank vet
 crank tidy
-crank swag
+crank make swag
 crank migrate up
 ```
 
