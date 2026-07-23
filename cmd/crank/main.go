@@ -30,8 +30,7 @@ import (
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/gofmt"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/migrate"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/run"
-	_ "github.com/anurag925/crank/internal/bootstrap/tools/seed"
-	_ "github.com/anurag925/crank/internal/bootstrap/tools/swag"
+
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/test"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/tidy"
 	_ "github.com/anurag925/crank/internal/bootstrap/tools/vet"
@@ -91,9 +90,8 @@ If --project is not specified, the current directory is used.`,
 		commands.NewInitCmd(featReg, toolReg),
 		commands.NewAddCmd(featReg),
 		commands.NewUpdateCmd(),
-		commands.NewUpdateSkillCmd(featReg),
 		commands.NewListCmd(featReg),
-		commands.NewMakeCmd(),
+		commands.NewMakeCmd(featReg, toolReg),
 		commands.NewToolsListCmd(toolReg),
 	)
 

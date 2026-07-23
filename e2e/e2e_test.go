@@ -38,7 +38,7 @@ var crankBin string
 var allFeatureNames = []string{"base", "auth", "crypto", "gorm", "redis", "mongodb", "qdrant", "temporal", "otel", "outbox", "audit"}
 
 // allToolNames lists every tool subcommand the application wraps.
-var allToolNames = []string{"migrate", "seed", "swag", "build", "run", "dev", "test", "gofmt", "vet", "tidy"}
+var allToolNames = []string{"migrate", "build", "run", "dev", "test", "gofmt", "vet", "tidy"}
 
 func TestMain(m *testing.M) {
 	root := moduleRoot()

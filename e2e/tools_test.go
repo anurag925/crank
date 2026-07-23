@@ -2,7 +2,7 @@ package e2e
 
 // Tests for the tool-wrapper subcommands (`crank build`, `crank run`,
 // `crank test`, `crank vet`, `crank gofmt`, `crank tidy`, `crank dev`,
-// `crank swag`, `crank migrate`).
+// `crank migrate`).
 //
 // Each tool has its own preconditions in Prepare() that surface as
 // user-facing errors when the project is malformed. The original e2e
@@ -171,10 +171,10 @@ func TestE2E_Tool_Dev_MissingAirToml(t *testing.T) {
 	}
 }
 
-// TestE2E_Tool_Swag_MissingMainGo — swag tool requires cmd/server/main.go.
+// TestE2E_Tool_Swag_MissingMainGo — make swag requires cmd/server/main.go.
 func TestE2E_Tool_Swag_MissingMainGo(t *testing.T) {
 	dir := t.TempDir()
-	out, err := runCrankRaw(t, "", "swag", "--project", dir)
+	out, err := runCrankRaw(t, "", "make", "swag", "--project", dir)
 	if err == nil {
 		t.Fatalf("expected error for missing cmd/server/main.go, got success:\n%s", out)
 	}
@@ -236,7 +236,7 @@ func TestE2E_Tool_Dev_HappyPath_LocalAir(t *testing.T) {
 	}
 }
 
-// TestE2E_Tool_Swag_HappyPath_LocalSwag runs `crank swag` against a real
+// TestE2E_Tool_Swag_HappyPath_LocalSwag runs `crank make swag` against a real
 // project. Skipped if the swag binary is missing from PATH. On success
 // the project must contain a `docs/` directory with the generated OpenAPI
 // files.
@@ -245,7 +245,7 @@ func TestE2E_Tool_Swag_HappyPath_LocalSwag(t *testing.T) {
 		t.Skip("swag binary not on PATH; skipping swagger generation test")
 	}
 	dir := scaffoldBase(t, "tool_swag")
-	runCrank(t, "", "swag", "--project", dir)
+	runCrank(t, "", "make", "swag", "--project", dir)
 	assertExists(t, dir, "docs")
 }
 

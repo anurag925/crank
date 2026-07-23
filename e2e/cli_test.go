@@ -114,12 +114,12 @@ func TestE2E_CLI_Build_Help_ShowsProjectFlag(t *testing.T) {
 	}
 }
 
-// TestE2E_CLI_Swag_Help_ShowsProjectFlag verifies that `crank swag --help`
+// TestE2E_CLI_Swag_Help_ShowsProjectFlag verifies that `crank make swag --help`
 // mentions --project.
 func TestE2E_CLI_Swag_Help_ShowsProjectFlag(t *testing.T) {
-	out := runCrank(t, "", "swag", "--help")
+	out := runCrank(t, "", "make", "swag", "--help")
 	if !strings.Contains(out, "--project") {
-		t.Errorf("swag --help missing --project flag:\n%s", out)
+		t.Errorf("make swag --help missing --project flag:\n%s", out)
 	}
 }
 
@@ -255,9 +255,9 @@ func TestE2E_CLI_LongDescriptionForMigrate(t *testing.T) {
 // TestE2E_CLI_LongDescriptionForSwag verifies the long help on `crank
 // swag` mentions the swag init invocation.
 func TestE2E_CLI_LongDescriptionForSwag(t *testing.T) {
-	out := runCrank(t, "", "swag", "--help")
+	out := runCrank(t, "", "make", "swag", "--help")
 	if !strings.Contains(out, "swag init") {
-		t.Errorf("swag --help missing 'swag init':\n%s", out)
+		t.Errorf("make swag --help missing 'swag init':\n%s", out)
 	}
 }
 
