@@ -29,6 +29,7 @@ func GoGet(projectDir string, deps []string) error {
 		Dir:    projectDir,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
+		Env:    append(os.Environ(), "GOWORK=off"),
 	}
 	fmt.Printf("→ go get %s\n", joinDeps(deps))
 	if err := c.Run(); err != nil {
@@ -51,6 +52,7 @@ func Tidy(projectDir string) error {
 		Dir:    projectDir,
 		Stdout: os.Stdout,
 		Stderr: os.Stderr,
+		Env:    append(os.Environ(), "GOWORK=off"),
 	}
 	fmt.Println("→ go mod tidy")
 	if err := c.Run(); err != nil {
