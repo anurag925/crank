@@ -222,6 +222,9 @@ func generateModelSeed(info *StructInfo, opts Options) string {
 func generateGormModelSeed(info *StructInfo, opts Options) string {
 	var b strings.Builder
 
+	domainPkg := pascalToSnake(info.Name)
+	domainImport := opts.ModulePath + "/internal/domain/" + domainPkg
+
 	needsTime := hasTimeField(info)
 
 	b.WriteString(fmt.Sprintf(`package %s
@@ -232,29 +235,19 @@ import (
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
-`, "gorm"))
+	%q
+`, "gorm", domainImport))
 
 	if needsTime {
 		b.WriteString("\t\"time\"\n")
 	}
 
-	b.WriteString(fmt.Sprintf(`)
-
-type seed%s struct {
-`, info.Name))
-
-	for _, f := range info.ExportedFields {
-		b.WriteString(fmt.Sprintf("\t%s %s `gorm:\"%s\"`\n",
-			f.Name, goTypeForField(f), gormTag(f)))
-	}
-
-	b.WriteString("}\n\n")
-	b.WriteString(fmt.Sprintf("func (seed%s) TableName() string { return %q }\n\n", info.Name, info.TableName))
+	b.WriteString(")\n\n")
 
 	// SeedUp
 	b.WriteString(fmt.Sprintf(`func Seed%sUp(db *gorm.DB) error {
-	entries := []seed%s{
-`, pascalPlural(info.Name), info.Name))
+	entries := []%s.%s{
+`, pascalPlural(info.Name), domainPkg, info.Name))
 
 	for i := 0; i < opts.Count; i++ {
 		b.WriteString("\t\t{")
@@ -276,7 +269,9 @@ type seed%s struct {
 		if err := db.Clauses(clause.OnConflict{DoNothing: true}).Create(&e).Error; err != nil {
 			return err
 		}
-		log.Printf("  ✓ ` + info.TableName + ` %s", e.`)
+		log.Printf("  ✓ `)
+	b.WriteString(info.TableName)
+	b.WriteString(` %s", e.`)
 
 	nameField := findNameField(info)
 	if nameField != "" {
@@ -285,16 +280,16 @@ type seed%s struct {
 		b.WriteString("ID")
 	}
 	b.WriteString(`)
+		}
+		return nil
 	}
-	return nil
-}
 `)
 
 	// SeedDown
 	b.WriteString(fmt.Sprintf(`func Seed%sDown(db *gorm.DB) error {
-	return db.Where("id LIKE 'a0000000-0000-4000-a000-00000000000%%%%'").Delete(&seed%s{}).Error
+	return db.Where("id LIKE 'a0000000-0000-4000-a000-00000000000%%%%'").Delete(&%s.%s{}).Error
 }
-`, pascalPlural(info.Name), info.Name))
+`, pascalPlural(info.Name), domainPkg, info.Name))
 
 	return b.String()
 }

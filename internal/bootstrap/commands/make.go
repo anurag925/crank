@@ -42,13 +42,14 @@ Examples:
   crank make handler Product --only
   crank make scaffold Invoice number:string amount:float
   crank make scaffold Invoice number:string --tests
+  crank make scaffold Product --seed
   crank make workflow OrderFulfillment order_id:uuid
   crank make activity ChargeCard amount:float --tests
   crank make repository Ticket
   crank make migration add_index_to_orders
   crank make seed User
   crank make seed User --count 20 --force
-  crank make seed up
+  crank make seed
   crank make swag
   crank make skill`
 
@@ -61,6 +62,7 @@ func NewMakeCmd(featReg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *c
 		force         bool
 		skipMigration bool
 		tests         bool
+		seed          bool
 		count         int
 	)
 
@@ -112,7 +114,7 @@ func NewMakeCmd(featReg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *c
 				if name == "" {
 					return fmt.Errorf("%s name is required\n\nUsage: crank make %s <name> [field:type ...]\n\nExample: crank make %s Order customer:string total:float", kind, kind, kind)
 				}
-				return runScaffold(scaffold.Options{
+				if err := runScaffold(scaffold.Options{
 					ProjectDir:    projectDir,
 					Kind:          kind,
 					Name:          name,
@@ -121,7 +123,14 @@ func NewMakeCmd(featReg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *c
 					Force:         force,
 					SkipMigration: skipMigration,
 					Tests:         tests,
-				})
+				}); err != nil {
+					return err
+				}
+				if seed {
+					return generateSeed(projectDir, name, count, force)
+				}
+				return nil
+
 			default:
 				return fmt.Errorf("unknown kind %q\n\nSupported kinds: %s\n\nTip: Run 'crank make --help' to see all available kinds and examples.", kind, strings.Join(validKinds, ", "))
 			}
@@ -133,6 +142,7 @@ func NewMakeCmd(featReg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *c
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite existing files (used with scaffold and seed)")
 	cmd.Flags().BoolVar(&skipMigration, "skip-migration", false, "do not generate a table migration even when the gorm feature is enabled")
 	cmd.Flags().BoolVar(&tests, "tests", false, "generate _test.go files alongside each generated layer")
+	cmd.Flags().BoolVar(&seed, "seed", false, "also generate a seed file (used with scaffold/model/handler)")
 	cmd.Flags().IntVar(&count, "count", 10, "number of seed rows to generate (used with 'make seed')")
 	return cmd
 }
@@ -210,7 +220,8 @@ func sanitizeName(s string) string {
 // handleSeed handles `crank make seed [<model>|up|down]`.
 func handleSeed(projectDir string, args []string, count int, force bool) error {
 	if len(args) == 0 {
-		return runSeed(projectDir, "up")
+		// No args — scaffold seed infrastructure (main.go + seeder.go) only.
+		return generateSeed(projectDir, "", count, force)
 	}
 
 	arg := args[0]
@@ -218,7 +229,7 @@ func handleSeed(projectDir string, args []string, count int, force bool) error {
 		return runSeed(projectDir, arg)
 	}
 
-	// Treat as a model name — generate seed data.
+	// Treat as a model name — generate seed data for it.
 	return generateSeed(projectDir, arg, count, force)
 }
 
@@ -241,6 +252,7 @@ func runSeed(projectDir, direction string) error {
 }
 
 // generateSeed generates seed data files for a domain model.
+// When modelName is empty, only scaffolding (main.go + seeder.go) is generated.
 func generateSeed(projectDir, modelName string, count int, force bool) error {
 	proj, err := bootstrap.LoadProjectInfo(projectDir)
 	if err != nil {

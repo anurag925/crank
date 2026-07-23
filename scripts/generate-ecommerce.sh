@@ -119,10 +119,10 @@ mk migration add_index_to_orders
 # 4. Seed data
 # ---------------------------------------------------------------------------
 step "Generating seed scaffolding + fake data"
-crank seed generate --project "$PROJECT_DIR"
-crank seed generate Product  --count 20 --project "$PROJECT_DIR"
-crank seed generate Category --count 8  --project "$PROJECT_DIR"
-crank seed generate Customer --count 15 --project "$PROJECT_DIR"
+crank make seed --project "$PROJECT_DIR"
+crank make seed Product  --count 20 --project "$PROJECT_DIR"
+crank make seed Category --count 8  --project "$PROJECT_DIR"
+crank make seed Customer --count 15 --project "$PROJECT_DIR"
 ok "seed files generated"
 
 # ---------------------------------------------------------------------------

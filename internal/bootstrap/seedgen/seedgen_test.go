@@ -571,8 +571,11 @@ type Product struct {
 	if !strings.Contains(seedStr, "clause.OnConflict{DoNothing: true}") {
 		t.Error("seed_products.go missing OnConflict clause")
 	}
-	if !strings.Contains(seedStr, `gorm:"column:id`) {
-		t.Error("seed_products.go missing gorm tag")
+	if !strings.Contains(seedStr, `"example.com/myapp/internal/domain/product"`) {
+		t.Error("seed_products.go missing domain type import")
+	}
+	if !strings.Contains(seedStr, `product.Product{`) {
+		t.Error("seed_products.go missing domain type usage")
 	}
 }
 
