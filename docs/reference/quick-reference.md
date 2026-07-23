@@ -1,5 +1,6 @@
 ---
-title: Quick Reference
+title: Quick reference
+type: reference
 ---
 
 # Quick Reference

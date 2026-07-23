@@ -1,92 +1,73 @@
 ---
-title: Crank Documentation
+title: Crank — Production-Ready Go Backend CLI
+type: concept
 ---
 
-# Crank
+# Scaffold & Scale Production Go Services
 
-`crank` is a CLI for creating and maintaining production-ready Go backend services. It scaffolds a layered service, installs selected features, and wraps day-to-day development tools as first-class `crank` subcommands.
+Crank is a modern CLI framework that scaffolds production-ready Go 1.26 backend services using Domain-Driven Design (DDD), CQRS application handlers, and unified development tool wrappers.
 
-Instead of stitching together routing, configuration, validation, persistence, migrations, Swagger, live reload, and project scripts by hand, you choose the features you need and let `crank` generate a working project with sensible defaults.
+[🚀 Get Started](/tutorials/getting-started) &nbsp; [🧠 DDD Architecture](/explanation/architecture)
 
-## What you can build
+`Go 1.26` · `Echo v5` · `GORM` · `Temporal`
 
-A generated `crank` project gives you:
+---
 
-- A Go 1.26 backend service using Echo v5.
-- A Domain-Driven layout with domain, application, adapter, and composition-root layers.
-- Configuration through `configs/config.yaml`, `.env`, and environment variables.
-- Structured logging with `log/slog` including redaction and context-aware enrichment.
-- Request validation with `go-playground/validator` via automatic binder validation.
-- Swagger/OpenAPI generation with `swaggo/swag`.
-- Optional PostgreSQL persistence through GORM, where the domain aggregate doubles as the GORM model.
-- Optional modules for auth (JWT with token revocation), audit, Redis, MongoDB, Qdrant, Temporal, OpenTelemetry, React views, crypto helpers, and transactional outbox.
-- `TxRepositories` — transaction-scoped domain repos so application handlers never import persistence adapters.
-- Versioned HTTP handlers at `/api/v1` with self-scoped user endpoints.
-- One CLI surface for build, run, test, format, vet, migrations, Swagger, live reload, health checks, and code generation.
-- Agent-friendly project metadata through `.crank.yaml`, `AGENTS.md`, and a project-local agent skill.
+## Quick Start
 
-## Quick example
+Get up and running with a single command:
 
 ```bash
-# Install crank
+# 1. Install Crank CLI
 curl -fsSL https://raw.githubusercontent.com/anurag925/crank/main/install.sh | sh
 
-# Create a new service with the default ORM, GORM
-crank init bookstore --features=base,auth
+# 2. Scaffold a new service with GORM & Auth
+crank init bookstore --features=base,auth,gorm
 
-# Start the service
+# 3. Start hot-reloading dev server
 cd bookstore
 cp .env.example .env
-crank run
+crank dev
 ```
 
-The generated server listens on `http://localhost:8080` by default. The health endpoint is available at:
+---
 
-```bash
-curl http://localhost:8080/health
-```
+## Why Choose Crank?
 
-## How the docs are organized
+| Feature | Description |
+| --- | --- |
+| 🏛️ **Domain-Driven Architecture** | Clean layer separation between aggregate roots, CQRS application handlers, and HTTP adapters. No ORM leakage into business logic. |
+| ⚡ **Aggregate Doubles** | Aggregates double as GORM models with raw `uuid.UUID` identifiers. Zero DTO translation boilerplate needed. |
+| 🛠️ **Unified Tool Wrappers** | One CLI for `build`, `run`, `test`, `dev` (live reload), `migrate`, `swag`, `gofmt`, `vet`, and `doctor`. |
+| 🧱 **Modular Feature System** | Opt-in modules for JWT Auth, Audit Trails, Redis, MongoDB, Qdrant, Temporal, OpenTelemetry, React Views, and Transactional Outbox. |
+| ⚙️ **Rails-Style Generators** | Scaffold domain models, repositories, services, versioned Echo HTTP handlers, Temporal workflows, activities, and SQL migrations effortlessly. |
+| 🤖 **AI Agent Ready** | Generated projects embed local agent skills (`.agents/skills/`) and strict architectural constraints for autonomous AI coders. |
 
-| Section | Page | Use it when you want to... |
+---
+
+## Core Philosophy
+
+`crank` cleanly separates two concerns:
+
+1. **Project Generation**: `crank init`, `crank add`, and `crank make` generate clean, un-obfuscated Go code directly into your repository.
+2. **Project Operation**: `crank run`, `crank test`, `crank migrate`, and `crank make swag` wrap common tools consistently so developers don't have to fiddle with custom shell scripts.
+
+---
+
+## Documentation Roadmap
+
+| Section | Page | Description |
 | --- | --- | --- |
-| **📚 Tutorials** | [Installation](./tutorials/installation.md) | Install `crank` or build it from source. |
-| | [Getting started](./tutorials/getting-started.md) | Scaffold your first app and run it locally. |
-| **📖 Reference** | [Commands](./reference/commands.md) | Learn the full CLI surface. |
-| | [Features](./reference/features.md) | Pick the modules to include in a project. |
-| | [Generators](./reference/generators.md) | Generate models, handlers, scaffolds, workflows, activities, and migrations. |
-| | [Configuration](./reference/configuration.md) | Configure generated applications safely. |
-| | [Project structure](./reference/project-structure.md) | Quick reference for where generated code lives. |
-| | [Quick reference](./reference/quick-reference.md) | Cheat sheet for commands, features, and field types. |
-| **🧠 Explanation** | [Navigating the generated application](./explanation/generated-app.md) | **Deep dive into the generated code — architecture diagrams, request lifecycle, layer walkthroughs, feature modules, and testing patterns.** |
-| | [AI agent support](./explanation/ai-agents.md) | Understand how generated projects guide AI agents to use Crank correctly. |
-| | [Feature: Base](./explanation/features/base.md) | Foundation — Echo, Viper, config, validation, logging, in-memory adapters. |
-| | [Feature: GORM](./explanation/features/gorm.md) | PostgreSQL persistence via GORM (default ORM). |
-| | [Feature: Auth](./explanation/features/auth.md) | JWT authentication, bcrypt hashing, auth endpoints. |
-| | [Feature: Audit](./explanation/features/audit.md) | Domain event audit trail, queryable by entity type and ID. |
-| | [Feature: Crypto](./explanation/features/crypto.md) | AES-256-GCM encryption helpers. |
-| | [Feature: Redis](./explanation/features/redis.md) | Redis caching client and port interface. |
-| | [Feature: MongoDB](./explanation/features/mongodb.md) | MongoDB document database client. |
-| | [Feature: Qdrant](./explanation/features/qdrant.md) | Qdrant vector database client. |
-| | [Feature: Temporal](./explanation/features/temporal.md) | Temporal workflow orchestration. |
-| | [Feature: OpenTelemetry](./explanation/features/otel.md) | Distributed tracing with OpenTelemetry. |
-| | [Feature: Outbox](./explanation/features/outbox.md) | Transactional outbox for reliable event delivery. |
-| | [Feature: Views](./explanation/features/views.md) | React SPA with Vite, embedded in Go binary. |
-| **🔧 How-to Guides** | [Development workflow](./how-to/development-workflow.md) | Build, run, test, format, migrate, and generate Swagger docs. |
-| | [Recipes](./how-to/recipes.md) | Copy practical workflows for common use cases. |
-| | [Troubleshooting](./how-to/troubleshooting.md) | Fix common setup and runtime issues. |
-| | [Hosting](./how-to/hosting.md) | Host the documentation site. |
-| | [Contributing](./how-to/contributing.md) | Work on `crank` itself. |
-
-## Core idea
-
-`crank` separates two concerns:
-
-1. **Project generation** — `crank init`, `crank add`, and `crank make` write code into a generated service.
-2. **Project operation** — commands like `crank run`, `crank test`, `crank migrate`, and `crank make swag` wrap common tools consistently.
-
-That means teams can standardize on a familiar Go project shape while still keeping all generated code ordinary, editable Go.
-
-## Recommended next step
-
-Start with [Getting started](./tutorials/getting-started.md), then read [Features](./reference/features.md) before choosing optional modules for a real project.
+| **📚 Tutorials** | [Installation](/tutorials/installation) | Install Crank binary or build from source code. |
+| | [Getting Started](/tutorials/getting-started) | Scaffold your first project and inspect the directory structure. |
+| | [Building a Full REST Service](/tutorials/building-a-service) | Step-by-step hands-on guide to building an E-Commerce API. |
+| | [Temporal Workflows](/tutorials/temporal-workflows) | Async background jobs, activities, and worker registration. |
+| **📖 Reference** | [CLI Commands](/reference/commands) | Complete reference for all Crank CLI flags and options. |
+| | [Tool Wrappers](/reference/tools) | How Crank wraps `go test`, `air`, `golang-migrate`, `swag`, etc. |
+| | [Features Reference](/reference/features) | Available feature modules and dependency requirements. |
+| | [Code Generators](/reference/generators) | How `crank make` scaffolds models, repos, handlers, & workflows. |
+| **🧠 Explanation** | [DDD Architecture](/explanation/architecture) | Deep-dive into aggregate doubles, `TxRepositories`, and layer boundaries. |
+| | [Transactional Outbox](/explanation/outbox-pattern) | Event-driven microservices pattern with guaranteed delivery. |
+| **🔧 How-to Guides** | [Testing Guide](/how-to/testing-guide) | Unit testing, handler mocks, integration tests, and E2E suites. |
+| | [Migrations & Seeding](/how-to/migrations-and-seeding) | Database migrations and fake data seed generators. |
+| | [Troubleshooting](/how-to/troubleshooting) | Common setup questions and diagnostic solutions. |

@@ -1,5 +1,6 @@
 ---
 title: Getting Started
+type: tutorial
 ---
 
 # Getting started

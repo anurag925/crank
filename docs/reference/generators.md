@@ -1,5 +1,6 @@
 ---
 title: Generators
+type: reference
 ---
 
 # Generators

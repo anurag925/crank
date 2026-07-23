@@ -1,5 +1,6 @@
 ---
-title: Generated Project Structure
+title: Project structure
+type: reference
 ---
 
 # Generated project structure

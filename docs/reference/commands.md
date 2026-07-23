@@ -1,5 +1,6 @@
 ---
 title: Commands
+type: reference
 ---
 
 # Commands
