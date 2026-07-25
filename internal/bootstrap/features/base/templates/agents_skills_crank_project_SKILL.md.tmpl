@@ -82,6 +82,7 @@ Feature behavior:
 | `outbox` | Transactional outbox at `internal/adapters/outbox/`, outbox_events table, GORM UoW with TxRepositories |
 | `crypto` | AES-256-GCM cipher at `pkg/crypto/`, Cipher port at `internal/ports/cipher.go` |
 | `audit` | Audit trail at `internal/adapters/audit/`, audit_events table, `/api/v1/audit/events` endpoint |
+| `views` | Embedded React SPA (Vite) at `views/`, served via `internal/adapters/http/web/views.go`; build output embedded in `static/dist/` via `static/embed.go` |
 
 Do not assume all features exist. Check `.crank.yaml` first.
 
@@ -163,6 +164,31 @@ crank add audit
 ```
 
 When adding features, preserve user edits. Crank uses marker-based injection (`// crank:config-fields`, `# crank:config-section`, etc.) for config and wiring.
+
+## Frontend development (`views` feature only)
+
+Only applies when `views` is enabled in `.crank.yaml`. The frontend is a React + Vite SPA that the Go binary serves embedded in production.
+
+- Frontend sources live under `views/` (React 19, Vite 6, react-router-dom).
+- `views/vite.config.js` proxies `/api`, `/auth`, `/health`, `/swagger` to the Go backend at `http://localhost:8080`.
+- Build output goes to `static/dist/` which is git-ignored; `static/embed.go` embeds it via `//go:embed dist/*`.
+- The Go server serves the SPA through `web.ServeViews(e, cfg.ViewsConfig, logger)`. Set `views.dev_server` (e.g. `http://localhost:5173`) to proxy SPA requests to Vite for HMR; leave empty in production to serve the embedded bundle with SPA fallback.
+
+```bash
+# Install frontend deps (one-time)
+cd views && npm install
+
+# Dev: run Vite (HMR) and the Go server side by side
+#   - Vite on :5173, proxies /api to :8080
+#   - Go server with views.dev_server: http://localhost:5173
+cd views && npm run dev
+
+# Production build: emits static/dist/, then build the Go binary to embed it
+cd views && npm run build
+crank build
+```
+
+The embedded SPA only updates when you rebuild the Go binary after running `npm run build`. During dev, point the Go server at the Vite URL so HMR takes effect without rebuilds.
 
 ## Validation workflow
 

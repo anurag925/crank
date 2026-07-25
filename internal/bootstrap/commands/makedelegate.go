@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/anurag925/crank/internal/bootstrap"
 	"github.com/anurag925/crank/internal/utils"
 )
 
@@ -19,19 +20,22 @@ import (
 // assignments like `APP_NAME := myapp`.
 var makeTargetRe = regexp.MustCompile(`^([a-zA-Z0-9][a-zA-Z0-9_.-]*)[ \t]*:([^=]|$)`)
 
-// TryMakeDelegation inspects the raw CLI args and, when the first argument is
-// not a known crank subcommand but matches a target in the target project's
-// Makefile, runs `make <target>` in that project.
+// TryMakeDelegation inspects the raw CLI args and either delegates to the
+// target project's Makefile or lets cobra handle the command natively.
 //
-// It returns handled=true only when it takes responsibility for the command
-// (i.e. a matching Makefile target was found and make was invoked). In every
-// other case it returns handled=false so that cobra can run the command
-// natively or report an unknown command as usual.
+// There are two modes:
 //
-// Native crank commands always take precedence: the fallback is consulted only
-// for names cobra does not already recognize. This means a Makefile can extend
-// crank with project-specific targets, and (in the future) be used to override
-// behavior for names crank does not ship natively.
+//  1. Normal mode (default) — native crank commands always take precedence.
+//     The Makefile is consulted only for names cobra does not already
+//     recognise. This means a Makefile can extend crank with project-specific
+//     targets but cannot shadow built-in commands.
+//
+//  2. Override mode — enabled by setting makefile_override: true in the
+//     project's .crank.yaml or passing --makefile-override to crank init.
+//     In this mode the Makefile is consulted first. If it defines a target
+//     matching the requested command, `make <target>` is run instead of the
+//     native crank command. This lets projects customise or replace crank's
+//     tool wrappers (dev, build, test, …) with project-specific behaviour.
 func TryMakeDelegation(root *cobra.Command, args []string) (handled bool, err error) {
 	if len(args) == 0 {
 		return false, nil
@@ -42,25 +46,26 @@ func TryMakeDelegation(root *cobra.Command, args []string) (handled bool, err er
 	if candidate == "" || strings.HasPrefix(candidate, "-") {
 		return false, nil
 	}
-	// Defer to cobra for anything it already knows about.
+
+	projectDir, makeArgs := splitProjectFlag(args[1:])
+	override := isMakefileOverrideEnabled(projectDir)
+
+	if override {
+		// Override mode: Makefile targets shadow native commands.
+		// If the Makefile defines the target, delegate to make.
+		// Otherwise fall through to cobra for the native command.
+		if hasMakefileTarget(projectDir, candidate) {
+			return true, runMakeTarget(projectDir, candidate, makeArgs)
+		}
+		return false, nil
+	}
+
+	// Normal mode: native commands win.
 	if isKnownCommand(root, candidate) {
 		return false, nil
 	}
 
-	projectDir, makeArgs := splitProjectFlag(args[1:])
-
-	makefile := filepath.Join(projectDir, "Makefile")
-	if !utils.PathExists(makefile) {
-		// No Makefile to delegate to; let cobra report the unknown command.
-		return false, nil
-	}
-
-	targets, terr := makefileTargets(makefile)
-	if terr != nil {
-		return false, fmt.Errorf("read Makefile in %s: %w", projectDir, terr)
-	}
-	if !targets[candidate] {
-		// Not a make target either; let cobra report the unknown command.
+	if !hasMakefileTarget(projectDir, candidate) {
 		return false, nil
 	}
 
@@ -156,4 +161,29 @@ func runMakeTarget(projectDir, target string, args []string) error {
 		Args:   makeArgs,
 		Dir:    projectDir,
 	})
+}
+
+// isMakefileOverrideEnabled returns true when the project's .crank.yaml has
+// makefile_override: true, giving the Makefile precedence over native commands.
+func isMakefileOverrideEnabled(projectDir string) bool {
+	info, err := bootstrap.LoadProjectInfo(projectDir)
+	if err != nil {
+		// No manifest or unreadable — default to normal mode.
+		return false
+	}
+	return info.MakefileOverride
+}
+
+// hasMakefileTarget reports whether the project's Makefile in projectDir
+// defines a target with the given name.
+func hasMakefileTarget(projectDir, target string) bool {
+	makefile := filepath.Join(projectDir, "Makefile")
+	if !utils.PathExists(makefile) {
+		return false
+	}
+	targets, err := makefileTargets(makefile)
+	if err != nil {
+		return false
+	}
+	return targets[target]
 }

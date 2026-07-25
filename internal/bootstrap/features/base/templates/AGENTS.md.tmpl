@@ -29,6 +29,46 @@ crank test --project /path/to/project
 
 If `.crank.yaml` is missing, do not assume the repository is managed by Crank.
 
+## Enabled features
+
+Read `.crank.yaml` to see which Crank features are enabled. Do not assume any feature is present — check the manifest first. Common features: `base` (always), `gorm`, `auth`, `redis`, `mongodb`, `qdrant`, `temporal`, `otel`, `outbox`, `crypto`, `audit`, `views`.
+
+## Code generation
+
+Prefer Crank generators over hand-writing boilerplate:
+
+```bash
+crank make model Order customer:string total:float
+crank make handler Product title:string price:float
+crank make scaffold Invoice number:string amount:float
+crank make migration create_orders
+crank seed generate Order --count 20
+```
+
+For Temporal projects: `crank make workflow` / `crank make activity`.
+
+## Frontend (`views` feature only)
+
+When `views` is enabled, a React + Vite SPA lives under `views/` and is served embedded from the Go binary in production.
+
+```bash
+cd views && npm install     # one-time
+cd views && npm run dev    # Vite HMR on :5173 (proxies /api to :8080)
+cd views && npm run build  # emits static/dist/, then `crank build` to embed it
+```
+
+Set `views.dev_server: "http://localhost:5173"` in config for HMR; leave empty to serve the embedded bundle.
+
+## Adding features
+
+```bash
+crank add redis
+crank add temporal
+crank add views
+```
+
+Crank uses marker-based injection to preserve user edits when adding features.
+
 This repo includes a project-local Zed skill at:
 
 ```txt
