@@ -19,11 +19,10 @@ import (
 // NewInitCmd returns the `init` cobra command.
 func NewInitCmd(reg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *cobra.Command {
 	var (
-		features         string
-		module           string
-		target           string
-		force            bool
-		makefileOverride bool
+		features string
+		module   string
+		target   string
+		force    bool
 	)
 
 	cmd := &cobra.Command{
@@ -123,12 +122,11 @@ Examples:
 			}
 
 			result, err := bootstrap.Generate(reg, bootstrap.Options{
-				ProjectName:      projectName,
-				ModulePath:       module,
-				TargetDir:        target,
-				Features:         featList,
-				Force:            force,
-				MakefileOverride: makefileOverride,
+				ProjectName: projectName,
+				ModulePath:  module,
+				TargetDir:   target,
+				Features:    featList,
+				Force:       force,
 			})
 			if err != nil {
 				return err
@@ -180,7 +178,6 @@ Examples:
 	cmd.Flags().StringVar(&module, "module", "", "Go module path (defaults to the project name)")
 	cmd.Flags().StringVar(&target, "target", ".", "parent directory in which to create the project")
 	cmd.Flags().BoolVar(&force, "force", false, "overwrite an existing non-empty target directory")
-	cmd.Flags().BoolVar(&makefileOverride, "makefile-override", false, "give the project's Makefile precedence over native crank commands")
 
 	return cmd
 }

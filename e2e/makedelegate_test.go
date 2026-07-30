@@ -6,13 +6,11 @@ package e2e
 // crank command with that name is registered.
 //
 // Precedence rules under test:
-//   1. Native crank commands always win (no delegation, even if Makefile
-//      has a same-named target).
-//   2. If the first arg is not a known crank command AND the Makefile in
-//      the project (default "." or via --project) defines that target,
-//      crank transparently runs `make <target>`.
-//   3. If neither (1) nor (2) match, the cobra error path fires ("unknown
-//      command").
+//   1. If the Makefile in the project (default "." or via --project) defines
+//      a target matching the first arg, crank transparently runs `make <target>`.
+//      Makefile targets shadow native crank commands.
+//   2. help and completion are never delegated.
+//   3. If no Makefile target matches, the cobra command runs natively.
 
 import (
 	"os"
@@ -80,25 +78,25 @@ func TestE2E_Makefile_DelegatesClean(t *testing.T) {
 	}
 }
 
-// TestE2E_Makefile_NativeCommandWins verifies the precedence rule: even
-// if the Makefile defines a `vet` target, `crank vet` must still run the
-// native tool wrapper. The test detects this by checking the invocation
-// output for the tool's "→ go vet ./..." banner.
-func TestE2E_Makefile_NativeCommandWins(t *testing.T) {
-	dir := scaffoldBase(t, "makedelegate_native_wins")
+// TestE2E_Makefile_TargetShadowsNative verifies the precedence rule: when
+// the Makefile defines a `vet` target, `crank vet` delegates to `make vet`
+// and does NOT run the native crank vet tool. The test detects this by
+// checking that the Makefile's sentinel file was touched and that the
+// native tool's "→ go vet" banner is absent.
+func TestE2E_Makefile_TargetShadowsNative(t *testing.T) {
+	dir := scaffoldBase(t, "makedelegate_shadows_native")
 	makefileFixture(t, dir, map[string]string{
-		"vet": filepath.Join(dir, "should_not_exist.txt"),
+		"vet": filepath.Join(dir, "vet_ran.txt"),
 	})
 
 	out := runCrank(t, dir, "vet")
-	// The crank tool invocation prints "→ go vet ./...". If we see that,
-	// we know crank ran the native vet tool, not `make vet`.
-	if !strings.Contains(out, "go vet") {
-		t.Errorf("expected native go vet invocation, got:\n%s", out)
+	// The Makefile target must have fired.
+	if !sentinelTouched(t, filepath.Join(dir, "vet_ran.txt")) {
+		t.Errorf("expected make vet to run, got output:\n%s", out)
 	}
-	// The Makefile's vet target must not have fired.
-	if _, err := os.Stat(filepath.Join(dir, "should_not_exist.txt")); err == nil {
-		t.Errorf("Makefile vet target was invoked despite native command winning")
+	// The crank native vet tool banner must NOT appear.
+	if strings.Contains(out, "→ go vet") {
+		t.Errorf("native go vet ran but Makefile target should have taken precedence, got:\n%s", out)
 	}
 }
 

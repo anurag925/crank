@@ -16,11 +16,10 @@ import (
 // used by tooling (e.g. the `make` code generators) that needs to know the
 // project's module path and enabled feature set.
 type ProjectInfo struct {
-	ProjectName      string
-	ModulePath       string
-	Features         []string
-	CrankVersion     string
-	MakefileOverride bool
+	ProjectName  string
+	ModulePath   string
+	Features     []string
+	CrankVersion string
 }
 
 // LoadProjectInfo reads the .crank.yaml manifest from projectDir and returns a
@@ -39,11 +38,10 @@ func LoadProjectInfo(projectDir string) (*ProjectInfo, error) {
 		mod = m.ProjectName
 	}
 	return &ProjectInfo{
-		ProjectName:      m.ProjectName,
-		ModulePath:       mod,
-		Features:         m.Features,
-		CrankVersion:     m.CrankVersion,
-		MakefileOverride: m.MakefileOverride,
+		ProjectName:  m.ProjectName,
+		ModulePath:   mod,
+		Features:     m.Features,
+		CrankVersion: m.CrankVersion,
 	}, nil
 }
 

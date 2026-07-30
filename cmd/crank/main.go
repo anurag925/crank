@@ -46,10 +46,10 @@ var (
 func main() {
 	root := newRootCmd()
 
-	// If the first argument is not a native crank command but matches a target in
-	// the target project's Makefile, transparently delegate to `make <target>`.
-	// Native crank commands always take precedence.
-	if handled, err := commands.TryMakeDelegation(root, os.Args[1:]); handled {
+	// If the project's Makefile defines a target matching the requested command,
+	// transparently delegate to `make <target>` — Makefile targets take precedence
+	// over native crank commands. Falls through to cobra if no Makefile target matches.
+	if handled, err := commands.TryMakeDelegation(os.Args[1:]); handled {
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
 			os.Exit(1)

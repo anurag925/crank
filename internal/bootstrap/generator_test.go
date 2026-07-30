@@ -207,7 +207,7 @@ func TestAdd_AuthToBase(t *testing.T) {
 // --- renderTemplate tests ---
 
 func TestRenderTemplate_Basic(t *testing.T) {
-	ctx := NewContext("world", "github.com/example/world", []string{"base"}, false)
+	ctx := NewContext("world", "github.com/example/world", []string{"base"})
 	rendered, err := renderTemplate("hello.txt.tmpl", "Hello {{.ProjectName}}!", ctx)
 	if err != nil {
 		t.Fatalf("renderTemplate: %v", err)
@@ -228,7 +228,7 @@ REDIS
 end`
 
 	t.Run("auth only", func(t *testing.T) {
-		ctx := NewContext("app", "app", []string{"base", "auth"}, false)
+		ctx := NewContext("app", "app", []string{"base", "auth"})
 		out, err := renderTemplate("test", tmpl, ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -242,7 +242,7 @@ end`
 	})
 
 	t.Run("redis only", func(t *testing.T) {
-		ctx := NewContext("app", "app", []string{"base", "redis"}, false)
+		ctx := NewContext("app", "app", []string{"base", "redis"})
 		out, err := renderTemplate("test", tmpl, ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -256,7 +256,7 @@ end`
 	})
 
 	t.Run("both", func(t *testing.T) {
-		ctx := NewContext("app", "app", []string{"base", "auth", "redis"}, false)
+		ctx := NewContext("app", "app", []string{"base", "auth", "redis"})
 		out, err := renderTemplate("test", tmpl, ctx)
 		if err != nil {
 			t.Fatal(err)
@@ -272,7 +272,7 @@ func TestRenderTemplate_RangeLoop(t *testing.T) {
 {{- range .Features}}
   - {{.}}
 {{- end}}`
-	ctx := NewContext("app", "app", []string{"base", "auth"}, false)
+	ctx := NewContext("app", "app", []string{"base", "auth"})
 	out, err := renderTemplate("test", tmpl, ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -283,7 +283,7 @@ func TestRenderTemplate_RangeLoop(t *testing.T) {
 }
 
 func TestRenderTemplate_MissingKey(t *testing.T) {
-	ctx := NewContext("app", "app", nil, false)
+	ctx := NewContext("app", "app", nil)
 	_, err := renderTemplate("test", "{{.NoSuchField}}", ctx)
 	if err == nil {
 		t.Fatal("expected error for missing key (missingkey=error)")
@@ -291,7 +291,7 @@ func TestRenderTemplate_MissingKey(t *testing.T) {
 }
 
 func TestRenderTemplate_ModulePath(t *testing.T) {
-	ctx := NewContext("myapp", "github.com/org/myapp", []string{"base"}, false)
+	ctx := NewContext("myapp", "github.com/org/myapp", []string{"base"})
 	out, err := renderTemplate("test", "import \"{{.ModulePath}}/internal/config\"", ctx)
 	if err != nil {
 		t.Fatal(err)

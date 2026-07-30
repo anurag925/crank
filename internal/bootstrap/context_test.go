@@ -5,7 +5,7 @@ import (
 )
 
 func TestNewContext_BasicFields(t *testing.T) {
-	ctx := NewContext("myapp", "github.com/example/myapp", []string{"base"}, false)
+	ctx := NewContext("myapp", "github.com/example/myapp", []string{"base"})
 
 	if ctx.ProjectName != "myapp" {
 		t.Errorf("ProjectName = %q, want %q", ctx.ProjectName, "myapp")
@@ -19,7 +19,7 @@ func TestNewContext_BasicFields(t *testing.T) {
 }
 
 func TestNewContext_ModulePathDefaultsToProjectName(t *testing.T) {
-	ctx := NewContext("myapp", "", []string{"base"}, false)
+	ctx := NewContext("myapp", "", []string{"base"})
 
 	if ctx.ModulePath != "myapp" {
 		t.Errorf("ModulePath = %q, want %q", ctx.ModulePath, "myapp")
@@ -30,7 +30,7 @@ func TestNewContext_ModulePathDefaultsToProjectName(t *testing.T) {
 }
 
 func TestNewContext_TrimsAndStripsTrailingSlash(t *testing.T) {
-	ctx := NewContext("app", " github.com/x/app/ ", nil, false)
+	ctx := NewContext("app", " github.com/x/app/ ", nil)
 
 	if ctx.ModulePath != "github.com/x/app" {
 		t.Errorf("ModulePath = %q, want %q", ctx.ModulePath, "github.com/x/app")
@@ -41,7 +41,7 @@ func TestNewContext_TrimsAndStripsTrailingSlash(t *testing.T) {
 }
 
 func TestNewContext_PackageNameFromLastSegment(t *testing.T) {
-	ctx := NewContext("proj", "github.com/org/special-pkg", nil, false)
+	ctx := NewContext("proj", "github.com/org/special-pkg", nil)
 
 	if ctx.PackageName != "special-pkg" {
 		t.Errorf("PackageName = %q, want %q", ctx.PackageName, "special-pkg")
@@ -49,7 +49,7 @@ func TestNewContext_PackageNameFromLastSegment(t *testing.T) {
 }
 
 func TestHas(t *testing.T) {
-	ctx := NewContext("app", "app", []string{"base", "auth", "postgres"}, false)
+	ctx := NewContext("app", "app", []string{"base", "auth", "postgres"})
 
 	tests := []struct {
 		name string
@@ -71,14 +71,14 @@ func TestHas(t *testing.T) {
 }
 
 func TestRequire_AllPresent(t *testing.T) {
-	ctx := NewContext("app", "app", []string{"base", "auth"}, false)
+	ctx := NewContext("app", "app", []string{"base", "auth"})
 	if err := ctx.Require("base", "auth"); err != nil {
 		t.Errorf("Require() unexpected error: %v", err)
 	}
 }
 
 func TestRequire_Missing(t *testing.T) {
-	ctx := NewContext("app", "app", []string{"base"}, false)
+	ctx := NewContext("app", "app", []string{"base"})
 	err := ctx.Require("base", "auth", "postgres")
 	if err == nil {
 		t.Fatal("Require() expected error, got nil")

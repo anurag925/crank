@@ -295,7 +295,7 @@ func handleSkill(reg *bootstrap.Registry, projectDir string) error {
 		return fmt.Errorf("parse skill template: %w", err)
 	}
 
-	ctx := bootstrap.NewContext(info.ProjectName, info.ModulePath, info.Features, false)
+	ctx := bootstrap.NewContext(info.ProjectName, info.ModulePath, info.Features)
 
 	var sb strings.Builder
 	if err := tmpl.Execute(&sb, ctx); err != nil {

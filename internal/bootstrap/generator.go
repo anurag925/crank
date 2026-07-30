@@ -22,10 +22,6 @@ type Options struct {
 	Features []string
 	// Force overwrites an existing non-empty directory.
 	Force bool
-	// MakefileOverride when true gives the project's Makefile precedence over
-	// native crank commands. A Makefile target that shadows a crank command
-	// name will be run instead of the native command.
-	MakefileOverride bool
 }
 
 // Result reports the files written during a generation.
@@ -78,7 +74,7 @@ func Generate(reg *Registry, opts Options) (*Result, error) {
 		return nil, err
 	}
 
-	ctx := NewContext(opts.ProjectName, opts.ModulePath, features, opts.MakefileOverride)
+	ctx := NewContext(opts.ProjectName, opts.ModulePath, features)
 
 	var all []string
 	var allDeps []string
@@ -133,7 +129,7 @@ func Add(reg *Registry, projectDir, featureName string) (*Result, error) {
 
 	features := ensureBase(append([]string{}, manifest.Features...))
 	features = appendUnique(features, featureName)
-	ctx := NewContext(manifest.ProjectName, manifest.ModulePath, features, manifest.MakefileOverride)
+	ctx := NewContext(manifest.ProjectName, manifest.ModulePath, features)
 
 	// Only render the new feature's templates, not all features.
 	ftr, err := reg.resolve(featureName)
@@ -272,11 +268,10 @@ func checkRequirements(featureName string, reqs []string, ctx *Context) error {
 
 // manifest records which features were applied to a generated project.
 type manifest struct {
-	ProjectName      string   `json:"project_name" yaml:"project_name"`
-	ModulePath       string   `json:"module_path"  yaml:"module_path"`
-	Features         []string `json:"features"     yaml:"features"`
-	CrankVersion     string   `json:"crank_version" yaml:"crank_version"`
-	MakefileOverride bool     `json:"makefile_override,omitempty" yaml:"makefile_override,omitempty"`
+	ProjectName  string   `json:"project_name" yaml:"project_name"`
+	ModulePath   string   `json:"module_path"  yaml:"module_path"`
+	Features     []string `json:"features"     yaml:"features"`
+	CrankVersion string   `json:"crank_version" yaml:"crank_version"`
 }
 
 func readManifest(projectDir string) (*manifest, error) {
@@ -345,21 +340,4 @@ func writeManifest(projectDir string, current *manifest, updated []string) error
 		return err
 	}
 	return utils.WriteFile(filepath.Join(projectDir, ".crank.yaml"), body)
-}
-
-// SetMakefileOverride updates the makefile_override flag in the project's
-// .crank.yaml manifest and writes it back. Returns true if the value changed.
-func SetMakefileOverride(projectDir string, enabled bool) (bool, error) {
-	m, err := readManifest(projectDir)
-	if err != nil {
-		return false, fmt.Errorf("read manifest: %w", err)
-	}
-	if m.MakefileOverride == enabled {
-		return false, nil
-	}
-	m.MakefileOverride = enabled
-	if err := writeManifest(projectDir, m, m.Features); err != nil {
-		return false, err
-	}
-	return true, nil
 }

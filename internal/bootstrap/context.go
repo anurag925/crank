@@ -17,17 +17,13 @@ type Context struct {
 	Features []string
 	// CrankVersion is the crank CLI version that generated this project.
 	CrankVersion string
-	// MakefileOverride when true gives the project's Makefile precedence over
-	// native crank commands.
-	MakefileOverride bool
 
 	featureSet map[string]bool
 }
 
-// NewContext builds a Context from the project name, module path, feature list,
-// and makefile-override flag. If modulePath is empty, the project name is used
-// as the module path.
-func NewContext(projectName, modulePath string, features []string, makefileOverride bool) *Context {
+// NewContext builds a Context from the project name, module path, and feature list.
+// If modulePath is empty, the project name is used as the module path.
+func NewContext(projectName, modulePath string, features []string) *Context {
 	if modulePath == "" {
 		modulePath = projectName
 	}
@@ -48,13 +44,12 @@ func NewContext(projectName, modulePath string, features []string, makefileOverr
 	}
 
 	return &Context{
-		ProjectName:      projectName,
-		ModulePath:       modulePath,
-		PackageName:      pkg,
-		Features:         features,
-		CrankVersion:     Version,
-		MakefileOverride: makefileOverride,
-		featureSet:       set,
+		ProjectName:  projectName,
+		ModulePath:   modulePath,
+		PackageName:  pkg,
+		Features:     features,
+		CrankVersion: Version,
+		featureSet:   set,
 	}
 }
 
