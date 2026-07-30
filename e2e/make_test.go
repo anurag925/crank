@@ -240,54 +240,6 @@ func TestE2E_Make_Migration_Idempotent(t *testing.T) {
 	assertGlobCount(t, dir, "db/migrations/*_create_items.up.sql", 1)
 }
 
-// TestE2E_Make_Migration_StandalonePair verifies that `crank make
-// migration` produces a fresh timestamped .up.sql and .down.sql pair
-// (DB-agnostic, no gorm required).
-func TestE2E_Make_Migration_StandalonePair(t *testing.T) {
-	dir := scaffoldBase(t, "make_mig_standalone")
-	runCrank(t, "", "make", "migration", "add_index_to_things", "--project", dir)
-	assertGlobCount(t, dir, "db/migrations/*_add_index_to_things.up.sql", 1)
-	assertGlobCount(t, dir, "db/migrations/*_add_index_to_things.down.sql", 1)
-}
-
-// TestE2E_Make_Migration_MultipleStandalone verifies that consecutive
-// standalone migrations each get their own timestamped pair. We do not
-// check exact timestamps (which can collide within one second) but we do
-// check the file count.
-func TestE2E_Make_Migration_MultipleStandalone(t *testing.T) {
-	dir := scaffoldBase(t, "make_mig_multi")
-	runCrank(t, "", "make", "migration", "first_migration", "--project", dir)
-	runCrank(t, "", "make", "migration", "second_migration", "--project", dir)
-	assertGlobCount(t, dir, "db/migrations/*_first_migration.up.sql", 1)
-	assertGlobCount(t, dir, "db/migrations/*_second_migration.up.sql", 1)
-}
-
-// TestE2E_Make_Migration_EmptyName checks that the name-required
-// validation fires. A name-less migration must error.
-func TestE2E_Make_Migration_EmptyName(t *testing.T) {
-	dir := scaffoldBase(t, "make_mig_no_name")
-	out, err := runCrankRaw(t, "", "make", "migration", "--project", dir)
-	if err == nil {
-		t.Fatalf("expected missing-name error, got success:\n%s", out)
-	}
-	if !strings.Contains(out, "migration name is required") {
-		t.Errorf("error should mention 'migration name is required', got:\n%s", out)
-	}
-}
-
-// TestE2E_Make_Migration_InvalidChars verifies the name sanitization:
-// special characters in the migration name are dropped and the result is
-// a valid filename. The migration files use the form
-// `<timestamp>_add_index_to_things.up.sql` (the `!` is dropped, leaving
-// the trailing word unchanged).
-func TestE2E_Make_Migration_InvalidChars(t *testing.T) {
-	dir := scaffoldBase(t, "make_mig_invalid")
-	// Spaces, dashes, slashes, etc. all collapse to underscores. The
-	// `!` is dropped entirely.
-	runCrank(t, "", "make", "migration", "Add Index To Things!", "--project", dir)
-	assertGlobCount(t, dir, "db/migrations/*_add_index_to_things.up.sql", 1)
-}
-
 // ---------------------------------------------------------------------------
 // Field-type coverage matrix
 // ---------------------------------------------------------------------------
@@ -460,7 +412,7 @@ func TestE2E_Make_NoArgs_Help(t *testing.T) {
 	dir := scaffoldBase(t, "make_no_args")
 	out := runCrank(t, dir, "make")
 	// The help must mention supported kinds.
-	for _, kind := range []string{"model", "repository", "service", "handler", "scaffold", "migration"} {
+	for _, kind := range []string{"model", "repository", "service", "handler", "scaffold"} {
 		if !strings.Contains(out, kind) {
 			t.Errorf("help missing kind %q:\n%s", kind, out)
 		}

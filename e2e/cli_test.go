@@ -75,7 +75,7 @@ func TestE2E_CLI_Add_Help_ShowsProjectFlag(t *testing.T) {
 func TestE2E_CLI_Make_Help_ShowsKinds(t *testing.T) {
 	out := runCrank(t, "", "make", "--help")
 	for _, want := range []string{
-		"model", "repository", "service", "handler", "scaffold", "workflow", "activity", "migration",
+		"model", "repository", "service", "handler", "scaffold", "workflow", "activity",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("make --help missing kind %q:\n%s", want, out)

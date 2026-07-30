@@ -21,7 +21,6 @@ crank make handler Order
 crank make scaffold Order customer:string total:float --tests
 crank make workflow OrderFulfillment order_id:uuid
 crank make activity ChargeCard amount:float --tests
-crank make migration create_orders
 
 crank run --project ./myapp
 crank dev --project ./myapp

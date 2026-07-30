@@ -139,7 +139,6 @@ crank make scaffold Product --seed
 crank make workflow OrderFulfillment order_id:uuid
 crank make activity ChargeCard amount:float --tests
 crank make repository Ticket
-crank make migration create_orders
 crank make seed User
 crank make seed User --count 20 --force
 crank make seed

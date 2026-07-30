@@ -242,8 +242,6 @@ func TestE2E_Make(t *testing.T) {
 			runCrank(t, "", "make", "model", "Category", "name:string", "--project", projectDir)
 			runCrank(t, "", "make", "repository", "Ticket", "subject:string", "--project", projectDir)
 			runCrank(t, "", "make", "service", "Cart", "label:string", "--project", projectDir)
-			// 5. A standalone, DB-agnostic migration pair.
-			runCrank(t, "", "make", "migration", "add_index_to_orders", "--project", projectDir)
 
 			// Every resource has a model (note the multi-word snake_case file name).
 			for _, rel := range []string{
@@ -317,13 +315,8 @@ func TestE2E_Make(t *testing.T) {
 				}
 			}
 
-			// The standalone migration is DB-agnostic and always created as a pair.
-			if n := globCount(t, projectDir, "db/migrations/*_add_index_to_orders.up.sql"); n != 1 {
-				t.Errorf("expected one add_index_to_orders.up.sql migration, found %d", n)
-			}
-			if n := globCount(t, projectDir, "db/migrations/*_add_index_to_orders.down.sql"); n != 1 {
-				t.Errorf("expected one add_index_to_orders.down.sql migration, found %d", n)
-			}
+			// The standalone migration is no longer generated via `crank make` —
+			// use golang-migrate's `migrate create` directly for that.
 
 			// The whole project — including every generated _test.go — must compile,
 			// vet and pass.

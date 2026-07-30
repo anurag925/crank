@@ -46,8 +46,10 @@ crank doctor --project ./api
 
 ## Create a migration manually
 
+Use golang-migrate directly:
+
 ```bash
-crank make migration add_product_status --project ./api
+migrate create -ext sql -dir db/migrations -seq add_product_status
 ```
 
 Edit the generated `.up.sql` and `.down.sql` files, then run:

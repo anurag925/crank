@@ -15,16 +15,16 @@ Crank wraps `golang-migrate` under the `crank migrate` subcommand so you don't n
 
 ### Creating Migrations
 
-When you run `crank make scaffold <Model>` or `crank make migration <name>`, Crank creates timestamped `.up.sql` and `.down.sql` files in `migrations/`:
+When you run `crank make scaffold <Model>`, Crank creates timestamped `.up.sql` and `.down.sql` files in `db/migrations/` alongside the generated code. To create standalone migrations, use `golang-migrate` directly via `crank migrate`:
 
 ```bash
-# Generate a custom migration file
-crank make migration add_category_to_products
+# Generate a custom migration file (using golang-migrate directly)
+migrate create -ext sql -dir db/migrations -seq add_category_to_products
 ```
 
 This creates:
-- `migrations/20260723200000_add_category_to_products.up.sql`
-- `migrations/20260723200000_add_category_to_products.down.sql`
+- `db/migrations/20260723200000_add_category_to_products.up.sql`
+- `db/migrations/20260723200000_add_category_to_products.down.sql`
 
 Edit the SQL files to define DDL changes:
 
@@ -125,7 +125,6 @@ Crank connects to PostgreSQL using GORM, executes your seed functions inside a t
 
 | Command | Purpose |
 | --- | --- |
-| `crank make migration <name>` | Scaffolds a new SQL `.up.sql` and `.down.sql` migration pair. |
 | `crank migrate up` | Applies all pending database migrations. |
 | `crank migrate down [N]` | Rolls back N database migration steps. |
 | `crank make seed <Model> --count N` | Generates a fake data seed script for `Model`. |

@@ -12,13 +12,11 @@ import (
 	"embed"
 	"fmt"
 	"go/format"
-	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
-	"strconv"
 	"strings"
 	"text/template"
+	"time"
 
 	"github.com/anurag925/crank/internal/bootstrap"
 	"github.com/anurag925/crank/internal/utils"
@@ -526,38 +524,9 @@ func generateMigration(projectDir string, data tmplData) (created, skipped []str
 	return []string{upRel, downRel}, nil, nil
 }
 
-// migrationPrefixRE captures the leading numeric version of a migration file
-// name (e.g. "000004" in "000004_create_orders.up.sql").
-var migrationPrefixRE = regexp.MustCompile(`^(\d+)_`)
-
-// NextMigrationVersion returns the next migration version string for dir. It
-// scans the existing *.sql migrations, finds the highest numeric version
-// prefix, and returns that value + 1 zero-padded to at least 6 digits so it
-// matches the base feature's 000001-style scheme (and continues monotonically
-// from it).
-//
-// Using a monotonic sequence — rather than a wall-clock timestamp — guarantees
-// unique, collision-free versions even when several migrations are generated
-// within the same second (which golang-migrate rejects as "duplicate migration
-// version").
+// NextMigrationVersion returns a wall-clock Unix timestamp string for use as a
+// migration version prefix. The timestamp represents the current time in
+// seconds since epoch.
 func NextMigrationVersion(dir string) string {
-	var max uint64
-	entries, _ := os.ReadDir(dir)
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		m := migrationPrefixRE.FindStringSubmatch(e.Name())
-		if m == nil {
-			continue
-		}
-		n, err := strconv.ParseUint(m[1], 10, 64)
-		if err != nil {
-			continue
-		}
-		if n > max {
-			max = n
-		}
-	}
-	return fmt.Sprintf("%06d", max+1)
+	return fmt.Sprintf("%d", time.Now().Unix())
 }

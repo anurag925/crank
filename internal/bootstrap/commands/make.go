@@ -18,7 +18,7 @@ import (
 	"github.com/anurag925/crank/internal/utils"
 )
 
-const makeLongDesc = `Generate boilerplate code: model, repository, service, handler, scaffold, workflow, activity, migration, seed, swag, skill.
+const makeLongDesc = `Generate boilerplate code: model, repository, service, handler, scaffold, workflow, activity, seed, swag, skill.
 
 Kinds:
   model       Domain struct (+ migration if gorm)
@@ -28,7 +28,6 @@ Kinds:
   scaffold    Full stack (model + repo + handler + wiring)
   workflow    Temporal workflow
   activity    Temporal activity
-  migration   Blank SQL migration pair
   seed        Generate seed data files or run seed up/down
   swag        Generate Swagger/OpenAPI documentation
   skill       Regenerate the crank-project agent SKILL.md
@@ -46,7 +45,6 @@ Examples:
   crank make workflow OrderFulfillment order_id:uuid
   crank make activity ChargeCard amount:float --tests
   crank make repository Ticket
-  crank make migration add_index_to_orders
   crank make seed User
   crank make seed User --count 20 --force
   crank make seed
@@ -54,7 +52,7 @@ Examples:
   crank make skill`
 
 // NewMakeCmd returns the `make` cobra command which generates scaffolding inside
-// an existing project (models, repositories, services, handlers, migrations, seeds, etc).
+// an existing project (models, repositories, services, handlers, seeds, etc).
 func NewMakeCmd(featReg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *cobra.Command {
 	var (
 		projectDir    string
@@ -68,7 +66,7 @@ func NewMakeCmd(featReg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *c
 
 	cmd := &cobra.Command{
 		Use:   "make <kind> <name> [field:type ...]",
-		Short: "Generate models, handlers, migrations, seeds, and more",
+		Short: "Generate models, handlers, seeds, and more",
 		Long:  makeLongDesc,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
@@ -85,16 +83,10 @@ func NewMakeCmd(featReg *bootstrap.Registry, toolReg *bootstrap.ToolRegistry) *c
 				fields = args[2:]
 			}
 
-			validKinds := []string{"migration", "seed", "swag", "skill"}
+			validKinds := []string{"seed", "swag", "skill"}
 			validKinds = append(validKinds, scaffold.Kinds()...)
 
 			switch kind {
-			case "migration":
-				if name == "" {
-					return fmt.Errorf("migration name is required\n\nUsage: crank make %s <name>\n\nExample: crank make migration create_users_table", kind)
-				}
-				return makeMigration(projectDir, name)
-
 			case "seed":
 				return handleSeed(projectDir, args[1:], count, force)
 
@@ -170,51 +162,6 @@ func runScaffold(opts scaffold.Options) error {
 
 	fmt.Printf("✔ Generated %s (%d file(s))\n", result.Resource.Pascal, len(result.Created))
 	return nil
-}
-
-func makeMigration(projectDir, name string) error {
-	name = sanitizeName(name)
-	dir := filepath.Join(projectDir, "db/migrations")
-	if err := utils.EnsureDir(dir); err != nil {
-		return err
-	}
-
-	stamp := scaffold.NextMigrationVersion(dir)
-	up := filepath.Join(dir, fmt.Sprintf("%s_%s.up.sql", stamp, name))
-	down := filepath.Join(dir, fmt.Sprintf("%s_%s.down.sql", stamp, name))
-
-	if err := utils.WriteFile(up, "-- +migrate Up\n"); err != nil {
-		return err
-	}
-	if err := utils.WriteFile(down, "-- +migrate Down\n"); err != nil {
-		return err
-	}
-
-	fmt.Printf("✔ Created %s\n✔ Created %s\n", up, down)
-	return nil
-}
-
-func sanitizeName(s string) string {
-	var b strings.Builder
-	prevUnderscore := false
-	for _, r := range strings.ToLower(s) {
-		switch {
-		case r >= 'a' && r <= 'z', r >= '0' && r <= '9':
-			b.WriteRune(r)
-			prevUnderscore = false
-		case r == '-' || r == '_' || r == ' ':
-			if !prevUnderscore && b.Len() > 0 {
-				b.WriteRune('_')
-				prevUnderscore = true
-			}
-		}
-	}
-	out := strings.TrimRight(b.String(), "_")
-	if out == "" {
-		fmt.Fprintln(os.Stderr, "warning: migration name produced an empty slug, defaulting to `change`")
-		return "change"
-	}
-	return out
 }
 
 // handleSeed handles `crank make seed [<model>|up|down]`.

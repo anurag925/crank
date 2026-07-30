@@ -73,7 +73,7 @@ ORM-backed projects use golang-migrate.
 Create a migration:
 
 ```bash
-crank make migration add_status_to_orders
+migrate create -ext sql -dir db/migrations -seq add_status_to_orders
 ```
 
 Apply migrations:
@@ -166,7 +166,7 @@ crank doctor
 For schema changes:
 
 ```bash
-crank make migration add_field_to_table
+migrate create -ext sql -dir db/migrations -seq add_field_to_table
 crank migrate up
 crank test
 ```

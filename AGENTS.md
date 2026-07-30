@@ -36,7 +36,6 @@ crank make service Book --project ./myapp
 crank make handler Book --only --project ./myapp
 crank make workflow OrderFulfillment --project ./myapp
 crank make activity ChargeCard --project ./myapp
-crank make migration create_orders --project ./myapp
 
 # Seed data
 crank make seed up --project ./myapp
@@ -195,9 +194,6 @@ Run: `go test ./internal/...` for fast suite, `go test -tags e2e ./e2e/` for ful
 ./crank make activity ChargeCard amount:float --tests --project=./myapp    # Temporal activity (+ worker wiring; requires temporal)
 ./crank make repository Ticket --project=./myapp
 ./crank make service Cart --project=./myapp
-
-# Generate a migration
-./crank make migration create_orders --project=./myapp
 
 # Generate seed data
 ./crank make seed --project=./myapp                             # empty seed file
